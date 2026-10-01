@@ -1,0 +1,19 @@
+name: player_signals_sorry
+description: PlayerSignals - Sorry
+eventCriteria:
+  - eventType: mod_event
+    schemaConditions:
+      - fieldPath: event_name
+        operator: equals
+        value: PlayerSignals_Intent_sorry
+      - fieldPath: sender_form_id
+        operator: equals
+        value: "00000014"
+response:
+  type: direct_narration
+  content: "{{ originator }} makes an apologetic gesture."
+audience: nearby_npcs
+enabled: true
+probability: 1.0
+cooldownSeconds: 0
+priority: 5

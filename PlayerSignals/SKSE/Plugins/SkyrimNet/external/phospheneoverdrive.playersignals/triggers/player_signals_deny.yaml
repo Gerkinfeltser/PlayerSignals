@@ -1,0 +1,19 @@
+name: player_signals_deny
+description: PlayerSignals - Deny
+eventCriteria:
+  - eventType: mod_event
+    schemaConditions:
+      - fieldPath: event_name
+        operator: equals
+        value: PlayerSignals_Intent_deny
+      - fieldPath: sender_form_id
+        operator: equals
+        value: "00000014"
+response:
+  type: direct_narration
+  content: "{{ originator }} shakes their head in disagreement."
+audience: nearby_npcs
+enabled: true
+probability: 1.0
+cooldownSeconds: 0
+priority: 5

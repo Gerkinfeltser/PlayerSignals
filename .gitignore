@@ -12,3 +12,7 @@ Thumbs.db
 
 # Local logs
 *.log
+
+# Python test bytecode
+__pycache__/
+*.pyc

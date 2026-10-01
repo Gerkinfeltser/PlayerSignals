@@ -1,0 +1,14 @@
+SpriggitSource:
+  PackageName: Spriggit.Yaml.Skyrim
+  Version: 0.40.0
+ModKey: PlayerSignals.esp
+GameRelease: SkyrimSE
+ModHeader:
+  Flags:
+  - Small
+  Author: Gerkinfeltser
+  Description: JSON-configurable nonverbal communication wheel for SkyrimNet.
+  MasterReferences:
+  - Master: Skyrim.esm
+    FileSize: 0
+  INTV: 1

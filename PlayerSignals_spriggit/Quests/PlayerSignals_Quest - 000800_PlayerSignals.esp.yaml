@@ -1,0 +1,26 @@
+FormKey: 000800:PlayerSignals.esp
+EditorID: PlayerSignals_Quest
+VirtualMachineAdapter:
+  Scripts:
+  - Name: PlayerSignals_Controller
+  FileName: ''
+  Aliases:
+  - Property:
+      Name: ''
+      Object: 000800:PlayerSignals.esp
+      Alias: 0
+    Scripts:
+    - Name: PlayerSignals_PlayerAlias
+Name:
+  TargetLanguage: English
+  Value: PlayerSignals
+Flags:
+- StartGameEnabled
+- 0x10
+Priority: 10
+NextAliasID: 1
+Aliases:
+- Name: Player
+  Flags: []
+  ForcedReference: 000014:Skyrim.esm
+  VoiceTypes: Null

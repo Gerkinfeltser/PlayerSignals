@@ -1,0 +1,19 @@
+name: player_signals_come_here
+description: PlayerSignals - Come here
+eventCriteria:
+  - eventType: mod_event
+    schemaConditions:
+      - fieldPath: event_name
+        operator: equals
+        value: PlayerSignals_Intent_come_here
+      - fieldPath: sender_form_id
+        operator: equals
+        value: "00000014"
+response:
+  type: direct_narration
+  content: "{{ originator }} beckons for someone to come closer."
+audience: nearby_npcs
+enabled: true
+probability: 1.0
+cooldownSeconds: 0
+priority: 5

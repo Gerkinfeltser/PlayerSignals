@@ -1,7 +1,7 @@
 # Implementation Plan: PlayerSignals (for SkyrimNet)
 
-Status: The approved captured-target/direct-narration contract is active. Scoped Lua-loader/source-derived adapter smokes passed, both Papyrus scripts compiled, and 15 unittests passed separately. The integrated full build failed at a later Spriggit step; in-game acceptance remains pending.
-Updated: 2026-10-01
+Status: Limited-test GitHub release preparation. Scoped loader/submission smokes, both Papyrus compiles, and 15 configuration tests passed. Current archived runtime evidence verifies player-originator targeted/group submissions and NPC responses. A limited removal test and short post-ReSaver load are documented; exhaustive runtime acceptance and long-term removal safety remain unverified. The earlier integrated build failed at a locked, unchanged ESP, separately verified by generation.
+Updated: 2026-10-02
 
 Authoritative behavior, schema, targeting, narration, and acceptance contracts: [PlayerSignals specification](../specs/player-signals.md). Update that spec first if an approved contract changes.
 
@@ -10,7 +10,7 @@ Authoritative behavior, schema, targeting, narration, and acceptance contracts: 
 - Repository: `D:/gerkgit/SkyrimNet_PlayerSignals`.
 - Actual mod root: `PlayerSignals/`; only this child folder is symlinked into MO2.
 - Authored plugin records: `PlayerSignals_spriggit/`, outside the mod root.
-- Do not change MO2, symlinks, plugin activation, or load order. No commit/push.
+- Do not change MO2, symlinks, plugin activation, or load order. Commit/push only when explicitly requested by the user.
 - Do not use the former mod-event/YAML external-package installation, editing, or activation procedures as current instructions.
 
 ## Active phase — Captured targeting and direct narration
@@ -21,7 +21,7 @@ This phase replaces the former `SendModEvent`/external-YAML-trigger path. The co
 
 1. **Native API readiness:** require both loaded `SkyrimNet.esp` and a nonempty `SkyrimNetApi.GetBuildVersion()` before enabling the feature. Use installed SkyrimNet script imports in the build, ordered after JContainers and before vanilla imports.
 2. **Capture and selection:** capture the current crosshair NPC before opening the wheel. Immediately after `Browse` returns a final accepted intent, sample left/right Shift scan codes 42/54 before feedback/catalog lookups. Either held key overrides targeting to group mode; no captured NPC is also group mode.
-3. **Submission:** targeted mode checks the captured actor is alive, enabled, and 3D-loaded at submission. Without a Shift override, any failed check ends silently, never redirecting to group or another NPC. Targeted call: `SkyrimNetApi.DirectNarration(text, respondingNPC, player)`. Group call: `SkyrimNetApi.DirectNarration(text, player, None)`. Group text explicitly addresses everyone nearby; witnesses may join, but no response or compliance is guaranteed.
+3. **Submission:** targeted mode checks the captured actor is alive, enabled, and 3D-loaded at submission. Without a Shift override, any failed check ends silently, never redirecting to group or another NPC. Targeted call: `SkyrimNetApi.DirectNarration(text, player, capturedNPC)`. Group call: `SkyrimNetApi.DirectNarration(text, player, None)`. The player is always the originator. Targeted text explicitly addresses the captured NPC; group text explicitly addresses everyone nearby. SkyrimNet selects the responder in both modes; the captured NPC is not guaranteed to respond, and no response or compliance is guaranteed.
 4. **Catalog and feedback:** `PlayerSignals/SKSE/Plugins/PlayerSignals/intents.json` is the editable ID registry and phrase source. The shipped catalog has 25 default IDs, but valid new lowercase IDs are defined and validated dynamically in JSON. Each record has exactly the nonempty UTF-8 strings `narration`, `notification`, and `targetedNotification`; the sole literal `{target}` occurs exactly once in the targeted template and nowhere in the other fields. All phrases omit player prefix/final period. The Lua loader reads both JSON files, validates every catalog record before layout references, and builds native `narrations`, group `notifications`, and targeted-notification prefix/suffix maps. Changing or adding an ID/phrase is JSON-only; reference new IDs from `layout.json`, then load a save. No Lua/Papyrus edit or recompilation is needed.
 5. **Cutover and docs:** keep obsolete YAML trigger/action content and its installation/activation guidance removed. The separately requested prompt-only WebUI helper may use a new manifest, but cannot restore the old dispatch bundle. Keep useful old-runtime facts only in sections explicitly labeled historical/pre-cutover.
 
@@ -37,9 +37,29 @@ The integrated full-build attempt did not succeed: after the Papyrus compiles, S
 
 - [x] All 15 unittests passed when run separately. The chained build/test command did not reach tests because the Spriggit stage failed on the locked ESP.
 - [ ] Complete a successful integrated build after the ESP file lock is released; the separate generated-file comparison is already complete.
-- [ ] Verify current behavior in game. The adapter/source smokes do not verify Papyrus VM/native execution, physical Shift timing, in-game notifications, or uninstall behavior.
+- [x] Scoped in-game evidence: eight player-originator gestures, seven NPC responses, and one expected no-audience result; see current runtime evidence below. Physical Shift timing, notification display, exhaustive cancellation/error transitions, upgrade coverage, and long-term removal behavior are not established by these logs.
 
-The latest reviewed runtime archive below is prior-build routing evidence only. It does not verify the current JSON catalog, targeted local notifications, physical Shift timing, or uninstall behavior. No MO2 changes were made.
+Current runtime evidence is separated below from the older prior-build archive. No assistant-initiated MO2/profile/load-order changes were made; the user performed the save/removal tests.
+
+### Player-originator correction — implemented and runtime-observed
+
+- Approved tradeoff: the player must always be the narration originator (`From`), even though targeted submissions no longer force the captured NPC to respond.
+- `Submit` passes the player directly as originator, with the captured NPC as explicit target or `None` for group mode. Capture, Shift override, recipient validation, authored text, local feedback, and one-call/no-retry behavior are unchanged.
+- Source trace: `D:/git/SkyrimNet/src/Skyrim/Papyrus/PapyrusLLMUtils.cpp:18–67` registers the supplied originator/target. `src/Skyrim/DialogueManager.cpp:491–560` does not bypass responder selection for player-origin direct narration and subsequently replaces event target/listener with the selected responder. This is source evidence, not installed-native or runtime verification.
+- Before/after source-derived `Submit` smoke reproduced the old NPC/player argument ordering and confirmed the new player/NPC targeted call and player/`None` group call, including exact recipient/audience text and local feedback. Missing, dead, disabled, or unloaded targets and stale generations remained fail-closed; API failure did not retry or notify, and generation change during submission suppressed success feedback.
+- Both Papyrus scripts compiled into a temporary directory with 0 errors and 0 warnings using the existing build script's compiler, flags, and imports. Only the packaged controller PEX was updated; SHA-256 `dbc9cc6b072ee92caffee8e2bf90dd4039d130f10fc7ccce8d49d1bc93a64367`. Alias PEX, ESP, and SEQ were not changed.
+- All 15 existing Lua/config unittests passed in a fresh Python process (`python -B -m unittest discover -s tests`). Initial in-process discovery used a retained Magelight-era test module with five extra callback tests absent from current source; the fresh process removed that stale-module mismatch without changing tests.
+- The ASSOS archive below verifies native player-originator arguments and responses, including the targeted Faendal gesture. The correction does not preserve the intended recipient/audience in event `To`; no engine patch or exhaustive UI display proof is claimed.
+
+### Current runtime evidence — 2026-10-02
+
+- `SkyrimNetOutput_ASSOS-1.1.1_2026-10-02_17-43-40.zip`, canonical session 17:38:49.754–17:44:03.175, SkyrimNet `0-26-0-0` / `ea1bc28eec68`: eight native calls, all originator B-man, eight successful registrations, seven generated NPC responses. At 17:42:48.742, `SkyrimNet.log:18093–18095` records B-man as originator and Faendal as explicit target; Faendal responded to B-man. At 17:43:42.139, `:21246–21251` records no eligible NPCs and ends selection. The user confirmed nobody was in earshot and no UI `To` appeared for that last gesture.
+- Complete-file correlation retained 50 current request/response IDs and rejected 130 stale input and 5,150 stale output records; newest rejected timestamp 17:37:04.625. This establishes the listed submissions/responses, not every menu, modifier, notification, or update case.
+- The ADT archive path `SkyrimNetOutput_ADT_2026-10-02_18-05-40.zip` was reused for two distinct snapshots. The first-read 18:04:54.409–18:05:52.079 session loaded a disabled-mod save, changed location, and saved at 18:05:48.163. It logged no native direct-narration calls; `Papyrus.0.log:177–182` still referenced the missing PlayerSignals script classes. ReSaver showed two definitions and two instances; the user identified and removed two unattached instances and two undefined elements.
+- The replacement ADT snapshot spans 18:08:43.710–18:09:13.279, SkyrimNet `0-26-0-0` / `0c57e39fda7b`, ZIP SHA-256 `3b1c4230a33b699f5166f9da805b0c04aa7ed81403364c8150336432cae38d0e`. `SkyrimNet.log:3375` loads `Save6_resaver.ess`; `:3567–3568` reaches post-load/Running at 18:09:05.363. There are no PlayerSignals Papyrus mentions or native narration calls. All 39 supplemental input/output records predate this session.
+- This is a short successful cleaned-save load, approximately eight seconds after post-load. It does not include another post-cleanup save/reload cycle or establish unassisted clean removal/long-term safety. ReSaver cleanup is not a universally safe uninstall prescription. Preserve a pre-installation ESS/SKSE save pair.
+
+
 
 ### Optional intent-authoring agent — implemented and locally rendered
 
@@ -56,10 +76,10 @@ The latest reviewed runtime archive below is prior-build routing evidence only. 
 
 Source comparison confirms the cutover adds no saved controller fields or variables, changes no property defaults, aliases, quest/FormIDs, or startup SEQ; private native maps are rebuilt from both JSON files at load. The stable startup quest plus alias `OnInit`/`OnPlayerLoadGame` maintenance is designed to support new and existing saves, but current existing-save installation/update has not been verified in-game.
 
-Comparison reference: `C:/Users/vector/ivault/reference/skyrim/skyrim-mid-playthrough-mod-updates.md` (Skyrim Mod Mid-Playthrough Updates). Applied considerations: persisted quest/script state, initialization on existing-save load, and testing updates before release. Do not rely on its claim that execution frames are unsaved; generation guards explicitly protect resumed old menu waits.
+Save-update review considerations: persisted quest/script state, initialization on existing-save load, and testing updates before release. Generation guards explicitly protect resumed old menu waits; do not assume saved execution frames disappear.
 
 - [ ] Verify a new install and an update from the previous release on an existing save through the actual `OnPlayerLoadGame` path.
-- [ ] Verify/document removal from a save. There is no shutdown/uninstall cleaner and no guaranteed clean mid-playthrough removal. Recommend restoring a pre-installation save before removing the mod; SkyrimNet may retain separately stored narration history even after Skyrim save rollback.
+- [x] Document the limited removal test and short cleaned-save load above. Saved remnants persisted without cleanup; there is no shutdown/uninstall cleaner or guaranteed clean mid-playthrough removal. Recommend restoring a pre-installation ESS/SKSE pair; SkyrimNet may retain separately stored narration history.
 
 ## Prior-build runtime archive — historical routing evidence
 
@@ -74,7 +94,7 @@ The latest reviewed archive has canonical main-log timestamps **2026-10-01 19:08
 
 The trace shows the actual targeted branch skipping the selection step. The four prompts contain the correct Sigma gesture text; the model was `gemma-4-e4b-it`. Review retained 74 current input/output pairs and excluded 6,507 stale outputs; the latest excluded stale output was at **18:51:56.543**.
 
-This archive establishes routing behavior for a prior build only. It does not establish the current JSON catalog or targeted-notification implementation, the physical timing of Shift sampling, local notification behavior, or uninstall safety. Its SkyrimNet attribution output showed the targeted `eventOriginator=NPC, target=player` path reversing gesture `From`/`To`, while group processing substituted the reply speaker into event `To`. This known engine behavior remains unfixed; no engine patch is approved, and do not claim it is fixed.
+This archive establishes routing behavior for a prior build only. It does not establish the current JSON catalog or targeted-notification implementation, the physical timing of Shift sampling, local notification behavior, or uninstall safety. Its SkyrimNet attribution output showed the former targeted `eventOriginator=NPC, target=player` path reversing gesture `From`/`To`, while group processing substituted the reply speaker into event `To`. The NPC-originator targeted call is now superseded by the player-originator correction above; this archive does not verify that correction in game. SkyrimNet's responder-based `To` metadata remains unchanged, and no engine patch is approved.
 
 ## Historical implementation plan — pre-cutover only
 

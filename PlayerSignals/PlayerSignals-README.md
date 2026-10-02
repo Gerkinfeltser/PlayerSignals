@@ -4,6 +4,12 @@ Want to agree, say thanks, or give someone a puzzled look without typing a sente
 
 That's all it does: submit the narration and show a local notification only when SkyrimNet's API accepts it. Group feedback omits a recipient; targeted feedback names the NPC captured before the wheel opened. Your character will not visibly perform an animation. SkyrimNet handles the dialogue; a reply isn't guaranteed, and requests don't force NPCs to obey.
 
+## Test release status
+
+This is a limited-test beta. Targeted and group gestures have been exercised in game, with the player correctly supplied as the narration originator. A gesture sent with nobody nearby was accepted without producing an NPC response, as expected.
+
+Mid-save removal has been tested on **one ADT save**. Disabling the mod left saved Papyrus remnants; a ReSaver-cleaned copy subsequently loaded without PlayerSignals missing-script warnings. This is limited test evidence, not a guarantee of clean removal or long-term save safety. See [Updating or removing](#updating-or-removing), and back up your saves before testing.
+
 ## Before you start
 
 You'll need:
@@ -13,7 +19,7 @@ You'll need:
 - JContainers with its Lua support files (API 4 / feature 2).
 - SkyrimNet, with `SkyrimNet.esp` loaded and its native API available.
 
-Back up your save before installing or updating. The stable startup quest/SEQ and player-alias `OnPlayerLoadGame` path are designed to initialize PlayerSignals on existing saves, but this path has not been tested in-game for the current build.
+Back up your save and matching SKSE cosave before installing or updating. The startup quest and player-alias save-load handling are designed to initialize PlayerSignals on existing saves. The limited removal test below does not establish installation/update compatibility with every existing save.
 
 Install PlayerSignals with your mod manager and enable **PlayerSignals.esp**. The mod's Data root should contain `PlayerSignals.esp`, `Scripts`, `Seq`, and `SKSE`—this readme belongs alongside them. You don't need the repository's build tools or authoring folders. If you're upgrading an older PlayerSignals install, replace its files rather than merging this version into it, and remove the obsolete PlayerSignals trigger bundle/files so old content cannot be mistaken for current.
 
@@ -25,7 +31,7 @@ Start the game and load a save, or begin a new game. PlayerSignals checks for Sk
 2. Press **Right Alt** to open the wheel. PlayerSignals captures the crosshair NPC before showing it.
 3. Choose a communication entry, such as **Confirm / Yes** or **Greet**.
 
-If the captured NPC is still alive, enabled, and loaded when you choose, SkyrimNet receives a targeted narration. The captured NPC is the responder context; the narration still describes your character as the one making the gesture. Moving the crosshair while the wheel is open does not change the target.
+If the captured NPC is still alive, enabled, and loaded when you choose, SkyrimNet receives a targeted narration with your character as the originator (`From`) and the captured NPC as the explicit target. The text describes your character making the gesture and addresses that NPC by name. Moving the crosshair while the wheel is open does not change the submitted target. SkyrimNet still chooses who responds; the captured NPC is not guaranteed to be the responder, and Recent Events may show the selected responder under `To`.
 
 You'll see a small notification with your character's name only if SkyrimNet's API accepts the narration. For the **Greet** intent, group feedback looks like `Bill greets.`; targeted feedback to the captured NPC Ted looks like `Bill greets Ted.` Think of it as a receipt—not a promise that an NPC heard you or will answer.
 
@@ -43,11 +49,11 @@ Group narration explicitly says the gesture is addressed to everyone nearby. Nea
 
 ### A note about Recent Events
 
-SkyrimNet's **Recent Events** cards can show misleading **From** and **To** names for PlayerSignals narrations. A gesture aimed at Ted may appear as Ted → Bill even though Bill made the gesture. A group gesture may appear as Bill → Ted because SkyrimNet selected Ted to respond—not because the gesture was addressed only to him.
+PlayerSignals now always supplies your character as the narration originator (**From**), including gestures addressed to a captured NPC. An NPC can still appear under **From** on their own dialogue reply; that is a separate event, not the NPC performing your gesture.
 
-For the intended actor and audience, read the narration itself: it names your character and explicitly says the gesture is addressed to the captured NPC or **everyone nearby**. The local notification also distinguishes targeted and group submissions. Misleading card names do not, by themselves, mean the wrong mode was submitted.
+The remaining limitation is **To**: SkyrimNet selects a responder and can put that NPC in the event's target field. A group gesture may therefore appear as Bill → Ted even though the narration explicitly addresses everyone nearby. If nobody is in earshot and no responder is selected, there may be no **To** value and no reply.
 
-This is a known limitation of the current SkyrimNet API integration. Correcting the event metadata while preserving captured-NPC response routing would require SkyrimNet-side changes. That's a future consideration, not a fix included in this version; the current explicit audience wording is intentional.
+Read the narration for the intended audience; it names your character and explicitly addresses the captured NPC or **everyone nearby**. The local notification also distinguishes targeted and group submissions. This version corrects the player-originator arguments, but it does not separate intended audience from selected responder inside SkyrimNet's event metadata.
 
 
 ## What's on the wheel?
@@ -218,22 +224,69 @@ Tell it what gesture you want. It can suggest wording immediately, without seein
 Like the iActions helper, it **generates JSON for you to save**. Your configuration files are not automatically visible to the agent just because it appears in SkyrimNet's WebUI. It cannot read or write them through standard agent tools, and SkyrimNet's prompt editor/reload tools do not manage them. Its review covers only the JSON you provide—not the installed files or actual Lua validation. Record snippets are merge-only or replace-one-record suggestions, never whole-catalog replacements; without your files, ID collisions and wheel placement remain unchecked. Review its output, back up your files, save or merge the changes, then load a save. The wheel works without this helper; it adds no actions or triggers.
 
 
-## If something isn't behaving
+## FAQ
 
-**The wheel doesn't open:** Check that you launched through SKSE, enabled PlayerSignals.esp, and installed UIExtensions and JContainers—including its Lua files. Confirm SkyrimNet.esp is enabled and its native API is available. Try again in normal gameplay with other menus closed. If you changed the key, load a save first and check for a conflicting binding.
+### How do I change the hotkey?
 
-**The wheel opens but looks wrong:** Another mod may replace UIExtensions' wheel script or menu. Check which files win in your mod manager; PlayerSignals needs a stock-compatible pair. If only a label is clipped, try shorter wording.
+1. Open the winning installed copy of `SKSE/Plugins/PlayerSignals/layout.json`. In MO2, open the mod folder and check for higher-priority overrides as described under [Make the wheel your own](#make-the-wheel-your-own).
+2. Change only the existing `input.openKeyCode` value. **F9 is `67`; Right Alt is `184`.** Use a decimal SKSE keyboard scan code, not `"F9"` or a Windows key code, and keep the rest of the file.
+3. Save the file, then **load a save** to apply the new binding. Check for other mods using that key.
 
-**You chose a gesture but got no notification:** The notification appears only when SkyrimNet's API reports success. Check the reported PlayerSignals/API error and dependency setup. An invalid captured NPC fails closed unless you held Shift for group mode.
+There is no MCM hotkey setting. Avoid Tab and either Shift key; they already serve as cancel and group-targeting controls. See [Change the opening key](#change-the-opening-key) for more codes.
 
-**You got the notification but no NPC replied:** The notification is a local submission receipt, not a response. SkyrimNet's settings and conversation rules determine whether NPCs speak. No response is guaranteed, even in group mode.
+### How do I customize actions or add a new gesture?
 
-**You selected a gesture but your character didn't move:** That's expected. PlayerSignals describes nonverbal intent to SkyrimNet; it doesn't play animations, transfer items, or force NPC actions.
+- To rename, reorder, move, hide, or place an entry in a submenu, edit `layout.json`. The visible `label` does not change the narration; the `intent` ID chooses the catalog record. Use `null` to disable a slot without shifting later entries.
+- To change what a gesture means or what its notification says, edit its record in `intents.json`.
+- To add a new gesture, add a new lowercase intent ID with all three phrase fields—`narration`, `notification`, and `targetedNotification`—then add a layout slot with a `label` and that same `intent` ID. Merge these into your existing files; do not discard unrelated entries.
+- Keep your character's name and final period out of the three phrase values. Only `targetedNotification` contains the literal `{target}`, exactly once.
+
+Back up both files, save valid JSON without comments or trailing commas, then **load a save**. No recompilation is needed. See [Change phrases or add an intent](#change-phrases-or-add-an-intent) for an example.
+
+These “actions” are narration requests, not executable NPC commands. Adding a follow, trade, or animation-themed phrase does not implement that behavior.
+
+### Why doesn't the wheel open?
+
+Check that you launched through SKSE, enabled PlayerSignals.esp, and installed UIExtensions and JContainers—including its Lua files. Confirm SkyrimNet.esp is enabled and its native API is available. Try again in normal gameplay with other menus closed. If you changed the key, load a save first and check for a conflicting binding. Invalid configuration fails closed; restore your backed-up JSON and reload if the problem started after an edit.
+
+### Why does the wheel look wrong?
+
+Another mod may replace UIExtensions' wheel script or menu. Check which files win in your mod manager; PlayerSignals needs a stock-compatible pair. If only a label is clipped, try shorter wording.
+
+### Why didn't I get a notification?
+
+The notification appears only when SkyrimNet's API reports success. Check the reported PlayerSignals/API error and dependency setup. An invalid captured NPC fails closed unless you held Shift for group mode. Navigation and cancellation intentionally produce no submission notification.
+
+### Why didn't an NPC reply after I got a notification?
+
+The notification is a local submission receipt, not a response. SkyrimNet's settings and conversation rules determine whether NPCs speak; the captured NPC is not guaranteed to respond. With nobody eligible nearby, no reply is expected. Hold either Shift through selection until the wheel closes to address everyone nearby, but that still does not force a response.
+
+### Does this play animations or force NPC actions?
+
+No. PlayerSignals describes nonverbal intent to SkyrimNet; it does not animate your character, transfer items, or force an NPC to follow, wait, or obey. The gesture text is roleplaying context for SkyrimNet.
+
+### Can I enable or remove it during a playthrough?
+
+Existing-save initialization is designed into the mod. Removal was tested on one ADT save: disabling PlayerSignals left saved script data, and a ReSaver-cleaned copy loaded without PlayerSignals missing-script warnings. That does not establish clean removal without intervention or long-term safety. Preserve a pre-installation save and matching SKSE cosave; see [Updating or removing](#updating-or-removing) for the findings and recommended rollback.
 
 ## Updating or removing
 
 When updating an older PlayerSignals version, replace its files rather than merging the new version over them. Remove old PlayerSignals YAML trigger/action files; this version uses SkyrimNet's native API instead. Keep the new prompt-only helper bundle if you want its WebUI agent—it is not the old dispatch bundle.
 
-PlayerSignals doesn't add gesture spells, edit NPC world records, or change player controls. A save can still retain quest/script state, and there is no shutdown/uninstall cleaner. This doesn't mean removal is inherently unsafe; it means a clean mid-playthrough removal is not guaranteed. The safest save-state rollback is to restore a backup from before installation, then remove the mod. SkyrimNet may store narration history separately; restoring a Skyrim save does not erase that history.
+PlayerSignals doesn't add gesture spells, edit NPC world records, or change player controls. A save can still retain quest/script state, and there is no shutdown/uninstall cleaner.
+
+### What the removal test showed
+
+On one ADT test save:
+
+- With PlayerSignals disabled, the save loaded, gameplay continued, and another save was made. No new PlayerSignals narration calls were logged, but missing-plugin/script warnings and saved Papyrus remnants remained.
+- ReSaver identified **two unattached instances and two undefined elements** associated with PlayerSignals.
+- After those remnants were removed from a copy, `Save6_resaver.ess` loaded without PlayerSignals missing-class/type warnings. The captured post-load window was approximately **eight seconds**; it did not include another save/reload cycle after cleanup.
+
+This demonstrates a short successful load after cleanup, **not guaranteed clean removal or long-term safety**. ReSaver cleaning is not a required or universally safe uninstall procedure for this beta. If you investigate saved remnants, work on copies and preserve the originals.
+
+### Recommended rollback
+
+The safest save-state rollback remains restoring a **save and matching SKSE cosave from before PlayerSignals was installed**, with the mod disabled. Disabling a mod does not automatically erase its saved script data. SkyrimNet may store narration history separately; restoring a Skyrim save does not erase that history.
 
 And that's it: a nod, a wave, a very Skyrim-flavoured misunderstanding. Make the labels yours, keep the gestures clear, and let the conversation take it from there.

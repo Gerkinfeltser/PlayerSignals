@@ -239,13 +239,11 @@ Event OnKeyDown(Int keyCode)
 EndEvent
 
 Function Submit(String narration, String feedbackPrefix, String feedbackSuffix, Actor player, Actor recipient, Bool targeted, Int token)
-    Actor speaker = player
-    Actor listener = None
+    Actor targetActor = None
     String failure = ""
     If targeted
         If recipient
-            speaker = recipient
-            listener = player
+            targetActor = recipient
             String recipientName = recipient.GetDisplayName()
             narration += " This gesture is addressed to " + recipientName + "."
             feedbackPrefix += recipientName
@@ -265,7 +263,7 @@ Function Submit(String narration, String feedbackPrefix, String feedbackSuffix, 
         Debug.Trace("[PlayerSignals] " + failure, 1)
         Return
     EndIf
-    Int result = SkyrimNetApi.DirectNarration(narration, speaker, listener)
+    Int result = SkyrimNetApi.DirectNarration(narration, player, targetActor)
     If token != _generation || !_ready
         Return
     EndIf

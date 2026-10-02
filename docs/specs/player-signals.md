@@ -23,7 +23,7 @@ Decided:
 - No captured NPC means everyone-nearby mode. A captured NPC that is no longer alive, enabled, or 3D-loaded when submitting fails closed; it must not silently turn into everyone mode or another target.
 - One `SkyrimNetApi.DirectNarration` call per accepted selection. No retries, fallback submission, mod events, trigger bundle, or YAML triggers.
 - One local in-game notification only when that API call returns `0`. Navigation, cancellation, failed API calls, invalidated/stale selections, and failed captured-target validation are silent.
-- Preserve the meanings of all 25 shipped default gestures while allowing additional intents through the JSON catalog. Narration text always describes the player as the gesture actor, even when SkyrimNet's responder context is a captured NPC.
+- Preserve the meanings of all 25 shipped default gestures while allowing additional intents through the JSON catalog. Narration text always describes the player as the gesture actor, and every direct narration call supplies the player as originator.
 - No animation playback, item transfers, forced NPC actions, or guaranteed NPC response/compliance.
 
 ### User outcomes
@@ -66,12 +66,12 @@ No captured NPC is an intentional everyone-nearby selection, not an error. Do no
 For a still-valid captured NPC with no Shift override, call exactly:
 
 ```papyrus
-SkyrimNetApi.DirectNarration(text, respondingNPC, player)
+SkyrimNetApi.DirectNarration(text, player, capturedNPC)
 ```
 
-The captured NPC is the responder/originator context and the player is the listener context for SkyrimNet. The narration text itself must still name the player as the actor performing the authored gesture; do not rewrite the gesture as an action performed by the NPC.
+The player is always the originator (`From`), and the captured NPC is the explicit target supplied to SkyrimNet. The narration text must name the player as the actor performing the authored gesture and explicitly address the captured NPC. Correct originator attribution takes priority over forcing that NPC to respond. SkyrimNet's player-origin direct-narration path selects a responder; an explicit target does not bypass that selection, so the captured NPC is not guaranteed to respond.
 
-Known SkyrimNet attribution limitation: the latest reviewed archive showed the targeted `eventOriginator=NPC, target=player` path rendering gesture `From`/`To` attribution in reverse, while group processing substituted the reply speaker into event `To`. This is observed engine behavior, not fixed by PlayerSignals; no engine patch is approved. Do not claim that the attribution issue is fixed.
+Known SkyrimNet metadata limitation: after selecting a responder, the player-origin direct-narration path writes that NPC into event `targetActor` and JSON `listener`. Event `To` therefore need not preserve the captured recipient or an everyone-nearby audience. The implementation plan separates the older NPC-originator archive from current player-originator runtime evidence. The current session verifies native player-originator calls and responses, not exhaustive Recent Events rendering. No engine patch is approved, and do not claim the remaining `To` limitation is fixed.
 
 For no captured NPC or a Shift override, call exactly:
 
@@ -312,7 +312,7 @@ Prior build, test, and adapter-smoke evidence is historical and does not verify 
 ## Acceptance criteria and verification
 
 - Right Alt opens once per press; the crosshair NPC is captured before the wheel opens.
-- With a still-valid captured NPC and no Shift held at final selection return, exactly one targeted direct narration is submitted with responder/originator context set to that NPC and listener context set to player. Narration text still names the player as gesture actor.
+- With a still-valid captured NPC and no Shift held at final selection return, exactly one targeted direct narration is submitted with the player as originator and the captured NPC as explicit target. Narration text names the player as gesture actor and addresses the captured NPC. SkyrimNet selects the responder; the captured NPC is not guaranteed to respond.
 - Holding either Shift scan code 42/54 at the immediate post-`Browse` sample overrides targeting; the no-target case also uses group mode. Both call `DirectNarration(text, player, None)` once and explicitly say everyone nearby is addressed.
 - A captured NPC that is no longer alive, enabled, or 3D-loaded before a non-overridden submission causes no API call, no redirection, and no success notification.
 - Every selected ID resolves through the dynamically validated JSON registry: it includes the 25 shipped default records and may include additional records. The `narrations`, group `notifications`, and targeted notification prefix/suffix maps are built from JSON phrases; phrase values omit the player prefix/final period.
@@ -321,7 +321,7 @@ Prior build, test, and adapter-smoke evidence is historical and does not verify 
 - Navigate every submenu; test Back, root Close, Tab cancel, cancel after a prior intent, blocked/failed menu opening, invalidated sessions, startup dependency checks, and save-load/rebinding.
 - Malformed/missing JSON, unknown IDs, excess slots, missing submenu targets, and submenu cycles fail closed without accidental narration.
 - Verify stock-framework operation and actual winning script/SWF combination without changing profile/load order unless approved.
-- Do not mark the JSON catalog/targeted-notification revision complete based on prior-build tests, archive routing, scoped source-derived smokes, or successful Papyrus compiles. Although the 15 unittests passed separately, the integrated full build failed; in-game acceptance remains unverified.
+- Do not mark exhaustive runtime acceptance complete based on scoped smokes or a small archived session. Current logs establish eight player-originator submissions, seven NPC responses, and one expected no-audience result; physical Shift timing, notification display, comprehensive cancellation/error transitions, upgrades, and long-term removal behavior remain unverified. The earlier integrated build failed at a locked, unchanged ESP, separately verified by generation.
 
 Verification strategy:
 - Compile against real SKSE/UIExtensions/JContainers declarations and inspect both generated PEX files plus authored ESP/SEQ.
@@ -329,7 +329,7 @@ Verification strategy:
 - Exercise the player-facing wheel, captured-target validity transitions, Shift group override, no-target group behavior, SkyrimNet API outcomes, notification return gating, save-load, and cancellation in game.
 - Observe actual NPC reaction without equating API success with speech or compliance. Group address text is not a broadcast guarantee.
 - If permanent tests are added, they must catch consumer-visible behavior such as wrong target, silent-failure regression, cancellation leakage, stale-session dispatch, target invalidation, narration-map mismatch, or notification gating—not copied source text or tautological forwarding.
-- Report only checks actually exercised. Prior-build source/build/adapter-smoke evidence and archive routing are historical; current scoped smokes, Papyrus compiles, and separately run 15 unittests are recorded in the plan. The integrated full build failed, and in-game runtime acceptance remains pending.
+- Report only checks actually exercised. The plan separates historical evidence, current source/build/config verification, the ASSOS gesture session, and the limited ADT removal/post-ReSaver snapshots. Do not equate a successful cleaned-save load with unassisted clean removal or long-term safety.
 
 ## Implementation boundaries
 

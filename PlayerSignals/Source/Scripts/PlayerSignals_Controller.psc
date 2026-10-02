@@ -54,6 +54,10 @@ Function Maintenance(Int token)
         Report("UIExtensions.esp is not loaded.")
         Return
     EndIf
+    If Game.GetModByName("SkyrimNet.esp") == 255 || SkyrimNetApi.GetBuildVersion() == ""
+        Report("SkyrimNet native API is unavailable; check its installation and SKSE log.")
+        Return
+    EndIf
     Int transport = JValue.retain(JMap.object(), "PlayerSignals")
     JMap.setStr(transport, "path", _path)
     String failure = JLua.evalLuaStr("local m = jrequire('PlayerSignals.config'); return m.load(args)", transport, "Lua validator unavailable; check JContainers Lua support and PlayerSignals/config.lua.", False)
@@ -102,6 +106,22 @@ Bool Function ValidateNative(Int config)
     If JMap.valueType(config, "root") != 6 || JMap.valueType(config, "input") != 5 || JMap.valueType(config, "wheels") != 5
         Return False
     EndIf
+    If JMap.valueType(config, "notifications") != 5 || JMap.valueType(config, "narrations") != 5
+        Return False
+    EndIf
+    If JMap.valueType(config, "targetNotificationPrefixes") != 5 || JMap.valueType(config, "targetNotificationSuffixes") != 5
+        Return False
+    EndIf
+    Int notifications = JMap.getObj(config, "notifications")
+    Int narrations = JMap.getObj(config, "narrations")
+    Int targetPrefixes = JMap.getObj(config, "targetNotificationPrefixes")
+    Int targetSuffixes = JMap.getObj(config, "targetNotificationSuffixes")
+    If !JValue.isMap(notifications) || !JValue.isMap(narrations)
+        Return False
+    EndIf
+    If !JValue.isMap(targetPrefixes) || !JValue.isMap(targetSuffixes)
+        Return False
+    EndIf
     Int inputConfig = JMap.getObj(config, "input")
     Int wheels = JMap.getObj(config, "wheels")
     If !JValue.isMap(inputConfig) || !JValue.isMap(wheels) || JMap.valueType(inputConfig, "openKeyCode") != 2
@@ -133,6 +153,16 @@ Bool Function ValidateNative(Int config)
                 EndIf
                 If JMap.hasKey(entry, "intent")
                     If JMap.valueType(entry, "intent") != 6
+                        Return False
+                    EndIf
+                    String intent = JMap.getStr(entry, "intent")
+                    If JMap.valueType(notifications, intent) != 6 || JMap.getStr(notifications, intent) == ""
+                        Return False
+                    EndIf
+                    If JMap.valueType(narrations, intent) != 6 || JMap.getStr(narrations, intent) == ""
+                        Return False
+                    EndIf
+                    If JMap.valueType(targetPrefixes, intent) != 6 || JMap.valueType(targetSuffixes, intent) != 6
                         Return False
                     EndIf
                 ElseIf JMap.hasKey(entry, "submenu")
@@ -168,19 +198,83 @@ Event OnKeyDown(Int keyCode)
     EndIf
     _browsing = True
     Int token = _generation
+    ; Capture once before the first wheel; navigation never retargets this session.
+    Actor recipient = Game.GetCurrentCrosshairRef() as Actor
+    If recipient == player
+        recipient = None
+    EndIf
+    Bool targeted = recipient != None
     ; A local lease keeps the old graph alive across latent OpenMenu, even after reload.
     Int session = JValue.retain(_config, "PlayerSignals")
     Int history = JValue.retain(JArray.object(), "PlayerSignals")
     String pending = Browse(session, history, token, player)
+    Bool broadcast = False
+    If pending != ""
+        ; Hold Shift through selection; stock UIExtensions does not return click modifiers.
+        broadcast = Input.IsKeyPressed(42) || Input.IsKeyPressed(54)
+    EndIf
+    targeted = targeted && !broadcast
+    String feedbackPrefix = ""
+    String feedbackSuffix = "."
+    String narration = ""
+    If pending != "" && token == _generation && _ready
+        ; Capture text while the session lease is alive, before the final dispatch guard.
+        String name = player.GetDisplayName()
+        If targeted
+            feedbackPrefix = name + " " + JMap.getStr(JMap.getObj(session, "targetNotificationPrefixes"), pending)
+            feedbackSuffix = JMap.getStr(JMap.getObj(session, "targetNotificationSuffixes"), pending) + "."
+        Else
+            feedbackPrefix = name + " " + JMap.getStr(JMap.getObj(session, "notifications"), pending)
+        EndIf
+        narration = name + " " + JMap.getStr(JMap.getObj(session, "narrations"), pending) + "."
+    EndIf
     history = JValue.release(history)
     session = JValue.release(session)
+    If token == _generation && _ready && pending != ""
+        Submit(narration, feedbackPrefix, feedbackSuffix, player, recipient, targeted, token)
+    EndIf
     If token == _generation
         _browsing = False
-        If _ready && pending != ""
-            player.SendModEvent("PlayerSignals_Intent_" + pending, "", 0.0)
-        EndIf
     EndIf
 EndEvent
+
+Function Submit(String narration, String feedbackPrefix, String feedbackSuffix, Actor player, Actor recipient, Bool targeted, Int token)
+    Actor speaker = player
+    Actor listener = None
+    String failure = ""
+    If targeted
+        If recipient
+            speaker = recipient
+            listener = player
+            String recipientName = recipient.GetDisplayName()
+            narration += " This gesture is addressed to " + recipientName + "."
+            feedbackPrefix += recipientName
+        EndIf
+        ; Validate after resolving text: the display-name lookup may yield.
+        If !recipient || recipient.IsDead() || recipient.IsDisabled() || !recipient.Is3DLoaded()
+            failure = "Captured NPC is no longer available; no narration submitted."
+        EndIf
+    Else
+        narration += " This gesture is addressed to everyone nearby."
+    EndIf
+    ; Actor queries can yield. No external lookup between this guard and dispatch.
+    If token != _generation || !_ready
+        Return
+    EndIf
+    If failure != ""
+        Debug.Trace("[PlayerSignals] " + failure, 1)
+        Return
+    EndIf
+    Int result = SkyrimNetApi.DirectNarration(narration, speaker, listener)
+    If token != _generation || !_ready
+        Return
+    EndIf
+    If result == 0
+        Debug.Notification(feedbackPrefix + feedbackSuffix)
+    Else
+        Debug.Trace("[PlayerSignals] DirectNarration failed: " + result + "; no success notification.", 1)
+    EndIf
+EndFunction
 
 Event OnKeyUp(Int keyCode, Float holdTime)
     If keyCode == _key

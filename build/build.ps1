@@ -14,6 +14,7 @@ $imports = @(
     (Join-Path $mod 'Source/Scripts'),
     (Join-Path $ModsRoot 'Skyrim Script Extender (SKSE64)/Scripts/Source'),
     (Join-Path $ModsRoot 'JContainers SE/scripts/source'),
+    (Join-Path $ModsRoot 'SkyrimNet/Source/Scripts'),
     (Join-Path $GameRoot 'Data/Source/Scripts'),
     $UiExtensionsSources,
     $FallbackHeaders

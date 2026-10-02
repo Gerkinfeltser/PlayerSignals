@@ -1,95 +1,103 @@
 # Implementation Plan: PlayerSignals (for SkyrimNet)
 
-Status: Source implementation and generated artifacts complete; external trigger-package migration and manifest complete; beta26 devkit content validation passed against the package root only; MO2 deployment and full in-game acceptance remain gated. User chose to leave MO2 unchanged.
+Status: The approved captured-target/direct-narration contract is active. Scoped Lua-loader/source-derived adapter smokes passed, both Papyrus scripts compiled, and 15 unittests passed separately. The integrated full build failed at a later Spriggit step; in-game acceptance remains pending.
 Updated: 2026-10-01
 
-Authoritative behavior, schema, event, narration, and acceptance contracts: [PlayerSignals specification](../specs/player-signals.md). Do not duplicate or change those contracts in this plan.
+Authoritative behavior, schema, targeting, narration, and acceptance contracts: [PlayerSignals specification](../specs/player-signals.md). Update that spec first if an approved contract changes.
 
-## Work Location
+## Work location and boundaries
 
 - Repository: `D:/gerkgit/SkyrimNet_PlayerSignals`.
 - Actual mod root: `PlayerSignals/`; only this child folder is symlinked into MO2.
 - Authored plugin records: `PlayerSignals_spriggit/`, outside the mod root.
-- Private GitHub repository: https://github.com/Gerkinfeltser/SkyrimNet_PlayerSignals.
+- Do not change MO2, symlinks, plugin activation, or load order. No commit/push.
+- Do not use the former mod-event/YAML external-package installation, editing, or activation procedures as current instructions.
 
-## Phase 1 — Preflight and Attachment
+## Active phase — Captured targeting and direct narration
 
-- [ ] Confirm installed runtime schema/monitor behavior against the inspected native source. The observed overlay convention is historical and predates the external-package cutover; exact DLL revision parity remains unproven.
-- [ ] Resolve the winning UIExtensions scripts/SWF before game verification. Read-only audit found the enabled original animation wheel's loose script override; user declined profile changes in this session.
-- [x] Author standalone ESL-flagged quest/player-alias records and matching SEQ. No edits to SkyrimNet or the separate emote project.
-- [x] Establish both script attachments and dependency checks using the lifecycle contracts. Actual startup/save-load scheduling still needs in-game observation.
+This phase replaces the former `SendModEvent`/external-YAML-trigger path. The controller and Lua loader must follow the frozen specification, including the editable JSON registry and target-feedback maps; the primary owns integration, build, and runtime verification.
 
-Acceptance: authored records attach the controller and player alias correctly; new game and save load schedule maintenance. Verify record links and generated ESP/SEQ separately from runtime startup.
+### Implementation sequence
 
-## Phase 2 — Config and Input
+1. **Native API readiness:** require both loaded `SkyrimNet.esp` and a nonempty `SkyrimNetApi.GetBuildVersion()` before enabling the feature. Use installed SkyrimNet script imports in the build, ordered after JContainers and before vanilla imports.
+2. **Capture and selection:** capture the current crosshair NPC before opening the wheel. Immediately after `Browse` returns a final accepted intent, sample left/right Shift scan codes 42/54 before feedback/catalog lookups. Either held key overrides targeting to group mode; no captured NPC is also group mode.
+3. **Submission:** targeted mode checks the captured actor is alive, enabled, and 3D-loaded at submission. Without a Shift override, any failed check ends silently, never redirecting to group or another NPC. Targeted call: `SkyrimNetApi.DirectNarration(text, respondingNPC, player)`. Group call: `SkyrimNetApi.DirectNarration(text, player, None)`. Group text explicitly addresses everyone nearby; witnesses may join, but no response or compliance is guaranteed.
+4. **Catalog and feedback:** `PlayerSignals/SKSE/Plugins/PlayerSignals/intents.json` is the editable ID registry and phrase source. The shipped catalog has 25 default IDs, but valid new lowercase IDs are defined and validated dynamically in JSON. Each record has exactly the nonempty UTF-8 strings `narration`, `notification`, and `targetedNotification`; the sole literal `{target}` occurs exactly once in the targeted template and nowhere in the other fields. All phrases omit player prefix/final period. The Lua loader reads both JSON files, validates every catalog record before layout references, and builds native `narrations`, group `notifications`, and targeted-notification prefix/suffix maps. Changing or adding an ID/phrase is JSON-only; reference new IDs from `layout.json`, then load a save. No Lua/Papyrus edit or recompilation is needed.
+5. **Cutover and docs:** keep obsolete YAML trigger/action content and its installation/activation guidance removed. The separately requested prompt-only WebUI helper may use a new manifest, but cannot restore the old dispatch bundle. Keep useful old-runtime facts only in sections explicitly labeled historical/pre-cutover.
 
-- [x] Implement strict raw-file validation through approved JContainers Lua, owned native root lifetime, and fail-closed errors.
-- [x] Implement Right Alt default registration and JSON-configured rebinding on load (source/compiled evidence; runtime pending).
-- [x] Implement session invalidation for maintenance/save-load and guards against another menu or re-entry.
+### Active acceptance and evidence gate
 
-Acceptance: valid config establishes one key binding; invalid config disables it without an intent. Save loading releases previous state and replaces the old binding at the documented point.
+Scoped current-source observations:
 
-## Phase 3 — One Complete Selection Path
+- [x] Lua+JSON loader smoke: the new native maps validated at the boundary; a custom ID loaded without Lua edits; empty target-template prefix/suffix and Unicode prefix/suffix worked, including a recipient name containing literal `{target}` without recursive substitution; missing/empty catalogs failed closed with the path and no published config/fallback. All 25 shipped narration and untargeted-notification phrases exactly matched the captured previous defaults. A direct file-load smoke rejected a narration ending in a period, `{target}` in a group notification, and a targeted template ending in a period before trailing whitespace; errors named `intents.json` and the offending field.
+- [x] Source-derived `OnKeyDown`/`Submit` smoke: captured Ted remained the recipient after the crosshair moved to Sven; targeted feedback was `Bill greets Ted`; either Shift key, no captured NPC, and Shift override feedback were `Bill greets` without Ted. The submenu sample produced `Bill asks Ted to follow`. Death, disablement, or unload during name lookup prevented API/feedback; API return `1` produced no feedback; generation change during the API call suppressed feedback.
+- [x] Both Papyrus scripts compiled with 0 errors and 0 warnings.
 
-- [x] Implement root Confirm/Close through UIExtensions; no animation calls or player-control toggles.
-- [x] Add the matching Confirm mod-event trigger.
-- [ ] Exercise Confirm, Close, Tab cancel, cancel after a prior selection, and failed opening in game. Compilation passed; no player-facing runtime exercise occurred.
+The integrated full-build attempt did not succeed: after the Papyrus compiles, Spriggit failed to move the unchanged ESP because the file was locked. A fresh Spriggit deserialize into an owned temporary directory succeeded; the generated and existing packaged ESP SHA-256 values both matched `e43f0e7cf612d9b9140ed14ff90df2b2a95ac8da6a0c487ec8530a8315596c35`, and the existing SEQ bytes were `00 08 00 00`. This confirms the ESP/SEQ are unchanged, not that the full build succeeded.
 
-Acceptance: one Confirm emits one player-originated named event and the intended direct narration; cancellation/navigation emits none. Observe nearby NPC behavior under SN reaction settings. This is an integration checkpoint, not the final deliverable or a scope reduction.
+- [x] All 15 unittests passed when run separately. The chained build/test command did not reach tests because the Spriggit stage failed on the locked ESP.
+- [ ] Complete a successful integrated build after the ESP file lock is released; the separate generated-file comparison is already complete.
+- [ ] Verify current behavior in game. The adapter/source smokes do not verify Papyrus VM/native execution, physical Shift timing, in-game notifications, or uninstall behavior.
 
-## Phase 4 — Complete Default Feature
+The latest reviewed runtime archive below is prior-build routing evidence only. It does not verify the current JSON catalog, targeted local notifications, physical Shift timing, or uninstall behavior. No MO2 changes were made.
 
-- [x] Implement iterative sub-wheel navigation, Back, disabled slots, and the complete supported schema.
-- [x] Add all four default wheels and 25 supported intent definitions.
-- [x] Integrate all 25 authored trigger files in the external package; the earlier joint contract audit confirmed IDs, events, filters, and narrations. Installed activation remains pending.
+### Optional intent-authoring agent — implemented and locally rendered
 
-Acceptance: all defaults match the spec's meaning and layout; custom valid layouts work without recompilation. No duplicate trigger copies or second narration submission path.
-
-## Phase 5 — Verification and Delivery
-
-- [x] Compile with real dependency declarations/stock UIExtensions source and repository-owned flags; build ESP/SEQ and inspect generated artifacts.
-- [x] Migrate all 25 authored trigger files byte-identically into `PlayerSignals/SKSE/Plugins/SkyrimNet/external/phospheneoverdrive.playersignals/triggers/`, remove the empty legacy overlay trigger directory, and add the package-root manifest (`phospheneoverdrive.playersignals`, owner `phospheneoverdrive`, version `0.1.0`, target `min_skyrimnet_version` `0.26.0`; not an in-game-tested minimum).
-- [x] Run beta26 devkit `content-validate.exe` against the external package root: `ok:true`, 25 files, matching package ID, 0 errors/warnings/unresolved/shadows. No base tree supplied; runtime remains unverified.
-- [ ] Register the child-folder symlink and enable the plugin. **User chose to leave MO2 unchanged**; no activation/order changes made.
-- [ ] Exercise the full in-game matrix: malformed config, targets, slot limits, cycles, save-load state, rebinding, cancellation and input restoration. No Skyrim runtime/harness available; profile gate also remains.
-- [x] Record build/artifact/runtime evidence separately and document activation/configuration instructions in README. Runtime instructions are a pending procedure, not verified behavior.
-- [x] Luna adversarial review completed; primary addressed owned-handle loss and stale-maintenance rescheduling. Independent role review findings and resolution are recorded below.
-
-Acceptance: every spec criterion passes or an actual unreachable prerequisite is explicitly reported. No feature completion claim based only on compilation or file presence.
-
-### Current Evidence and Next Runtime Gate
-
-- Generated `PlayerSignals_Controller.pex` and `PlayerSignals_PlayerAlias.pex`: compiler zero errors/warnings. Stock framework source was extracted only to a temporary compile directory and is not shipped.
-- Spriggit 0.40.0 built and round-tripped `PlayerSignals.esp`: `Small` flag; StartGameEnabled quest `000800`; controller attachment; alias 0 with player-alias attachment and forced player `000014:Skyrim.esm`.
-- Build-generated `PlayerSignals.seq` contains little-endian `00000800` (`00 08 00 00`); PEX/ESP headers and SEQ bytes inspected.
-- Seven LuaJIT regression tests passed for raw JSON/schema behavior. Throwaway load-entry smoke passed with a native-container adapter; this is not installed JContainers native-runtime proof.
-- The pre-cutover joint content audit covered four eight-slot wheels and all 25 trigger IDs, event names, player filters and exact narrations. All 25 authored trigger files were migrated byte-identically into the external package, with no remaining overlay trigger directory. Beta26 devkit `content-validate.exe` passed against the package root (`ok:true`, 25 files, package ID `phospheneoverdrive.playersignals`, 0 errors, 0 warnings, 0 unresolved, 0 shadows); no base tree was supplied.
-- Luna slices executed with explicit `openai-codex/gpt-6-luna`: default layout/config review, triggers/narration review, adversarial integration review. Reviewer/scout task roles were used for independent validation and are not claimed as Luna.
-- Independent reviewer confirmed two additional source-level maintenance races: readiness published after yielding key-state/registration calls, and player lookup after the final dispatch guard. Primary moved key/held computation to locals, added pre/post-registration generation guards with cleanup, committed readiness without external calls, resolved/passed the player before final guards, and rechecked key/readiness/re-entry after gameplay gates. Reviewer re-read the fixes and reported no remaining established defect. This is source review, not in-game race verification.
-- Read-only scout historically found the enabled animation-wheel loose `UIWheelMenu.pex` override and no active PlayerSignals provider. Its report that the installed `_iSetup_symlink` overlay supported the local trigger convention predates this external-package cutover; installed DLL/source parity and effective virtual SWF remain unproven.
-- Runtime status request could not connect, and no Skyrim process was observed. No actual UI selection, named event, narration, NPC speech, save-load/rebinding, or control restoration has been exercised.
-
-Next prerequisite: user authorizes a testing-profile change or supplies an already compatible profile with PlayerSignals activated, then a running SKSE game in normal world view. Do not infer permission from this plan or alter the current profile. Keep all unchecked runtime criteria open.
+- Packaged `SKSE/Plugins/SkyrimNet/external/phospheneoverdrive.playersignals/manifest.json` and `prompts/agent_playersignals_intent_helper.prompt`; no actions/triggers. The name follows the source-observed WebUI `agent_` discovery rule.
+- Mirrors the supplied iActions helper's generate-and-save workflow. Requests current catalog/layout from the user, preserves unrelated configuration, reviews exact schema/reference rules, and labels partial records merge-only. Standard agent tools cannot read/write these files or execute the PlayerSignals validator; no automatic application or runtime validation is claimed.
+- Ran the local `content-validate.exe` against the actual packaged bundle with installed `store/skyrimnet.base` and representative `availableTools`, `chatHistory`, and `userInput` context. Result: `ok:true`, one prompt, zero errors, warnings, unresolved references, or shadows. Observed rendered inherited role, literal `{target}`, tool list, and user context. Validated its JSON example through the actual Lua catalog validator.
+- Live WebUI discovery and LLM responses remain unverified: the new bundle has not been deployed or activated, and no MO2/load-order changes were made.
 
 
-## Luna Delegation
+### Existing-save compatibility and safe removal
 
-Verified runner: `omp --model openai-codex/gpt-6-luna --thinking low --no-session --print ...`.
+Source comparison confirms the cutover adds no saved controller fields or variables, changes no property defaults, aliases, quest/FormIDs, or startup SEQ; private native maps are rebuilt from both JSON files at load. The stable startup quest plus alias `OnInit`/`OnPlayerLoadGame` maintenance is designed to support new and existing saves, but current existing-save installation/update has not been verified in-game.
 
-| Slice | Prerequisite | Ownership / output |
+Comparison reference: `C:/Users/vector/ivault/reference/skyrim/skyrim-mid-playthrough-mod-updates.md` (Skyrim Mod Mid-Playthrough Updates). Applied considerations: persisted quest/script state, initialization on existing-save load, and testing updates before release. Do not rely on its claim that execution frames are unsaved; generation guards explicitly protect resumed old menu waits.
+
+- [ ] Verify a new install and an update from the previous release on an existing save through the actual `OnPlayerLoadGame` path.
+- [ ] Verify/document removal from a save. There is no shutdown/uninstall cleaner and no guaranteed clean mid-playthrough removal. Recommend restoring a pre-installation save before removing the mod; SkyrimNet may retain separately stored narration history even after Skyrim save rollback.
+
+## Prior-build runtime archive — historical routing evidence
+
+The latest reviewed archive has canonical main-log timestamps **2026-10-01 19:08:25.430–19:23:04.804**, SkyrimNet `0-26-0-0`. It records four PlayerSignals native calls:
+
+| Intent/mode | Recipient | Timestamp |
 |---|---|---|
-| Config/default-data review | Frozen spec | Read-only schema/reference findings |
-| Default layout implementation | Config contract fixed | `PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json` only |
-| Trigger implementation | Intent IDs/event contract fixed | 25 `player_signals_<id>.yaml` files in `PlayerSignals/SKSE/Plugins/SkyrimNet/external/phospheneoverdrive.playersignals/triggers/` |
-| Narration review | Spec catalog | Read-only meaning/recipient/outcome findings |
-| Adversarial integration review | Complete feature | Read-only cancellation/save-load/duplicate-event findings |
+| Greet, targeted | Embry | 19:09:35.552 |
+| Offer, group | — | 19:10:39.169 |
+| Greet, targeted | Alvor | 19:14:52.752 |
+| Think, group | — | 19:22:53.320 |
 
-Fan independent layout/trigger work together. Primary owns controller, plugin records, architecture, shared interfaces, integration, and final build/runtime verification. Delegate agents skip builds/tests/lint/formatters mid-flight; run integrated checks afterward.
+The trace shows the actual targeted branch skipping the selection step. The four prompts contain the correct Sigma gesture text; the model was `gemma-4-e4b-it`. Review retained 74 current input/output pairs and excluded 6,507 stale outputs; the latest excluded stale output was at **18:51:56.543**.
 
-The task tool's scout interface has no per-call model selector; do not claim a scout job used Luna. Use the explicitly selected Luna runner when model identity matters. Use source material via files and restrict tools appropriately for read-only jobs.
+This archive establishes routing behavior for a prior build only. It does not establish the current JSON catalog or targeted-notification implementation, the physical timing of Shift sampling, local notification behavior, or uninstall safety. Its SkyrimNet attribution output showed the targeted `eventOriginator=NPC, target=player` path reversing gesture `From`/`To`, while group processing substituted the reply speaker into event `To`. This known engine behavior remains unfixed; no engine patch is approved, and do not claim it is fixed.
 
-## Session Continuity
+## Historical implementation plan — pre-cutover only
 
-This spec and plan capture the implementation-relevant decisions from the original iPrompts conversation. An agent opened in the new repository should read the spec, this plan, and README before implementing. It must not reconstruct old conversation assumptions or modify iPrompts' mod root.
+This section preserves the former implementation sequence and runtime evidence for context. Its event/YAML architecture is superseded and must not be followed as current setup guidance.
 
-The current conversation can continue working against explicit new-project paths. Starting a separate Orca agent is optional; transfer context through these files plus an explicit task brief rather than assume a fresh session inherits the transcript.
+### Historical phases
+
+- **Preflight and attachment:** authored a standalone ESL-flagged quest/player-alias record and SEQ; checked startup/save-load lifecycle by source review. MO2/profile changes were not made.
+- **Configuration and input:** implemented strict raw JSON validation through JContainers Lua, native container ownership, Right Alt default registration, JSON rebinding, and maintenance invalidation. Those source/build results predate this cutover.
+- **Former one-selection path:** the earlier controller submitted player-originated `PlayerSignals_Intent_<id>` mod events, and a matching Confirm YAML trigger issued direct narration. This path is obsolete.
+- **Former full feature:** authored the four default wheels, 25 shipped intent defaults, external YAML trigger bundle, and player-named local notifications. Trigger text and event filtering are archival only; current editable ID/phrase data is in `intents.json`, as specified above.
+- **Former verification:** built PEX/ESP/SEQ, migrated 25 authored triggers into `phospheneoverdrive.playersignals`, and ran beta26 devkit validation. Those checks apply only to the former package and do not validate the current direct-API contract.
+
+### Historical evidence archive
+
+All evidence in this pre-cutover subsection is not evidence for current controller code, target capture, Shift behavior, direct API readiness, API return handling, or notifications:
+
+- Earlier Papyrus builds reported zero errors/warnings against installed SKSE/JContainers/vanilla declarations and stock UIExtensions source. Spriggit 0.40.0 round-tripped the standalone ESP; generated SEQ bytes were `00 08 00 00` for startup quest FormID `00000800`.
+- Seven LuaJIT raw-schema regression tests passed; a disposable native-container-adapter smoke exercised the former Lua load path. These do not verify installed native JContainers behavior or this cutover.
+- Historical beta26 `content-validate.exe` against the former external package root reported `ok:true`, 25 files, package ID `phospheneoverdrive.playersignals`, and zero errors/warnings/unresolved/shadows; no base tree was supplied.
+- The historical archive `D:/Modlists/ADT/_log-dumps/SkyrimNetOutput_ASSOS-1.1.1_2026-09-30_22-41-47.zip` has canonical log timestamps **2026-10-01 17:06:18.043–17:09:58.675**, SkyrimNet `0-26-0-0`. Logs recorded old package discovery/25 filter loads and controller readiness.
+- Historical Confirm at **17:06:52.957** reached direct narration but found no eligible nearby NPC. Historical Unsure at **17:09:40.173** selected Ralof and generated a response to `Sigma shrugs, indicating uncertainty.` Generation/TTS queuing was logged, but not that the user heard or saw the output. The archive predates the captured-target/direct-API contract.
+- The old decision/mood route reported HTTP 401 / missing authentication header at **17:09:41.707**; its fallback did not block the old Ralof generation. Supplemental OpenRouter logs were stale (September 30), not evidence for the October 1 turns.
+- Historical notification/catalog and wheel-label adapter smokes verified constructed values only. The archive predates the current API-return notification rule; old screenshots predate navigation markers and shortened labels.
+- The earlier profile inspection found an animation-wheel loose `UIWheelMenu.pex` override. Its winning script/SWF in a later session was not identified. A previous implementation session had no observed Skyrim process and could not connect to the local harness; these limitations/evidence are historical.
+
+## Session continuity
+
+For current work, read the authoritative spec and the active phase above. Historical phases, external-package records, old runtime logs, and old test/build outcomes must not be reconstructed as current behavior or used to claim current verification.

@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "intents": {
+    "confirm": {
+      "narration": "nods in agreement",
+      "notification": "nods in agreement",
+      "targetedNotification": "nods in agreement with {target}"
+    },
+    "deny": {
+      "narration": "shakes their head in disagreement",
+      "notification": "shakes their head in disagreement",
+      "targetedNotification": "shakes their head at {target} in disagreement"
+    },
+    "greet": {
+      "narration": "gives a friendly wave in greeting",
+      "notification": "greets",
+      "targetedNotification": "greets {target}"
+    },
+    "farewell": {
+      "narration": "waves goodbye",
+      "notification": "waves goodbye",
+      "targetedNotification": "waves goodbye to {target}"
+    },
+    "thanks": {
+      "narration": "bows their head in thanks",
+      "notification": "gives thanks",
+      "targetedNotification": "gives thanks to {target}"
+    },
+    "sorry": {
+      "narration": "makes an apologetic gesture",
+      "notification": "apologizes",
+      "targetedNotification": "apologizes to {target}"
+    },
+    "respect": {
+      "narration": "bows respectfully",
+      "notification": "shows respect",
+      "targetedNotification": "shows respect to {target}"
+    },
+    "welcome": {
+      "narration": "opens their arms in welcome",
+      "notification": "welcomes",
+      "targetedNotification": "welcomes {target}"
+    },
+    "congratulate": {
+      "narration": "applauds in congratulations",
+      "notification": "congratulates",
+      "targetedNotification": "congratulates {target}"
+    },
+    "offer": {
+      "narration": "extends an open hand, offering to give something",
+      "notification": "offers something",
+      "targetedNotification": "offers something to {target}"
+    },
+    "ask": {
+      "narration": "holds out an open hand, asking for something",
+      "notification": "asks for something",
+      "targetedNotification": "asks {target} for something"
+    },
+    "come_here": {
+      "narration": "beckons for someone to come closer",
+      "notification": "beckons",
+      "targetedNotification": "beckons {target}"
+    },
+    "follow_me": {
+      "narration": "gestures for others to follow them",
+      "notification": "asks others to follow",
+      "targetedNotification": "asks {target} to follow"
+    },
+    "wait_here": {
+      "narration": "gestures for others to wait here",
+      "notification": "asks others to wait",
+      "targetedNotification": "asks {target} to wait"
+    },
+    "quiet": {
+      "narration": "gestures for quiet",
+      "notification": "asks for quiet",
+      "targetedNotification": "asks {target} for quiet"
+    },
+    "ready": {
+      "narration": "signals that they are ready",
+      "notification": "signals readiness",
+      "targetedNotification": "signals to {target} that they are ready"
+    },
+    "warn": {
+      "narration": "makes an urgent warning gesture",
+      "notification": "gives a warning",
+      "targetedNotification": "gives {target} a warning"
+    },
+    "attention": {
+      "narration": "waves to get attention",
+      "notification": "seeks attention",
+      "targetedNotification": "seeks {target}'s attention"
+    },
+    "unsure": {
+      "narration": "shrugs, indicating uncertainty",
+      "notification": "is unsure",
+      "targetedNotification": "shrugs at {target}, indicating uncertainty"
+    },
+    "think": {
+      "narration": "pauses thoughtfully, asking for a moment to think",
+      "notification": "takes a moment to think",
+      "targetedNotification": "asks {target} for a moment to think"
+    },
+    "not_understood": {
+      "narration": "gives a puzzled look, indicating they do not understand",
+      "notification": "does not understand",
+      "targetedNotification": "gives {target} a puzzled look, indicating they do not understand"
+    },
+    "approve": {
+      "narration": "gestures approval",
+      "notification": "approves",
+      "targetedNotification": "gestures approval toward {target}"
+    },
+    "disapprove": {
+      "narration": "gestures disapproval",
+      "notification": "disapproves",
+      "targetedNotification": "gestures disapproval toward {target}"
+    },
+    "challenge": {
+      "narration": "makes a challenging gesture",
+      "notification": "issues a challenge",
+      "targetedNotification": "makes a challenging gesture toward {target}"
+    },
+    "yield": {
+      "narration": "raises their hands in surrender",
+      "notification": "signals surrender",
+      "targetedNotification": "signals surrender to {target}"
+    }
+  }
+}

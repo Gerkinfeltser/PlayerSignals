@@ -1,8 +1,6 @@
 -- Raw JSON validation avoids JContainers' boolean/integer and reference-string normalization.
 local M = {}
 local null = {}
-local intents = {}
-for id in string.gmatch('confirm deny greet farewell thanks sorry respect welcome congratulate offer ask come_here follow_me wait_here quiet ready warn attention unsure think not_understood approve disapprove challenge yield', '%S+') do intents[id] = true end
 
 local function decode(text)
     local pos, length = 1, #text
@@ -131,7 +129,34 @@ end
 local function nonempty(v, path)
     assert(type(v) == 'string' and #v > 0, path .. ': expected nonempty string')
 end
-local function validate(root)
+local function validateCatalog(root)
+    local r = object(root, 'root', {schemaVersion=true, intents=true})
+    assert(type(r.schemaVersion) == 'number' and r.schemaVersion == 1, 'schemaVersion: expected integer 1')
+    local intents = object(r.intents, 'intents')
+    assert(next(intents), 'intents: expected nonempty object')
+    local marker = '{target}'
+    for id, record in pairs(intents) do
+        local path = 'intents.' .. id
+        assert(string.match(id, '^[a-z][a-z0-9_]*$'), path .. ': expected lowercase ASCII ID')
+        local entry = object(record, path, {narration=true, notification=true, targetedNotification=true})
+        nonempty(entry.narration, path .. '.narration')
+        nonempty(entry.notification, path .. '.notification')
+        nonempty(entry.targetedNotification, path .. '.targetedNotification')
+        for _, field in ipairs({'narration', 'notification', 'targetedNotification'}) do
+            assert(not string.match(entry[field], '%.%s*$'), path .. '.' .. field .. ': omit the final period')
+            if field ~= 'targetedNotification' then
+                assert(not string.find(entry[field], marker, 1, true),
+                    path .. '.' .. field .. ': {target} is only allowed in targetedNotification')
+            end
+        end
+        local first = string.find(entry.targetedNotification, marker, 1, true)
+        assert(first, path .. '.targetedNotification: expected exactly one {target}')
+        assert(not string.find(entry.targetedNotification, marker, first + #marker, true),
+            path .. '.targetedNotification: expected exactly one {target}')
+    end
+    return r
+end
+local function validate(root, intents)
     local r = object(root, 'root', {schemaVersion=true, root=true, input=true, wheels=true})
     assert(type(r.schemaVersion) == 'number' and r.schemaVersion == 1, 'schemaVersion: expected integer 1')
     nonempty(r.root, 'root')
@@ -178,20 +203,54 @@ local function validate(root)
     end
     return r
 end
-function M.validateText(text)
-    return validate(decode(text))
+function M.validateCatalogText(text)
+    return validateCatalog(decode(text))
 end
-
+function M.validateText(text, catalogText)
+    local catalog = M.validateCatalogText(catalogText)
+    return validate(decode(text), catalog.intents.data)
+end
 
 function M.load(args)
     local ok, result = pcall(function()
-        local file, message = io.open(args.path, 'rb')
-        assert(file, 'cannot open file: ' .. tostring(message))
-        local text = file:read('*a'); file:close()
-        local r = M.validateText(text)
+        local function readFile(path)
+            local file, message = io.open(path, 'rb')
+            assert(file, path .. ': cannot open file: ' .. tostring(message))
+            local text, readMessage = file:read('*a')
+            file:close()
+            assert(text, path .. ': cannot read file: ' .. tostring(readMessage))
+            return text
+        end
+        local layoutText = readFile(args.path)
+        local lastSeparator = 0
+        for i = #args.path, 1, -1 do
+            local byte = string.byte(args.path, i)
+            if byte == 47 or byte == 92 then lastSeparator = i; break end
+        end
+        local catalogPath = string.sub(args.path, 1, lastSeparator) .. 'intents.json'
+        local catalogText = readFile(catalogPath)
+        local catalogOk, catalog = pcall(M.validateCatalogText, catalogText)
+        if not catalogOk then error(catalogPath .. ': ' .. tostring(catalog), 0) end
+        local layoutOk, r = pcall(function()
+            return validate(decode(layoutText), catalog.intents.data)
+        end)
+        if not layoutOk then error(args.path .. ': ' .. tostring(r), 0) end
         -- Build native containers directly: no metadata/reference-string reinterpretation.
         -- Numeric fields use the native JSON integer decoder only after raw validation.
         local root = JValue.objectFromPrototype('{"schemaVersion":1,"input":{"openKeyCode":' .. r.input.data.openKeyCode .. '}}')
+        local notifications = JMap.object(); root.notifications = notifications
+        local narrations = JMap.object(); root.narrations = narrations
+        local targetNotificationPrefixes = JMap.object(); root.targetNotificationPrefixes = targetNotificationPrefixes
+        local targetNotificationSuffixes = JMap.object(); root.targetNotificationSuffixes = targetNotificationSuffixes
+        local marker = '{target}'
+        for id, intent in pairs(catalog.intents.data) do
+            notifications[id] = intent.data.notification
+            narrations[id] = intent.data.narration
+            local template = intent.data.targetedNotification
+            local markerStart = string.find(template, marker, 1, true)
+            targetNotificationPrefixes[id] = string.sub(template, 1, markerStart - 1)
+            targetNotificationSuffixes[id] = string.sub(template, markerStart + #marker)
+        end
         -- Canonical internal wheel keys preserve case-distinct and metadata-like JSON names.
         local names, ordinal = {}, 0
         for name in pairs(r.wheels.data) do ordinal = ordinal + 1; names[name] = tostring(ordinal) end
@@ -206,6 +265,9 @@ function M.load(args)
                         if key == 'submenu' then v = names[v] end
                         entry[key] = v
                     end
+                    -- Decorate display text once; authored labels and action identity stay separate.
+                    if slot.data.submenu then entry.label = slot.data.label .. ' >'
+                    elseif slot.data.control == 'back' then entry.label = slot.data.label .. ' <' end
                 end
             end
         end

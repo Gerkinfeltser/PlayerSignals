@@ -1,71 +1,72 @@
 # PlayerSignals (for SkyrimNet)
 
-A JSON-configurable communication wheel for SkyrimNet. Select a nonverbal intent such as agreement, greeting, or thanks; matching SkyrimNet triggers narrate the authored roleplay action so nearby NPCs can react. No animation playback is required.
+PlayerSignals is a small configurable communication wheel for Skyrim. Pick one of 25 shipped nonverbal gesture defaults—or add a supported intent through the editable JSON catalog—and send its authored description to SkyrimNet as direct narration. A local notification confirms successful submission, with targeted wording for a captured recipient. It never plays an animation or forces requested NPC actions. SkyrimNet handles dialogue; a reply or compliance is not guaranteed.
 
 ## Status
 
-Source implementation and generated PEX/ESP/SEQ artifacts are present. Strict configuration tests and data/artifact checks pass. The external bundle passed the beta26 devkit validator: 25 files, zero errors/warnings/unresolved references/shadows. **Not installed or in-game verified**; event submission, narration, NPC reaction, cancellation, save-load, and rebinding still require the runtime matrix.
+Current scoped proof: Lua+JSON loader and source-derived `OnKeyDown`/`Submit` smokes passed, all 25 shipped narration/group-notification phrases matched their prior defaults, and both Papyrus scripts compiled with 0 errors/warnings. All 15 unittests passed in a separate run. **The full build did not succeed:** Spriggit could not move the unchanged ESP because the file was locked; a separate temporary deserialize confirmed the generated ESP matched the existing file and the SEQ was unchanged, but this is not full-build success. No live-game proof: physical Shift timing, in-game notifications, Papyrus VM/native/UI/Flash behavior, and uninstall remain unverified. See the [plan](docs/plans/player-signals.md) for evidence and limits.
 
-- [Specification](docs/specs/player-signals.md): behavior, JSON schema, default 25-intent layout, event/narration contracts, and acceptance criteria.
-- [Implementation plan](docs/plans/player-signals.md): build order, Luna delegation, runtime gates, and session continuity.
+- [Specification](docs/specs/player-signals.md): behavior, JSON schemas, 25 shipped narration/group-notification defaults, dynamic registry, targeting contract, and acceptance criteria.
+- [Player guide](PlayerSignals/PlayerSignals-README.md): friendly setup, wheel customization, targeting, and troubleshooting; this file is inside the packaged mod root.
+- [Implementation plan](docs/plans/player-signals.md): active direct-API cutover and separately labeled historical evidence.
 
-## Repository Layout
+## Repository layout
 
 ```text
-PlayerSignals/             Mod root; symlink this folder into MO2 for testing
-PlayerSignals_spriggit/     Authored plugin records (outside the mod root)
-docs/specs/                Authoritative feature specification
-docs/plans/                Implementation sequence and delegation
-build/                     PowerShell build and local compiler flags
-tests/                     Raw JSON/schema regressions executed on LuaJIT
+PlayerSignals/              Mod root; only this child folder belongs in MO2
+PlayerSignals_spriggit/      Authored plugin records (outside the mod root)
+docs/specs/                  Authoritative feature contract
+docs/plans/                  Active work and historical evidence
+build/                       PowerShell build and local compiler flags
+tests/                       Raw JSON/schema regressions executed on LuaJIT
 ```
 
-The mod root contains the standalone ESL-flagged `PlayerSignals.esp`, startup quest SEQ, two Papyrus scripts and compiled PEX files, four default wheels, a JContainers Lua validator, and the `phospheneoverdrive.playersignals` SkyrimNet external bundle with 25 triggers.
+The mod root contains `PlayerSignals.esp`, startup quest SEQ, two Papyrus scripts and compiled PEX files, four default wheels, sibling layout and intent JSON, and a JContainers Lua loader. An optional prompt-only SkyrimNet bundle supplies the WebUI agent `playersignals_intent_helper`; it generates JSON for users to save from pasted configuration, not automatic file edits. Wheel dispatch does not depend on its manifest or external bundle, and no YAML triggers/actions are shipped. The inherited agent rendered against installed base content with zero validation findings; live WebUI discovery/model behavior remain unverified.
 
-## Dependencies
+## Dependencies and targeting
 
-- SKSE
-- UIExtensions
-- JContainers API 4 / feature 2, including its Lua files and working Lua bridge
-- SkyrimNet with the specified mod-event trigger support
+Required: SKSE, UIExtensions, JContainers API 4 / feature 2 with working Lua support, and SkyrimNet. Startup requires `SkyrimNet.esp` loaded and a nonempty `SkyrimNetApi.GetBuildVersion()`.
 
-Default opening key: Right Alt, configurable through JSON. No MCM layout configuration.
+Before the wheel opens, PlayerSignals captures the current crosshair NPC. If a valid NPC remains captured when you select a gesture, SkyrimNet receives targeted direct narration with that captured NPC as responder and you as listener; the narration still describes your character as the gesture actor. Moving the crosshair after opening does not change the recipient. The captured NPC must remain alive, enabled, and 3D-loaded when submitting or the selection fails closed.
 
-Do not symlink the repository root as the mod: documentation and authoring/build files stay outside `PlayerSignals/`.
+No NPC captured means the gesture is addressed to everyone nearby. Holding either Shift (scan code 42 or 54) through selection overrides a captured target; Shift is sampled immediately after the wheel returns an accepted intent, not at the exact click instant. The group narration explicitly says it is addressed to everyone nearby. Nearby witnesses may join, but nobody is guaranteed to reply. An invalid captured target is not silently redirected to a different NPC or to group mode.
 
-SkyrimNet content lives in `PlayerSignals/SKSE/Plugins/SkyrimNet/external/phospheneoverdrive.playersignals/`: `manifest.json` plus `triggers/player_signals_<id>.yaml`. Owner/author is `phospheneoverdrive`; package version is `0.1.0`, with a conservative beta26 target (`min_skyrimnet_version: 0.26.0`). This is not a claim of in-game-tested compatibility. No shipped trigger copies remain in `overlay/`, which is reserved for player/dashboard edits.
+Each accepted selection makes one `SkyrimNetApi.DirectNarration` call. A local player-named notification appears only if the API returns `0`; group wording omits the recipient, while targeted wording uses the name captured before the wheel opened. Either Shift key forces group feedback without the discarded name. This is a submission receipt, not proof of SkyrimNet delivery or an NPC response. Navigation, cancellation, stale selections, invalid targets, and unsuccessful calls stay silent.
 
-## Installation Gate
+No animation playback, item transfer, or forced NPC action is performed.
 
-No MO2 symlink, activation, or ordering changes have been made. Installation requires approval.
+## Installation and first use
 
-1. Register only `PlayerSignals/` as its own MO2 symlink/mod; never the repository root.
-2. Enable this mod and `PlayerSignals.esp` with the dependencies loaded.
-3. Ensure **stock UIExtensions** `UIWheelMenu.pex` and `wheelmenu.swf` win. The currently enabled Idle Animations Wheel Menu supplies an incompatible loose wheel-script override. Resolve it through an approved profile change; do not copy framework PEX files into PlayerSignals.
-4. Start Skyrim through SKSE, then load a save or start a new game. Confirm `phospheneoverdrive.playersignals` appears as an enabled External plugin in SkyrimNet. Check Papyrus `[PlayerSignals]` traces and the SN live event monitor.
-5. Exercise the [runtime acceptance matrix](docs/specs/player-signals.md#acceptance-criteria-and-verification), including NPC reactions under enabled SN settings. Compiled artifacts do not establish runtime success.
+Before installing or updating, back up your save. Install the **`PlayerSignals/` child folder** as its own mod in MO2—not the repository root—and enable `PlayerSignals.esp`. Install and enable the dependencies above. Do not install or activate an old PlayerSignals trigger bundle; direct narration uses SkyrimNet's native API.
+
+Launch through SKSE and load a save or start a new game. If SkyrimNet.esp or the native API build version is missing, PlayerSignals will not enable. In normal gameplay, press **Right Alt** to open the wheel and choose a gesture. A local notification confirms the API accepted the submission; SkyrimNet decides whether NPCs speak.
+
+See the [player guide](PlayerSignals/PlayerSignals-README.md) for a quick walkthrough and examples.
+
+### Existing saves, updates, and removal
+
+Back up your save before installing or updating. The stable startup quest/SEQ and player alias `OnInit`/`OnPlayerLoadGame` path are designed to initialize on existing saves. This cutover adds no saved controller fields, changes no property defaults, aliases, quest/FormIDs, or startup SEQ, and rebuilds its private native maps from both JSON files through Lua on load. Existing-save support is by design, but the current install/update path has not been tested in-game.
+
+PlayerSignals does not add gesture spells, edit NPC world records, or toggle player controls. Saves may still retain quest/script state, and the mod has no shutdown/uninstall cleaner. This does not mean removal is necessarily unsafe; it means a clean mid-playthrough removal is not guaranteed. The safest save-state rollback is to restore a backup from before installation, then remove the mod. SkyrimNet may retain narration history separately; restoring a Skyrim save does not erase it.
 
 ## Configuration
 
-Edit `SKSE/Plugins/PlayerSignals/layout.json` inside the mod, then load a save. Right Alt defaults to scan code `184`; only keyboard codes `1–255` are supported. No live reload or JSON write-back.
+Edit `PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json` and, for intent IDs or phrases, `PlayerSignals/SKSE/Plugins/PlayerSignals/intents.json` inside the mod, then load a save to apply changes. Right Alt defaults to keyboard scan code `184`; configurable opening-key codes are `1–255`. No live reload or JSON write-back.
 
-Each wheel has 1–8 ordered slots. Slots are null (disabled), or a nonempty label plus exactly one catalog `intent`, resolved `submenu`, or `control` (`back`/`close`). All wheels, including unreachable ones, are validated; unknown properties, wrong types, broken references, cycles, and oversized wheels disable the feature. Errors identify the file and field/slot where available.
+Each wheel has 1–8 ordered slots. A slot is `null` (disabled) or a nonempty label and exactly one of `intent`, `submenu`, or `control` (`back` / `close`). The catalog ships 25 default intent IDs, but the validated lowercase-ASCII ID registry is dynamic. Every layout ID must exist in `intents.json`; every wheel and catalog entry is validated. Unknown properties/IDs, wrong types, broken submenu references, cycles, and oversized wheels fail closed.
 
-The raw Lua validator preserves strict JSON types: `true`, `184.0`, and `184e0` are not integer key codes. It prevents JContainers metadata/reference-string reinterpretation and preserves case-distinct wheel names through internal canonical IDs. Strings must be valid UTF-8 without NUL characters, which Papyrus cannot represent.
+Labels, slot order, disabled slots, repeated supported intents, wheel names/submenus, and opening key are customizable without recompiling. Positions 1–4 run down the left side; positions 5–8 run down the right. Submenus display ` >`; Back displays ` <`. Leave these markers out of JSON. Keep labels short—there is no automatic truncation.
 
-Navigation and cancellation submit no intent. A selected intent is sent once from the player as `PlayerSignals_Intent_<id>` after leaving the wheel loop. There are no retries, animation calls, item transfers, or forced NPC responses.
+`intents.json` defines each supported ID and its three phrases: `narration`, group `notification`, and `targetedNotification`. Add an ID by adding its catalog record and referencing it from `layout.json`; edit phrases in that record. Phrase values omit your character's name and final period; exactly one literal `{target}` marker appears only in `targetedNotification`. Use plain JSON without comments or trailing commas. Both files are read on load, so changes apply after loading a save. No Lua/Papyrus edit, recompile, YAML narration file, or external trigger bundle is needed.
 
-## Build and Checks
+For exact schema rules and all 25 shipped default narration/group-notification phrases, see the [specification](docs/specs/player-signals.md).
+
+## Build and checks
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File build/build.ps1
 python -m pip install "lupa==2.8"
 python -m unittest discover -s tests -v
-
-# Headless external-content validation; does not install or start the game.
-& 'D:/Modlists/ASSOS-1.1.1/mods/skyrimnet-devkit-beta26-rc1/tools/content-validate.exe' 'PlayerSignals/SKSE/Plugins/SkyrimNet/external/phospheneoverdrive.playersignals'
 ```
 
-`build/build.ps1` accepts `GameRoot`, `ModsRoot`, `UiExtensionsSources`, `FallbackHeaders`, and `Spriggit` paths. It uses repository-owned flags, ordered imports, Spriggit 0.40.0 metadata, and generates SEQ from the authored quest FormID `00000800`; it does not deploy or alter MO2.
-
-The default `UiExtensionsSources` path is the local GamePlugin API declaration fallback. For real framework-source compilation, supply stock UIExtensions source extracted to a temporary external directory. Both feature scripts were compiled against stock BSA source with zero errors/warnings; dependency sources/assets are not bundled. The Python tests execute the shipped raw validator on LuaJIT without emulating Skyrim or the native JContainers bridge.
+Scoped source-derived smokes, separately passed unittests, and the failed full-build attempt are summarized above and detailed in the plan; none establish in-game behavior.

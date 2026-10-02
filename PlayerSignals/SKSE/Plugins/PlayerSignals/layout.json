@@ -20,29 +20,29 @@
       { "label": "Sorry", "intent": "sorry" },
       { "label": "Show respect", "intent": "respect" },
       { "label": "Welcome", "intent": "welcome" },
-      { "label": "Congratulations / Well done", "intent": "congratulate" },
-      { "label": "Offer something", "intent": "offer" },
-      { "label": "Ask for something", "intent": "ask" },
+      { "label": "Well done", "intent": "congratulate" },
+      { "label": "Offer", "intent": "offer" },
+      { "label": "Request", "intent": "ask" },
       { "label": "Back", "control": "back" }
     ],
     "signals": [
       { "label": "Come here", "intent": "come_here" },
       { "label": "Follow me", "intent": "follow_me" },
       { "label": "Wait here", "intent": "wait_here" },
-      { "label": "Quiet / Be silent", "intent": "quiet" },
+      { "label": "Quiet", "intent": "quiet" },
       { "label": "Ready", "intent": "ready" },
       { "label": "Watch out", "intent": "warn" },
       { "label": "Get attention", "intent": "attention" },
       { "label": "Back", "control": "back" }
     ],
     "attitude": [
-      { "label": "Unsure / I don't know", "intent": "unsure" },
+      { "label": "Unsure", "intent": "unsure" },
       { "label": "Let me think", "intent": "think" },
-      { "label": "I don't understand", "intent": "not_understood" },
+      { "label": "Not understood", "intent": "not_understood" },
       { "label": "Approve", "intent": "approve" },
       { "label": "Disapprove", "intent": "disapprove" },
-      { "label": "Challenge / Provoke", "intent": "challenge" },
-      { "label": "Yield / Surrender", "intent": "yield" },
+      { "label": "Challenge", "intent": "challenge" },
+      { "label": "Surrender", "intent": "yield" },
       { "label": "Back", "control": "back" }
     ]
   }

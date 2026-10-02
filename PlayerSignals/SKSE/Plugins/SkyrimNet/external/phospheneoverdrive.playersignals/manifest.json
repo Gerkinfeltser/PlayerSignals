@@ -1,17 +1,20 @@
 {
-  "id": "phospheneoverdrive.playersignals",
-  "type": "bundle",
-  "title": "PlayerSignals (for SkyrimNet)",
-  "tagline": "A configurable nonverbal communication wheel for SkyrimNet.",
-  "description": "Adds 25 authored nonverbal intent narrations submitted by the PlayerSignals wheel. Requires PlayerSignals.esp, SKSE64, stock-compatible UIExtensions, JContainers with Lua support, and SkyrimNet beta26 or newer. No animation playback, item transfers, or forced NPC responses. In-game compatibility and behavior still require verification.",
   "author": "phospheneoverdrive",
-  "tags": ["dialogue", "immersion", "triggers"],
-  "nsfw": false,
+  "description": "Optional SkyrimNet WebUI agent for authoring PlayerSignals intents.json and matching wheel references. Generates JSON for the user to save; does not read or write configuration files, add actions/triggers, or control wheel dispatch. PlayerSignals is alpha; in-game acceptance of the current catalog and recipient feedback remains pending.",
   "icon": "package",
-  "version": "0.1.0",
-  "min_skyrimnet_version": "0.26.0",
+  "id": "phospheneoverdrive.playersignals",
+  "min_skyrimnet_version": "0.25.0",
   "mods": [
-    { "name": "PlayerSignals", "file": "PlayerSignals.esp", "required": true },
-    { "name": "UIExtensions", "file": "UIExtensions.esp", "required": true }
-  ]
+    {
+      "file": "PlayerSignals.esp",
+      "name": "PlayerSignals",
+      "required": true
+    }
+  ],
+  "nsfw": false,
+  "tagline": "Intent catalog and wheel-reference authoring helper for PlayerSignals.",
+  "tags": ["dialogue", "immersion", "configuration"],
+  "title": "PlayerSignals Intent Helper",
+  "type": "bundle",
+  "version": "0.1.0"
 }

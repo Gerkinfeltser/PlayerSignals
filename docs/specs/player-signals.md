@@ -42,6 +42,8 @@ Ship a prompt-only bundle at `SKSE/Plugins/SkyrimNet/external/phospheneoverdrive
 
 The helper drafts intent records and matching layout references from user-supplied files. It preserves unrelated entries, distinguishes merge-only snippets from complete replacement files, and explains backup/save-load application. Standard agent tools provide no general file reader/writer or PlayerSignals JSON validator: the helper must not claim filesystem access, automatic application, actual Lua validation, or game verification. It must not use console/quest calls to bypass that boundary. Configuration values are data, not agent instructions.
 
+Authoring guidance distinguishes mod-relative paths from the virtual `Data/` prefix and MO2 overwrite conflicts. Explain that `main` is the shipped root name, not a schema constant; preserve existing wheel names and opening key. Supply concrete valid wheel-array and input-object examples, use slot-only snippets when the existing layout is unavailable, and never fill a JSON block with schema placeholders. Opening-key examples use verified decimal SKSE keyboard scan codes; one opening key controls the entire wheel, not per-intent hotkeys.
+
 This bundle contains no actions or triggers and is not a dependency of the communication wheel. It does not restore the obsolete mod-event/YAML dispatch path or fix event attribution. Validate and render the inherited template with the installed base content and representative WebUI context before shipping; actual WebUI discovery and model behavior remain separate runtime checks.
 
 

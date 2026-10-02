@@ -41,6 +41,15 @@ If no NPC was captured, the narration is addressed to everyone nearby. You can a
 
 Group narration explicitly says the gesture is addressed to everyone nearby. Nearby witnesses may join, but no one is guaranteed to speak or comply. The group wording does not force every nearby NPC to reply.
 
+### A note about Recent Events
+
+SkyrimNet's **Recent Events** cards can show misleading **From** and **To** names for PlayerSignals narrations. A gesture aimed at Ted may appear as Ted → Bill even though Bill made the gesture. A group gesture may appear as Bill → Ted because SkyrimNet selected Ted to respond—not because the gesture was addressed only to him.
+
+For the intended actor and audience, read the narration itself: it names your character and explicitly says the gesture is addressed to the captured NPC or **everyone nearby**. The local notification also distinguishes targeted and group submissions. Misleading card names do not, by themselves, mean the wrong mode was submitted.
+
+This is a known limitation of the current SkyrimNet API integration. Correcting the event metadata while preserving captured-NPC response routing would require SkyrimNet-side changes. That's a future consideration, not a fix included in this version; the current explicit audience wording is intentional.
+
+
 ## What's on the wheel?
 
 | Wheel | Entries |
@@ -69,6 +78,8 @@ SKSE/Plugins/PlayerSignals/intents.json
 ```
 
 `layout.json` controls wheels, labels, and the opening key. `intents.json` defines supported IDs and their narration and notification phrases. Back up both files before editing. Use a plain-text editor, save changes, then **load a save** to apply them. Neither file reloads live or gets written back by the mod.
+
+In **MO2**, these are paths inside the installed mod folder—not a `Data` folder inside it. Open the PlayerSignals mod folder and look under `SKSE/Plugins/PlayerSignals/`, typically `<instance>/mods/<installed PlayerSignals folder>/SKSE/Plugins/PlayerSignals/`. If a matching file exists in `overwrite/SKSE/Plugins/PlayerSignals/` or another higher-priority mod, check MO2's Data/conflict view and edit the winning copy. The configs do not automatically belong in overwrite. For a manual install, their game-facing paths are `Data/SKSE/Plugins/PlayerSignals/...`.
 
 You can change labels, reorder entries, move supported intents between wheels, make submenus, disable slots, and change the opening key in `layout.json`. Edit or add IDs and phrase text in `intents.json`. A new ID must also be referenced by a layout entry. These JSON edits need no script recompilation.
 
@@ -130,9 +141,27 @@ This is a valid replacement layout with a main wheel and a Social submenu:
 
 Unused positions are disabled. Keep the quotes and commas intact; JSON is friendly right up until it meets a trailing comma.
 
+`"root": "main"` names the first wheel to open. `main` is the shipped default, not a required name: keep your existing root if you've renamed it, and make sure the matching wheel exists. Each wheel is an array (`[...]`), and `input` is an object (`{...}`). To add just one gesture, merge its slot into an existing wheel rather than replacing your full layout with this small example.
+
 ### Change the opening key
 
-`input.openKeyCode` uses a **SKSE keyboard scan code**. Right Alt is `184`. Replace that number with your preferred keyboard scan code, using a whole number from `1` to `255`, then load a save. Don't use a key name, a Windows virtual-key code, or a mouse/gamepad button.
+`input.openKeyCode` uses a **SKSE keyboard scan code**. This binds the opening key for the whole wheel, not a separate key for each gesture. Keep the rest of your layout unchanged.
+
+| Key | Decimal scan code |
+|---|---:|
+| Right Alt (default) | 184 |
+| Left Alt | 56 |
+| F8 | 66 |
+| F9 | 67 |
+| F10 | 68 |
+
+For example, to use **F9**, change only the existing `input.openKeyCode` value to `67`. This fragment shows the shape; it is not a complete `layout.json`:
+
+```json
+{ "input": { "openKeyCode": 67 } }
+```
+
+Use an integer from `1` to `255` that corresponds to a keyboard scan code—not a key name, ASCII value, Windows virtual-key code, or mouse/gamepad button. Check for conflicting bindings in other mods. Avoid Tab (the menu's cancel key) and either Shift key (the group-targeting override). Save your edit, then **load a save** to replace the old opening-key registration. Changing the opening key does not change Shift's targeting behavior.
 
 ### Supported intent IDs
 
@@ -184,9 +213,9 @@ If you also have the source repository, its `docs/specs/player-signals.md` has a
 
 The mod also includes an optional SkyrimNet agent named **`playersignals_intent_helper`**, built like the iActions configuration helper. After installing the full updated mod and restarting SkyrimNet with the game, look for it in the WebUI **Agents** page. This packaged prompt has been validated and rendered locally; its appearance and responses in your live WebUI have not yet been verified.
 
-Tell it what gesture you want, then paste your current `intents.json` and `layout.json`. It can draft the three phrases, explain targeted versus group feedback, and propose a matching wheel entry while preserving your custom configuration.
+Tell it what gesture you want. It can suggest wording immediately, without seeing your files. For a phrase edit, paste the current intent record; for a complete catalog replacement, paste the full `intents.json`. For wheel placement or an intent rename/removal, paste both complete files so it can check occupied slots and references. Find them in the winning PlayerSignals mod's `SKSE/Plugins/PlayerSignals` folder and label each pasted file with its filename.
 
-Like the iActions helper, it **generates JSON for you to save**. It cannot read or write these files through SkyrimNet's standard agent tools, and its schema review is not the actual Lua validator. A small record snippet is merge-only—not a replacement for your whole catalog. Review its output, back up your files, save complete replacements only when supplied, then load a save. The wheel works without this helper; it adds no actions or triggers.
+Like the iActions helper, it **generates JSON for you to save**. Your configuration files are not automatically visible to the agent just because it appears in SkyrimNet's WebUI. It cannot read or write them through standard agent tools, and SkyrimNet's prompt editor/reload tools do not manage them. Its review covers only the JSON you provide—not the installed files or actual Lua validation. Record snippets are merge-only or replace-one-record suggestions, never whole-catalog replacements; without your files, ID collisions and wheel placement remain unchecked. Review its output, back up your files, save or merge the changes, then load a save. The wheel works without this helper; it adds no actions or triggers.
 
 
 ## If something isn't behaving

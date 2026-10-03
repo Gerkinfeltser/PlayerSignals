@@ -290,3 +290,9 @@ This demonstrates a short successful load after cleanup, **not guaranteed clean 
 The safest save-state rollback remains restoring a **save and matching SKSE cosave from before PlayerSignals was installed**, with the mod disabled. Disabling a mod does not automatically erase its saved script data. SkyrimNet may store narration history separately; restoring a Skyrim save does not erase that history.
 
 And that's it: a nod, a wave, a very Skyrim-flavoured misunderstanding. Make the labels yours, keep the gestures clear, and let the conversation take it from there.
+
+## License and source
+
+PlayerSignals code and documentation are licensed under the [MIT License](LICENSE), copyright 2026 phospheneoverdrive. You may use, modify, and redistribute them under those terms; retain the copyright and permission notice. This does not change the licenses of SKSE, UIExtensions, JContainers, or SkyrimNet.
+
+Source and releases: [PlayerSignals on GitHub](https://github.com/Gerkinfeltser/PlayerSignals).

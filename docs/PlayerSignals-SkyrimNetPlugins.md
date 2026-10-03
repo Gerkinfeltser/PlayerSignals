@@ -4,9 +4,11 @@ Tagline: A little less talking, a little more nodding.
 
 Description (markdown ok):
 
-**Limited-test beta.** Targeted and group narration have been exercised in game. One mid-save removal test retained saved Papyrus remnants; a ReSaver-cleaned copy loaded without PlayerSignals missing-script warnings. Clean removal and long-term safety are not guaranteed. Back up your saves before installing or updating.
+> **⚠️Limited-test beta.** Targeted and group narration have been exercised in game. One mid-save removal test retained saved Papyrus remnants; a ReSaver-cleaned copy loaded without PlayerSignals missing-script warnings. Clean removal and long-term safety are not guaranteed. Back up your saves before installing or updating.
+>
+> **🙅Does not play animations**. The signals (nods, waves, puzzled looks, etc.) happen in the narration, not on your character model.
 
-Give your character something to say without saying a word. **PlayerSignals** adds a configurable communication wheel with 25 shipped nonverbal gesture defaults, including agreement, greetings, thanks, warnings, and surrender. Open it with **Right Alt**, choose a gesture, and PlayerSignals submits authored direct narration to SkyrimNet. A local notification appears only when the API accepts the submission. **It does not play animations**—the nods, waves, and puzzled looks happen in the narration, not on your character model.
+Give your character something to say without saying a word. **PlayerSignals** adds a configurable communication wheel with 25 shipped nonverbal gesture defaults, including agreement, greetings, thanks, warnings, and surrender. Open it with **Right Alt**, choose a gesture, and PlayerSignals submits authored direct narration to SkyrimNet. A local notification appears only when the API accepts the submission. 
 
 Look at an NPC before opening the wheel to address them, or **hold either Shift while choosing, until the wheel closes**, to address everyone nearby. With no NPC captured, the gesture addresses the group. Your character is always supplied as the narration originator (**From**). SkyrimNet selects who responds; the captured NPC is not guaranteed to answer, nearby witnesses may join, and requests remain requests. This is a roleplaying tool, not an NPC remote control.
 

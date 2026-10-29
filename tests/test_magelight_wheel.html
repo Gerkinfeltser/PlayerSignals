@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>PlayerSignals Magelight browser check</title>
+<h1>PlayerSignals Magelight browser check</h1>
+<pre id="result">Running…</pre>
+<iframe title="Actual wheel" src="../PlayerSignals/Magelight/PlayerSignals/index.html" width="960" height="720"></iframe>
+<script>
+const frame = document.querySelector("iframe");
+frame.addEventListener("load", async () => {
+    const report = document.getElementById("result");
+    try {
+        const view = frame.contentWindow;
+        const buttons = [...view.document.querySelectorAll("button")];
+        const replies = [];
+        view.psWheelChoice = payload => replies.push(payload);
+        const assert = (condition, message) => { if (!condition) throw Error(message); };
+        const layout = await (await fetch("../PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json")).json();
+        function populate(token, slots) {
+            view.psWheelBegin(token);
+            slots.forEach((slot, index) => {
+                if (!slot) return;
+                view["psWheelLabel" + index](slot.label + (slot.submenu ? " >" : slot.control === "back" ? " <" : ""));
+                view["psWheelIntent" + index](slot.intent || "");
+            });
+        }
+        for (const [name, slots] of Object.entries(layout.wheels)) {
+            populate(name, slots);
+            buttons[0].click();
+            assert(replies.length === 0, "Choice before focus entry");
+            view.psWheelArm("stale");
+            assert(buttons.every(button => button.disabled), "Stale request armed wheel");
+            view.psWheelArm(name);
+            const index = slots.findIndex(slot => slot && slot.intent);
+            buttons[index].click();
+            assert(replies.pop() === name + "|" + index + "|" + slots[index].intent, "Authored intent ID lost");
+            buttons[index].click();
+            view.psWheelArm(name);
+            buttons[index].click();
+            assert(replies.length === 0, "Duplicate/rearmed completed choice");
+        }
+        populate("literal", [null, {label: '<img src=x onerror="throw Error()"> Ω', intent: "greet"}]);
+        view.psWheelArm("literal");
+        assert(buttons[0].disabled && buttons[2].disabled, "Null/trailing slots selectable");
+        assert(buttons[1].textContent.includes("<img") && !buttons[1].querySelector("img"), "Label interpreted as HTML");
+        assert(view.document.activeElement === buttons[1], "Initial focus is disabled/stale");
+        buttons[0].click();
+        assert(replies.length === 0, "Disabled choice emitted");
+        for (const key of ["Tab", "Escape"]) {
+            populate(key, layout.wheels[layout.root]);
+            view.psWheelArm(key);
+            view.document.dispatchEvent(new view.KeyboardEvent("keydown", {key, bubbles: true, cancelable: true}));
+            assert(replies.pop() === key + "|-1|", key + " did not cancel");
+        }
+        report.textContent = "PASS: shipped-wheel intent identity, pre-arm/stale/duplicate suppression, null/trailing slots, literal Unicode labels, fresh focus, Tab/Escape cancellation. Browser-only; no Papyrus/native-host proof.";
+    } catch (error) {
+        report.textContent = "FAIL: " + error.stack;
+        throw error;
+    }
+});
+</script>
+</html>

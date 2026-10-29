@@ -3,6 +3,7 @@ param(
     [string]$ModsRoot = 'D:/Modlists/ADT/mods',
     [string]$UiExtensionsSources = 'D:/git/SkyrimNet-GamePlugin/headers',
     [string]$FallbackHeaders = 'D:/git/SkyrimNet-GamePlugin/headers',
+    [string]$MagelightSources = 'D:/git/MagelightUI/papyrus',
     [string]$Spriggit = 'D:/SkyrimMisc/SpriggitCLI/Spriggit.CLI.exe'
 )
 $ErrorActionPreference = 'Stop'
@@ -16,6 +17,7 @@ $imports = @(
     (Join-Path $ModsRoot 'JContainers SE/scripts/source'),
     (Join-Path $ModsRoot 'SkyrimNet/Source/Scripts'),
     (Join-Path $GameRoot 'Data/Source/Scripts'),
+    $MagelightSources,
     $UiExtensionsSources,
     $FallbackHeaders
 ) -join ';'

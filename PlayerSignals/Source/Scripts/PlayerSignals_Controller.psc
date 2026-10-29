@@ -8,13 +8,171 @@ Bool _ready = False
 Bool _browsing = False
 Bool _held = False
 Bool _maintaining = False
+Int _mlView = 0
+Int _mlSlots = 0
+String _mlRequest = ""
+String _mlResult = ""
+Bool _mlDomReady = False
+Bool _mlEntered = False
+Bool _mlPrimed = False
+Int _mlSequence = 0
 
-; Invalidate before the startup delay, including a suspended menu wait from a save.
+Bool Function UseMagelight()
+    Return False
+EndFunction
+
+Function InvalidateMagelight()
+    If !UseMagelight()
+        Return
+    EndIf
+    Int token = _generation
+    _mlRequest = ""
+    _mlResult = ""
+    _mlDomReady = False
+    _mlEntered = False
+    _mlPrimed = False
+    If JContainers.isInstalled() && _mlSlots != 0
+        _mlSlots = JValue.release(_mlSlots)
+    EndIf
+    Magelight.ReleaseUIMode("PlayerSignals")
+    If token != _generation
+        Return
+    EndIf
+    Int view = Magelight.FindView("PlayerSignals", "wheel")
+    If token == _generation && view != 0
+        Magelight.ShowView(view, False)
+    EndIf
+    If token == _generation
+        _mlView = 0
+    EndIf
+EndFunction
+
+Event OnMagelightDomReady(string eventName, string strArg, float numArg, Form sender)
+    If UseMagelight() && strArg == "PlayerSignals" && numArg as Int == _mlView && _mlRequest != "" && _mlResult == ""
+        If _mlPrimed
+            _mlResult = _mlRequest + "|-1|"
+        Else
+            _mlDomReady = True
+        EndIf
+    EndIf
+EndEvent
+
+Event OnMagelightUIModeEntered(string eventName, string strArg, float numArg, Form sender)
+    If UseMagelight() && strArg == "PlayerSignals" && numArg as Int == _mlView && _mlRequest != "" && _mlPrimed
+        Int token = _generation
+        String request = _mlRequest
+        Bool active = Magelight.IsUIModeActive()
+        If token != _generation || request != _mlRequest || !active
+            Return
+        EndIf
+        Int activeView = Magelight.GetUIModeView()
+        If token == _generation && request == _mlRequest && activeView == _mlView
+            _mlEntered = True
+        EndIf
+    EndIf
+EndEvent
+
+Event OnMagelightUIModeExited(string eventName, string strArg, float numArg, Form sender)
+    If UseMagelight() && strArg == "PlayerSignals" && numArg as Int == _mlView && _mlRequest != "" && _mlEntered
+        Int token = _generation
+        String request = _mlRequest
+        Bool active = Magelight.IsUIModeActive()
+        If token != _generation || request != _mlRequest
+            Return
+        EndIf
+        Int activeView = Magelight.GetUIModeView()
+        If token == _generation && request == _mlRequest && _mlResult == "" && (!active || activeView != _mlView)
+            _mlResult = request + "|-1|"
+        EndIf
+    EndIf
+EndEvent
+Event OnMagelightWheelChoice(string eventName, string strArg, float numArg, Form sender)
+    If !UseMagelight() || !JContainers.isInstalled() || eventName != "Magelight_JS_psWheelChoice" || numArg as Int != _mlView || _mlRequest == "" || _mlResult != ""
+        Return
+    EndIf
+    Int token = _generation
+    String request = _mlRequest
+    Bool active = Magelight.IsUIModeActive()
+    If token != _generation || request != _mlRequest || !active
+        Return
+    EndIf
+    Int activeView = Magelight.GetUIModeView()
+    If token != _generation || request != _mlRequest || activeView != _mlView
+        Return
+    EndIf
+    If _mlResult == "" && strArg == request + "|-1|"
+        _mlResult = strArg
+        Return
+    EndIf
+    Int i = 0
+    While i < JArray.count(_mlSlots) && i < 8 && token == _generation && request == _mlRequest
+        If JArray.valueType(_mlSlots, i) == 5
+            Int slot = JArray.getObj(_mlSlots, i)
+            String intent = ""
+            If JMap.hasKey(slot, "intent")
+                intent = JMap.getStr(slot, "intent")
+            EndIf
+            If token == _generation && request == _mlRequest && _mlResult == "" && strArg == request + "|" + i + "|" + intent
+                _mlResult = strArg
+                Return
+            EndIf
+        EndIf
+        i += 1
+    EndWhile
+EndEvent
+
+Function PrimeMagelight(Int token)
+    If token != _generation || _mlRequest == ""
+        Return
+    EndIf
+    Magelight.Call(_mlView, "psWheelBegin", _mlRequest)
+    If token != _generation || _mlRequest == ""
+        Return
+    EndIf
+    Int i = 0
+    While i < 8 && token == _generation && _mlRequest != ""
+        If i < JArray.count(_mlSlots) && JArray.valueType(_mlSlots, i) == 5
+            Int slot = JArray.getObj(_mlSlots, i)
+            Magelight.Call(_mlView, "psWheelLabel" + i, JMap.getStr(slot, "label"))
+            If token != _generation || _mlRequest == ""
+                Return
+            EndIf
+            String intent = ""
+            If JMap.hasKey(slot, "intent")
+                intent = JMap.getStr(slot, "intent")
+            EndIf
+            Magelight.Call(_mlView, "psWheelIntent" + i, intent)
+        EndIf
+        If token != _generation || _mlRequest == ""
+            Return
+        EndIf
+        i += 1
+    EndWhile
+    If token != _generation || _mlRequest == ""
+        Return
+    EndIf
+    _mlPrimed = True
+    Magelight.ShowView(_mlView, True)
+EndFunction
+Event OnMagelightViewFailure(string eventName, string strArg, float numArg, Form sender)
+    If !UseMagelight() || _mlRequest == ""
+        Return
+    EndIf
+    Int token = _generation
+    String request = _mlRequest
+    Bool ownEvent = strArg == "PlayerSignals" || StringUtil.Substring(strArg, 0, 14) == "PlayerSignals|"
+    If token == _generation && request == _mlRequest && _mlResult == "" && ownEvent && (numArg as Int == _mlView || (eventName == "Magelight_RenderDead" && numArg as Int == 0))
+        _mlResult = request + "|-1|"
+    EndIf
+EndEvent
 Function ScheduleMaintenance(Float delay)
     _generation += 1
     _ready = False
     _browsing = False
     _held = False
+    If UseMagelight()
+        InvalidateMagelight()
+    EndIf
     If _key > 0
         UnregisterForKey(_key)
         _key = 0
@@ -50,7 +208,44 @@ Function Maintenance(Int token)
     If _config != 0
         _config = JValue.release(_config)
     EndIf
-    If Game.GetModByName("UIExtensions.esp") == 255
+    If UseMagelight()
+        If Magelight.GetVersion() < 3102 || !Magelight.IsReady()
+            Report("Magelight host 0.31.2+ is unavailable or not ready.")
+            Return
+        EndIf
+        RegisterForModEvent("Magelight_ViewDomReady", "OnMagelightDomReady")
+        RegisterForModEvent("Magelight_UIModeEntered", "OnMagelightUIModeEntered")
+        RegisterForModEvent("Magelight_UIModeExited", "OnMagelightUIModeExited")
+        RegisterForModEvent("Magelight_JS_psWheelChoice", "OnMagelightWheelChoice")
+        RegisterForModEvent("Magelight_ViewLoadFailed", "OnMagelightViewFailure")
+        RegisterForModEvent("Magelight_FocusDenied", "OnMagelightViewFailure")
+        RegisterForModEvent("Magelight_RenderDead", "OnMagelightViewFailure")
+        RegisterForModEvent("Magelight_ViewDestroyed", "OnMagelightViewFailure")
+        Bool registered = Magelight.RegisterMod("PlayerSignals", "PlayerSignals")
+        If token != _generation
+            Return
+        EndIf
+        If !registered
+            Report("Magelight PlayerSignals mod registration failed.")
+            Return
+        EndIf
+        _mlView = Magelight.FindView("PlayerSignals", "wheel")
+        If token != _generation
+            Return
+        EndIf
+        If _mlView == 0
+            Report("Magelight wheel view/listener is unavailable.")
+            Return
+        EndIf
+        Bool listening = Magelight.RegisterListener(_mlView, "psWheelChoice")
+        If token != _generation
+            Return
+        EndIf
+        If !listening
+            Report("Magelight wheel view/listener is unavailable.")
+            Return
+        EndIf
+    ElseIf Game.GetModByName("UIExtensions.esp") == 255
         Report("UIExtensions.esp is not loaded.")
         Return
     EndIf
@@ -233,6 +428,13 @@ Event OnKeyDown(Int keyCode)
     If token == _generation && _ready && pending != ""
         Submit(narration, feedbackPrefix, feedbackSuffix, player, recipient, targeted, token)
     EndIf
+    If token == _generation && UseMagelight()
+        ; The overlay may suppress keyup while it owns keyboard focus.
+        Bool held = Input.IsKeyPressed(_key)
+        If token == _generation
+            _held = held
+        EndIf
+    EndIf
     If token == _generation
         _browsing = False
     EndIf
@@ -285,35 +487,38 @@ String Function Browse(Int config, Int history, Int token, Actor player)
     String current = JMap.getStr(config, "root")
     While token == _generation && _ready
         Int slots = JMap.getObj(wheels, current)
-        UIMenuBase menu = UIExtensions.GetMenu("UIWheelMenu", True)
-        ; GetMenu/reset may wait in another framework version; recheck before opening.
-        If token != _generation || !_ready
-            Return ""
-        EndIf
-        If !menu
-            Report("UIExtensions UIWheelMenu is unavailable.")
-            Return ""
-        EndIf
-        Int i = 0
-        While i < 8
-            String label = ""
-            Bool enabled = False
-            If i < JArray.count(slots)
-                If JArray.valueType(slots, i) == 5
+        Int selected = -1
+        If UseMagelight()
+            selected = BrowseMagelight(slots, token)
+        Else
+            UIMenuBase menu = UIExtensions.GetMenu("UIWheelMenu", True)
+            ; GetMenu/reset may wait in another framework version; recheck before opening.
+            If token != _generation || !_ready
+                Return ""
+            EndIf
+            If !menu
+                Report("UIExtensions UIWheelMenu is unavailable.")
+                Return ""
+            EndIf
+            Int i = 0
+            While i < 8
+                String label = ""
+                Bool enabled = False
+                If i < JArray.count(slots) && JArray.valueType(slots, i) == 5
                     Int entry = JArray.getObj(slots, i)
                     label = JMap.getStr(entry, "label")
                     enabled = True
                 EndIf
+                menu.SetPropertyIndexString("optionText", i, label)
+                menu.SetPropertyIndexString("optionLabelText", i, label)
+                menu.SetPropertyIndexBool("optionEnabled", i, enabled)
+                i += 1
+            EndWhile
+            If token != _generation || !_ready
+                Return ""
             EndIf
-            menu.SetPropertyIndexString("optionText", i, label)
-            menu.SetPropertyIndexString("optionLabelText", i, label)
-            menu.SetPropertyIndexBool("optionEnabled", i, enabled)
-            i += 1
-        EndWhile
-        If token != _generation || !_ready
-            Return ""
+            selected = menu.OpenMenu(player)
         EndIf
-        Int selected = menu.OpenMenu(player)
         ; Never inspect the result against replacement configuration.
         If token != _generation || !_ready
             Return ""
@@ -342,6 +547,170 @@ String Function Browse(Int config, Int history, Int token, Actor player)
         EndIf
     EndWhile
     Return ""
+EndFunction
+Int Function BrowseMagelight(Int slots, Int token)
+    If token != _generation || !_ready
+        Return -1
+    EndIf
+    _mlSequence += 1
+    String request = token + "_" + Utility.GetCurrentRealTime() + "_" + Utility.RandomInt(0, 1000000) + "_" + _mlSequence
+    Int slotLease = JValue.retain(slots, "PlayerSignals")
+    If token != _generation || !_ready
+        slotLease = JValue.release(slotLease)
+        Return -1
+    EndIf
+    _mlRequest = request
+    _mlResult = ""
+    _mlSlots = slotLease
+    _mlDomReady = False
+    _mlEntered = False
+    _mlPrimed = False
+    Int view = Magelight.FindView("PlayerSignals", "wheel")
+    If token != _generation || !_ready || _mlRequest != request
+        Return -1
+    EndIf
+    If view == 0
+        InvalidateMagelight()
+        Return -1
+    EndIf
+    _mlView = view
+    Magelight.ReloadView(view)
+    If token != _generation || !_ready || _mlRequest != request
+        Return -1
+    EndIf
+    Magelight.ShowView(view, True)
+    If token != _generation || !_ready || _mlRequest != request
+        Return -1
+    EndIf
+    Float deadline = Utility.GetCurrentRealTime() + 10.0
+    While token == _generation && _mlRequest != "" && !_mlDomReady && Utility.GetCurrentRealTime() < deadline
+        Utility.WaitMenuMode(0.1)
+    EndWhile
+    If token != _generation || _mlRequest == ""
+        Return -1
+    EndIf
+    If !_mlDomReady
+        InvalidateMagelight()
+        Return -1
+    EndIf
+    PrimeMagelight(token)
+    If token != _generation || _mlRequest == ""
+        Return -1
+    EndIf
+    If _mlResult != ""
+        InvalidateMagelight()
+        Return -1
+    EndIf
+    Bool requested = Magelight.RequestUIMode(_mlView, True)
+    If token != _generation || _mlRequest == ""
+        Return -1
+    EndIf
+    If !requested
+        InvalidateMagelight()
+        Return -1
+    EndIf
+    deadline = Utility.GetCurrentRealTime() + 5.0
+    While token == _generation && _mlRequest != "" && _mlResult == "" && !_mlEntered && Utility.GetCurrentRealTime() < deadline
+        Utility.WaitMenuMode(0.1)
+    EndWhile
+    If token != _generation || _mlRequest == ""
+        Return -1
+    EndIf
+    If !_mlEntered || _mlResult != ""
+        InvalidateMagelight()
+        Return -1
+    EndIf
+    Magelight.Call(_mlView, "psWheelArm", _mlRequest)
+    While token == _generation && _mlRequest != "" && _mlResult == ""
+        Utility.WaitMenuMode(0.1)
+        If token != _generation || _mlRequest == ""
+            Return -1
+        EndIf
+        If _mlResult == ""
+            Bool hostReady = Magelight.IsReady()
+            If token != _generation || _mlRequest == ""
+                Return -1
+            EndIf
+            Bool modeActive = Magelight.IsUIModeActive()
+            If token != _generation || _mlRequest == ""
+                Return -1
+            EndIf
+            Int modeView = Magelight.GetUIModeView()
+            If token != _generation || _mlRequest == ""
+                Return -1
+            EndIf
+            If _mlResult == "" && (!hostReady || !modeActive || modeView != _mlView)
+                InvalidateMagelight()
+                Return -1
+            EndIf
+        EndIf
+    EndWhile
+    If token != _generation || _mlRequest == ""
+        Return -1
+    EndIf
+    String result = _mlResult
+    Int selected = -1
+    If result == _mlRequest + "|-1|"
+        selected = -1
+    Else
+        Int i = 0
+        While i < JArray.count(slots) && i < 8
+            If JArray.valueType(slots, i) == 5
+                Int slot = JArray.getObj(slots, i)
+                String intent = ""
+                If JMap.hasKey(slot, "intent")
+                    intent = JMap.getStr(slot, "intent")
+                EndIf
+                If result == _mlRequest + "|" + i + "|" + intent
+                    selected = i
+                    i = 8
+                EndIf
+            EndIf
+            i += 1
+        EndWhile
+    EndIf
+    If token == _generation && _mlRequest != ""
+        _mlRequest = ""
+        _mlResult = ""
+        _mlPrimed = False
+        If JContainers.isInstalled() && _mlSlots != 0
+            _mlSlots = JValue.release(_mlSlots)
+        EndIf
+        Magelight.ReleaseUIMode("PlayerSignals")
+        If token == _generation
+            deadline = Utility.GetCurrentRealTime() + 5.0
+            Bool stillOwned = Magelight.IsUIModeActive()
+            If token != _generation
+                Return -1
+            EndIf
+            Int activeView = Magelight.GetUIModeView()
+            If token != _generation
+                Return -1
+            EndIf
+            While token == _generation && stillOwned && activeView == _mlView && Utility.GetCurrentRealTime() < deadline
+                Utility.WaitMenuMode(0.1)
+                If token != _generation
+                    Return -1
+                EndIf
+                stillOwned = Magelight.IsUIModeActive()
+                If token != _generation
+                    Return -1
+                EndIf
+                activeView = Magelight.GetUIModeView()
+                If token != _generation
+                    Return -1
+                EndIf
+            EndWhile
+            If stillOwned && activeView == _mlView
+                selected = -1
+            EndIf
+            view = Magelight.FindView("PlayerSignals", "wheel")
+            If token == _generation && view != 0
+                Magelight.ShowView(view, False)
+            EndIf
+        EndIf
+    EndIf
+    Return selected
 EndFunction
 
 Function Report(String details)

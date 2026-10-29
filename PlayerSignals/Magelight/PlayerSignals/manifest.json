@@ -1,0 +1,16 @@
+{
+    "modId": "PlayerSignals",
+    "name": "PlayerSignals wheel spike",
+    "version": "0.0.0",
+    "minHost": "0.31.2",
+    "session": "isolated",
+    "network": "file",
+    "views": {
+        "wheel": {
+            "path": "index.html",
+            "layer": "popup",
+            "fullscreen": true,
+            "startVisible": false
+        }
+    }
+}

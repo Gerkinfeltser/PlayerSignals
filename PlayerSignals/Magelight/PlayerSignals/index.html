@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PlayerSignals</title>
+<style>
+    :root { color-scheme: dark; font: 20px Georgia, serif; color: #f5ebd2; }
+    body { margin: 0; height: 100vh; display: grid; place-items: center; background: transparent; }
+    main { width: min(92vw, 900px); }
+    h1, p { text-align: center; text-shadow: 0 2px 3px #000; }
+    #wheel { display: grid; grid-template-rows: repeat(4, minmax(64px, auto)); grid-auto-flow: column; grid-template-columns: 1fr 1fr; gap: 12px 12vw; }
+    button { font: inherit; color: inherit; background: #191815ed; border: 1px solid #b5a482; padding: 12px; overflow-wrap: anywhere; cursor: pointer; }
+    button:focus-visible { outline: 3px solid #fff1bb; outline-offset: 3px; }
+    button:hover:enabled { background: #51432e; }
+    button:disabled { visibility: hidden; }
+    @media (max-height: 550px) { :root { font-size: 16px; } #wheel { grid-template-rows: repeat(4, minmax(36px, auto)); gap: 8px 8vw; } h1, p { margin: 8px; } }
+</style>
+<main aria-label="PlayerSignals communication wheel">
+    <h1>PlayerSignals</h1>
+    <div id="wheel" role="group" aria-label="Choose a gesture"></div>
+    <p>Arrow keys: focus · Enter: select · Tab / Escape: cancel<br>Hold either Shift through final selection to address everyone.</p>
+</main>
+<script>
+(() => {
+    "use strict";
+    let request = "", armed = false, finished = false;
+    const labels = Array(8).fill(""), intents = Array(8).fill("");
+    const wheel = document.getElementById("wheel");
+    const buttons = labels.map((_, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.disabled = true;
+        button.addEventListener("click", () => choose(index));
+        wheel.appendChild(button);
+        window["psWheelLabel" + index] = label => {
+            labels[index] = label;
+            button.textContent = label;
+            button.disabled = !armed || !label;
+        };
+        window["psWheelIntent" + index] = intent => { intents[index] = intent; };
+        return button;
+    });
+    function choose(index) {
+        if (!armed || finished || (index >= 0 && !labels[index])) return;
+        finished = true;
+        armed = false;
+        buttons.forEach(button => { button.disabled = true; });
+        // The host owns closure. Claim once before its yielding Papyrus wrapper releases focus.
+        window.psWheelChoice(request + "|" + index + "|" + (index < 0 ? "" : intents[index]));
+    }
+    window.psWheelBegin = token => {
+        request = token;
+        armed = false;
+        finished = false;
+        labels.fill("");
+        intents.fill("");
+        buttons.forEach(button => { button.textContent = ""; button.disabled = true; });
+    };
+    window.psWheelArm = token => {
+        if (token !== request || finished || !request) return;
+        armed = true;
+        buttons.forEach((button, index) => { button.disabled = !labels[index]; });
+        const first = buttons.find(button => !button.disabled);
+        if (first) first.focus();
+    };
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" || event.key === "Tab") {
+            event.preventDefault();
+            choose(-1);
+        } else if (armed && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+            event.preventDefault();
+            const enabled = buttons.filter(button => !button.disabled);
+            const step = ["ArrowUp", "ArrowLeft"].includes(event.key) ? -1 : 1;
+            const current = enabled.indexOf(document.activeElement);
+            if (enabled.length) enabled[(current + step + enabled.length) % enabled.length].focus();
+        }
+    });
+    // Preserve Tab/Escape as whole-session cancellation, not submenu Back.
+    if (window.magelight) window.magelight.send("__escapecapture", "1");
+})();
+</script>
+</html>

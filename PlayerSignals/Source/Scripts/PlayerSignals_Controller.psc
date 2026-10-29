@@ -18,7 +18,7 @@ Bool _mlPrimed = False
 Int _mlSequence = 0
 
 Bool Function UseMagelight()
-    Return False
+    Return True
 EndFunction
 
 Function InvalidateMagelight()

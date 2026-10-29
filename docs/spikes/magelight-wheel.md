@@ -1,10 +1,18 @@
 # Spike: MagelightUI wheel
 
+## Enabled ADT checkpoint — 2026-10-29
+
+**[source / built]** At the owner's request, `UseMagelight()` now returns `True`. Both Papyrus scripts were rebuilt with 0 errors / 0 warnings; ESP/SEQ generation completed. The owner reports the payload directory is symlinked into ADT, so rebuilding it updates files exposed to that installation; no separate copy/deploy command is necessary. Earlier no-deployment wording below describes the absence of a separate deployment operation, not isolation from that symlink.
+
+**[owner-reported runtime — PlayerSignals/ADT]** The owner reports “Works” and “a bit slow … compared to the wheel.” This establishes a reported working smoke, not the detailed targeting, Shift, callback, lifecycle or control-restoration matrix. No agent-controlled game test or timing measurement was performed.
+
+**[planned]** A radial menu is required; the current two-column prototype is not the intended final UI. Radial presentation and performance changes are explicitly deferred until after this checkpoint's commit/push. The installed SeverActions 4.6 reference was inspected read-only at `D:/Modlists/ADT/mods/SeverActions-4.6.0-FOMOD/Magelight/SeverActions/views/SeverActionsWheel/index.html` (SVG sectors and bridge contract, lines 183-207 and 267-282). No reference assets or dispatch code were copied, and no radial/performance implementation is included here.
+
 ## Decision and evidence boundaries
 
-**[source / runtime-unverified] GO for the disabled, offline prototype; NO-GO for replacing the production UIExtensions backend yet.** Magelight exposes the required Papyrus/view bridge without a PlayerSignals DLL. PlayerSignals still needs its own native input, lifecycle and narration acceptance run. SQOS's ON HOLD decision is not a Magelight defect finding and does not block this separately authorized offline spike.
+**[source / runtime-unverified] GO for the experimental prototype; NO-GO for replacing the production UIExtensions backend yet.** Magelight exposes the required Papyrus/view bridge without a PlayerSignals DLL. The owner's ADT smoke above does not close the native input, lifecycle and narration acceptance matrix. SQOS's ON HOLD decision is not a Magelight defect finding.
 
-**[source] Scope:** branch `spike/magelight-wheel`; no push, game launch, installation, deployment, MO2/profile/symlink/plugin/load-order change, or MagelightUI/SQOS worktree edit. Existing unrelated untracked `docs/backlog/` and `media/default-wheel_0.1.0.jpg` are outside this spike.
+**[source] Initial offline scope:** the first checkpoint (`65db3b2`) used branch `spike/magelight-wheel` with no push, agent game launch, separate deployment operation, MO2/profile/symlink/plugin/load-order change, or MagelightUI/SQOS worktree edit. The owner subsequently authorized enabling/rebuilding Magelight and committing/pushing that state. Existing unrelated untracked `docs/backlog/` and `media/default-wheel_0.1.0.jpg` remain outside this spike.
 
 Evidence labels apply to every claim in their paragraph/table row:
 
@@ -45,7 +53,7 @@ Evidence labels apply to every claim in their paragraph/table row:
 
 ## Prototype architecture
 
-**[source / runtime-unverified]** `UseMagelight()` returns `False` in the committed controller: UIExtensions remains the selected backend. To opt into a later authorized test, change only that function to `True` and rebuild; this document does not authorize installation or live testing. There is no new JSON schema flag, saved property default or automatic fallback between backends.
+**[source / built]** `UseMagelight()` now returns `True` in the controller and rebuilt PEX. To return to UIExtensions, change that function to `False` and rebuild with Skyrim closed. The original `65db3b2` checkpoint selected `False`; its offline evidence below remains historical. There is no new JSON schema flag, saved property default or automatic fallback between backends.
 
 **[source / runtime-unverified]** `Browse` owns navigation for both backends. For each wheel, the optional adapter sends a fresh request token, the eight validated/decorated labels and their intent IDs via string `Magelight.Call` arguments: `psWheelBegin`, `psWheelLabel0`…`7`, `psWheelIntent0`…`7`. Unused/null slots stay disabled. `psWheelArm(request)` is sent only after matching focus entry. The page renders slots 1–4 down the left and 5–8 down the right; this is a two-column wheel prototype, not a pixel-identical radial SWF replacement.
 
@@ -131,4 +139,4 @@ OK
 
 **[source] Review outcome:** a `reviewer` inspected the design, evidence claims and final stable adapter. Confirmed findings were fixed: begin-before-label ordering, menu-mode waits, DOM reload/reacquisition, detailed/plain failure routing, stale-entry guards, result-claim guards after yielding calls, lifecycle/polling preservation of the first terminal result, delayed prior-wheel exit rejection until current entry, held-key resampling generation fence, bounded release observation and a compiler-detected local variable shadow. The final review reports **no unresolved source-proven findings**. An earlier compile failed on the shadowed `view` variable; it was corrected before the successful final build. Review/compilation do not close any native acceptance gate.
 
-**[source / runtime-unverified] Reproduction:** start the localhost server above and open `/tests/test_magelight_wheel.html` for the browser check. The optional native route requires the separately installed host and manifest/view plus `UseMagelight() == True` and rebuilt controller; no such deployment or live run was performed or authorized by this spike. Browser tabs and the temporary HTTP service were closed after observation. No throwaway runtime harness or framework assets were added to the payload.
+**[source / runtime-unverified] Reproduction:** start the localhost server above and open `/tests/test_magelight_wheel.html` for the browser check. The native route requires the separately installed host and manifest/view plus the enabled rebuilt controller. The original offline investigation did not run the game; the later owner-reported ADT smoke is recorded separately above. Browser tabs and the temporary HTTP service were closed after observation. No throwaway runtime harness or framework assets were added to the payload.

@@ -36,7 +36,7 @@ $background = $svg.SelectSingleNode("*[local-name()='rect' and @id='Artboard1']"
 if ($background) { [void]$svg.RemoveChild($background) }
 $svg.SetAttribute('id', 'wheelSvg')
 $svg.SetAttribute('role', 'group')
-$svg.SetAttribute('aria-label', 'Choose a gesture')
+$svg.SetAttribute('aria-label', 'Choose a gesture or action')
 $svg.RemoveAttribute('width')
 $svg.RemoveAttribute('height')
 $viewPath = Join-Path $mod 'Magelight/PlayerSignals/index.html'

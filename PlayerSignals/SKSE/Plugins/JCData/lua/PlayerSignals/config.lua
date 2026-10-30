@@ -72,8 +72,8 @@ local function decode(text)
         fail('unterminated string')
     end
     local value
-    value = function(depth)
-        if depth > 128 then fail('JSON nesting too deep') end
+    value = function(depth, actionArgs)
+        local start = pos
         space()
         local c = string.sub(text, pos, pos)
         if c == '"' then return str() end
@@ -82,7 +82,7 @@ local function decode(text)
             local node = {kind = c == '{' and 'object' or 'array', data = {}}
             local close = c == '{' and '}' or ']'
             space()
-            if string.sub(text, pos, pos) == close then pos = pos + 1; return node end
+            if string.sub(text, pos, pos) == close then pos = pos + 1; node.raw = string.sub(text, start, pos - 1); return node end
             while true do
                 local key
                 if c == '{' then
@@ -93,10 +93,10 @@ local function decode(text)
                     pos = pos + 1
                     if node.data[key] ~= nil then fail('duplicate object key ' .. key) end
                 else key = #node.data + 1 end
-                node.data[key] = value(depth + 1)
+                node.data[key] = value(depth + 1, actionArgs or (c == '{' and key == 'args'))
                 space()
                 local delimiter = string.sub(text, pos, pos); pos = pos + 1
-                if delimiter == close then return node end
+                if delimiter == close then node.raw = string.sub(text, start, pos - 1); return node end
                 if delimiter ~= ',' then fail('expected comma or ' .. close) end
             end
         end
@@ -109,8 +109,13 @@ local function decode(text)
         end
         local token = string.match(string.sub(text, pos), '^%-?%d+%.?%d*[eE]?[+%-]?%d*')
         if not token then fail('expected JSON value') end
-        -- Only integer tokens are valid anywhere in this schema. Preserve lexical type.
-        if not string.match(token, '^%-?%d+$') or string.match(token, '^%-?0%d') then fail('expected integer token') end
+        if not actionArgs and (not string.match(token, '^%-?%d+$') or string.match(token, '^%-?0%d')) then fail('expected integer token') end
+        if string.match(token, '^%-?0%d') then fail('invalid leading zero') end
+        if actionArgs then
+            local valid = string.match(token, '^%-?%d+$') or string.match(token, '^%-?%d+%.%d+$') or
+                string.match(token, '^%-?%d+[eE][+%-]?%d+$') or string.match(token, '^%-?%d+%.%d+[eE][+%-]?%d+$')
+            if not valid then fail('invalid JSON number') end
+        end
         pos = pos + #token
         return tonumber(token)
     end
@@ -172,16 +177,33 @@ local function validate(root, intents)
         for i, slot in ipairs(wheel.data) do
             if slot ~= null then
                 local path = 'wheels.' .. name .. '[' .. i .. ']'
-                local e = object(slot, path, {label=true, intent=true, submenu=true, control=true})
+                local e = object(slot, path, {label=true, intent=true, submenu=true, control=true, action=true, event=true})
                 nonempty(e.label, path .. '.label')
-                local actions = 0
-                for _, action in ipairs({'intent','submenu','control'}) do
-                    if e[action] ~= nil then actions = actions + 1; nonempty(e[action], path .. '.' .. action) end
+                local kinds = 0
+                for _, kind in ipairs({'intent','submenu','control','action'}) do
+                    if e[kind] ~= nil then kinds = kinds + 1 end
                 end
-                assert(actions == 1, path .. ': expected exactly one action')
-                if e.intent then assert(intents[e.intent], path .. '.intent: unknown ID ' .. e.intent) end
-                if e.submenu then assert(wheels[e.submenu], path .. '.submenu: unknown wheel ' .. e.submenu) end
-                if e.control then assert(e.control == 'back' or e.control == 'close', path .. '.control: expected back or close') end
+                local eventIntent = e.action ~= nil and e.intent ~= nil and e.event ~= nil
+                assert(kinds == 1 or (kinds == 2 and eventIntent), path .. ': expected exactly one of intent, submenu, control or action (with paired event intent)')
+                if e.intent ~= nil then nonempty(e.intent, path .. '.intent') end
+                if e.submenu ~= nil then nonempty(e.submenu, path .. '.submenu') end
+                if e.control ~= nil then nonempty(e.control, path .. '.control') end
+                if e.intent ~= nil and e.action == nil then assert(intents[e.intent], path .. '.intent: unknown ID ' .. tostring(e.intent)) end
+                if e.submenu ~= nil then assert(wheels[e.submenu], path .. '.submenu: unknown wheel ' .. tostring(e.submenu)) end
+                if e.control ~= nil then assert(e.control == 'back' or e.control == 'close', path .. '.control: expected back or close') end
+                if e.action ~= nil then
+                    local action = object(e.action, path .. '.action', {name=true,args=true})
+                    nonempty(action.name, path .. '.action.name')
+                    assert(type(action.args) == 'table' and action.args.kind == 'object', path .. '.action.args: expected object')
+                    assert(action.args.raw, path .. '.action.args: missing raw JSON')
+                    assert((e.event == nil) == (e.intent == nil), path .. ': event and intent must be provided together')
+                    if e.event ~= nil then
+                        assert(e.event == 'persistent' or e.event == 'shortLived' or e.event == 'both', path .. '.event: expected persistent, shortLived or both')
+                        assert(type(e.intent) == 'string' and intents[e.intent], path .. '.intent: unknown ID ' .. tostring(e.intent))
+                    end
+                else
+                    assert(e.event == nil, path .. '.event: only valid for action entries')
+                end
             end
         end
     end
@@ -228,7 +250,11 @@ function M.wheelPayload(slots)
             if slot == nil then
                 entries[i] = 'null'
             else
-                entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(slot.intent or '') .. ']'
+                local kind = 'navigation'
+                if slot.kind == 'action' or slot.actionName ~= nil then kind = 'action'
+                elseif slot.kind == 'intent' then kind = 'intent' end
+                local identity = kind == 'action' and slot.actionName or kind == 'intent' and slot.intent or ''
+                entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. ']'
             end
         end
         return '[' .. table.concat(entries, ',') .. ']'
@@ -287,11 +313,22 @@ function M.load(args)
             for i, slot in ipairs(wheel.data) do
                 if slot ~= null then
                     local entry = JMap.object(); slots[i] = entry
+                    if slot.data.action then
+                        entry.kind = 'action'
+                        entry.actionName = slot.data.action.data.name
+                        entry.argsJson = slot.data.action.data.args.raw
+                        if slot.data.event then entry.event = slot.data.event; entry.intent = slot.data.intent end
+                    elseif slot.data.intent then
+                        entry.kind = 'intent'
+                    elseif slot.data.submenu then
+                        entry.kind = 'submenu'
+                    else
+                        entry.kind = 'control'
+                    end
                     for key, v in pairs(slot.data) do
                         if key == 'submenu' then v = names[v] end
-                        entry[key] = v
+                        if key ~= 'action' then entry[key] = v end
                     end
-                    -- Decorate display text once; authored labels and action identity stay separate.
                     if slot.data.submenu then entry.label = slot.data.label .. ' >'
                     elseif slot.data.control == 'back' then entry.label = slot.data.label .. ' <' end
                 end

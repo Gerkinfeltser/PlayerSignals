@@ -12,7 +12,7 @@
       { "label": "Farewell", "intent": "farewell" },
       { "label": "Social", "submenu": "social" },
       { "label": "Signals", "submenu": "signals" },
-      { "label": "Attitude", "submenu": "attitude" },
+      { "label": "Actions", "submenu": "actions" },
       { "label": "Close", "control": "close" }
     ],
     "social": [
@@ -21,8 +21,17 @@
       { "label": "Show respect", "intent": "respect" },
       { "label": "Welcome", "intent": "welcome" },
       { "label": "Well done", "intent": "congratulate" },
+      { "label": "More social", "submenu": "more_social" },
+      { "label": "Attitude", "submenu": "attitude" },
+      { "label": "Back", "control": "back" }
+    ],
+    "more_social": [
       { "label": "Offer", "intent": "offer" },
       { "label": "Request", "intent": "ask" },
+      { "label": "Back", "control": "back" }
+    ],
+    "actions": [
+      { "label": "Drink alcohol", "action": { "name": "drink_alcohol", "args": { "drinkName": "" } } },
       { "label": "Back", "control": "back" }
     ],
     "signals": [

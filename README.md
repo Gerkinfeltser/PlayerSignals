@@ -1,24 +1,24 @@
 # PlayerSignals (for SkyrimNet)
 
-PlayerSignals is a small configurable communication wheel for Skyrim. Pick one of 25 shipped nonverbal gesture defaults—or add a supported intent through the editable JSON catalog—and send its authored description to SkyrimNet as direct narration. A local notification confirms successful submission, with targeted wording for a captured recipient. It never plays an animation or forces requested NPC actions. SkyrimNet handles dialogue; a reply or compliance is not guaranteed.
+PlayerSignals is a configurable communication wheel for SkyrimNet. Gesture entries send authored direct narration; the experimental Actions category executes registered SkyrimNet actions on the captured NPC. Gesture requests do not force compliance. Action API acceptance does not prove that an in-game effect occurred.
 
 ## Status
 
-**Limited-test release.** Both Papyrus scripts compiled with 0 errors/warnings, all 15 configuration tests passed in a fresh process, and focused loader/submission smokes passed. The 2026-10-02 ASSOS session recorded eight gestures with the player as originator: seven received NPC responses, while the final no-audience gesture correctly produced none. One ADT removal test retained saved Papyrus remnants; a ReSaver-cleaned copy loaded without PlayerSignals missing-script warnings in an approximately eight-second post-load window. This is not guaranteed clean removal or long-term save safety. The earlier integrated build failed at a locked, unchanged ESP; separate generation verified its existing ESP/SEQ, and the corrected controller PEX was subsequently compiled and packaged. Physical Shift timing, exhaustive menu/error cases, upgrade coverage, and long-term removal behavior remain unverified. See the [plan](docs/plans/player-signals.md) for evidence and limits.
+**Historical limited-test release (before target-NPC actions).** The 2026-10-02 ASSOS session recorded eight player-originator gestures, seven NPC responses and one expected no-audience result. One ADT removal test retained saved Papyrus remnants; a ReSaver-cleaned copy loaded without missing-script warnings during a short window. These records do not establish action execution, exhaustive runtime acceptance or safe mid-save removal. The older ESP-lock build failure is historical; current offline results are below. See internal `docs-dev/plans/player-signals.md` for evidence and limits.
 
-**Experimental branch `dev`:** Magelight is enabled in the built payload, using the authored SVG wheel with separate captured-NPC bodies and everyone-nearby chevrons. Browser checks and compilation pass; the owner reported no errant camera movement on the preceding focus revision. The new artwork/region dispatch still needs native acceptance. See the [Magelight spike](docs/spikes/magelight-wheel.md), not the production status above, for this branch's current evidence.
+**Experimental branch `feature/target-npc-actions`:** Magelight is enabled in the built payload, using the authored SVG wheel with separate target-NPC bodies and everyone-nearby chevrons for gestures. Action entries are target-only and ignore Shift. Action implementation and offline verification are tracked in the external `openspec/changes/add-target-npc-actions/` change and `docs-dev/plans/player-signals.md`; native action acceptance remains runtime-unverified.
 
-- [Specification](docs/specs/player-signals.md): behavior, JSON schemas, 25 shipped narration/group-notification defaults, dynamic registry, targeting contract, and acceptance criteria.
+- Internal specification: `docs-dev/specs/player-signals.md` (externally stored development documentation).
 - [Player guide](PlayerSignals/PlayerSignals-README.md): friendly setup, wheel customization, targeting, and troubleshooting; this file is inside the packaged mod root.
-- [Implementation plan](docs/plans/player-signals.md): active direct-API cutover and separately labeled historical evidence.
+- Internal implementation plan: `docs-dev/plans/player-signals.md`; design and tasks: `openspec/changes/add-target-npc-actions/`. These ignored, linked directories are not part of this repository's published payload.
 
 ## Repository layout
 
 ```text
 PlayerSignals/              Mod root; only this child folder belongs in MO2
 PlayerSignals_spriggit/      Authored plugin records (outside the mod root)
-docs/specs/                  Authoritative feature contract
-docs/plans/                  Active work and historical evidence
+docs-dev/                    Externally linked internal contracts and evidence (not published)
+openspec/                    Externally linked change artifacts (not published)
 build/                       PowerShell build and local compiler flags
 tests/                       Raw JSON/schema regressions executed on LuaJIT
 ```
@@ -29,13 +29,15 @@ The mod root contains `PlayerSignals.esp`, startup quest SEQ, two Papyrus script
 
 Required: SKSE, UIExtensions, JContainers API 4 / feature 2 with working Lua support, and SkyrimNet. Startup requires `SkyrimNet.esp` loaded and a nonempty `SkyrimNetApi.GetBuildVersion()`.
 
+The enabled Magelight backend also requires Magelight host **0.31.2+** and its matching runtime. Action entries require SkyrimNet's `IsActionRegistered`, `ExecuteAction`, `SkyrimNetInternal` built-in eligibility functions and, when configured, persistent/short-lived event APIs. The shipped `drink_alcohol` example requires separately installed and registered iActions; iActions is optional, not a general PlayerSignals dependency. Without it, selecting that entry reports the unregistered action and does nothing.
+
 Before the wheel opens, PlayerSignals captures the current crosshair NPC. If a valid NPC remains captured when you select a gesture, SkyrimNet receives direct narration with the player as originator (`From`) and the captured NPC as the explicit target. The narration names your character as the gesture actor and explicitly addresses the captured NPC. Moving the crosshair after opening does not change the submitted recipient. The captured NPC must remain alive, enabled, and 3D-loaded when submitting or the selection fails closed. SkyrimNet selects the responder; this call does not force the captured NPC to respond, and SkyrimNet may replace event `To` with the selected responder.
 
 No NPC captured means the gesture is addressed to everyone nearby. Holding either Shift (scan code 42 or 54) through selection overrides a captured target; Shift is sampled immediately after the wheel returns an accepted intent, not at the exact click instant. The group narration explicitly says it is addressed to everyone nearby. Nearby witnesses may join, but nobody is guaranteed to reply. An invalid captured target is not silently redirected to a different NPC or to group mode.
 
-Each accepted selection makes one `SkyrimNetApi.DirectNarration` call. A local player-named notification appears only if the API returns `0`; group wording omits the recipient, while targeted wording uses the name captured before the wheel opened. Either Shift key forces group feedback without the discarded name. This is a submission receipt, not proof of SkyrimNet delivery or an NPC response. Navigation, cancellation, stale selections, invalid targets, and unsuccessful calls stay silent.
+Each accepted gesture makes one `SkyrimNetApi.DirectNarration` call. A local player-named notification appears only if the API returns `0`; group wording omits the recipient, while targeted wording uses the name captured before the wheel opened. Either Shift key forces group feedback without the discarded name. This is a submission receipt, not proof of SkyrimNet delivery or an NPC response. Navigation, cancellation, stale selections, invalid gesture targets, and unsuccessful gesture calls stay silent.
 
-No animation playback, item transfer, or forced NPC action is performed.
+Action entries instead execute once on the valid captured NPC, with no direct narration, nearby region or Shift conversion. Registered built-ins (`AccompanyTarget`, `StopAccompanying`, `WaitHere`) run their eligibility checks; other registered actions run without an eligibility check. PlayerSignals does not enforce action cooldowns. Accepted action failures report one trace and local notification. Optional per-slot events record context only after API success; they do not prove completion. No direct animation or player-control API is used by PlayerSignals itself.
 
 ## Installation and first use
 
@@ -55,13 +57,13 @@ PlayerSignals does not add gesture spells, edit NPC world records, or toggle pla
 
 Edit `PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json` and, for intent IDs or phrases, `PlayerSignals/SKSE/Plugins/PlayerSignals/intents.json` inside the mod, then load a save to apply changes. Right Alt defaults to keyboard scan code `184`; configurable opening-key codes are `1–255`. No live reload or JSON write-back.
 
-Each wheel has 1–8 ordered slots. A slot is `null` (disabled) or a nonempty label and exactly one of `intent`, `submenu`, or `control` (`back` / `close`). The catalog ships 25 default intent IDs, but the validated lowercase-ASCII ID registry is dynamic. Every layout ID must exist in `intents.json`; every wheel and catalog entry is validated. Unknown properties/IDs, wrong types, broken submenu references, cycles, and oversized wheels fail closed.
+Each wheel has 1–8 ordered slots. A slot is `null` (disabled) or has a nonempty label and one primary kind: `intent`, `action`, `submenu`, or `control` (`back` / `close`). An action is `{"name":"drink_alcohol","args":{"drinkName":""}}`; it may additionally supply paired `event` (`persistent`, `shortLived`, or `both`) and catalog `intent` fields for context text. Every narration/event intent must exist in `intents.json`; action names are not catalog IDs. All wheels and catalog entries are validated. Unknown fields, wrong types, broken references, cycles and oversized wheels fail closed.
 
 Labels, slot order, disabled slots, repeated supported intents, wheel names/submenus, and opening key are customizable without recompiling. UIExtensions positions 1–4 run down the left and 5–8 down the right; experimental Magelight positions run clockwise from the top. Submenus display ` >`; Back displays ` <`. Do not duplicate markers in JSON. No custom label is truncated or assigned a hard character limit.
 
 `intents.json` defines each supported ID and its three phrases: `narration`, group `notification`, and `targetedNotification`. Add an ID by adding its catalog record and referencing it from `layout.json`; edit phrases in that record. Phrase values omit your character's name and final period; exactly one literal `{target}` marker appears only in `targetedNotification`. Use plain JSON without comments or trailing commas. Both files are read on load, so changes apply after loading a save. No Lua/Papyrus edit, recompile, YAML narration file, or external trigger bundle is needed.
 
-For exact schema rules and all 25 shipped default narration/group-notification phrases, see the [specification](docs/specs/player-signals.md).
+For exact schema rules and all shipped narration defaults, see the internal `docs-dev/specs/player-signals.md` and the installed [player guide](PlayerSignals/PlayerSignals-README.md).
 
 ## Build and checks
 
@@ -73,7 +75,7 @@ python -m unittest discover -s tests -v
 
 The build embeds `media/src/RadialUI.svg` into the Magelight page, preserving its named paths/transforms while omitting the editor background. Edit that SVG for geometry; the marked SVG section in `PlayerSignals/Magelight/PlayerSignals/index.html` is generated. Only the built `PlayerSignals/` payload belongs in MO2.
 
-Scoped source-derived smokes, separately passed unittests, and the failed full-build attempt are summarized above and detailed in the plan; none establish in-game behavior.
+Current action revision: all **21 configuration tests** pass; source-derived controller/loader smokes and browser interaction checks pass; the full build compiles both scripts with **0 errors and 0 warnings** and completes ESP/SEQ generation. These are offline results, not native action or NPC-effect acceptance. Per the owner's revised decision, short-lived event data and description both contain the same rendered intent phrase; the inspected no-schema formatter can therefore expose the phrase rather than action/FormID metadata.
 
 ## License
 

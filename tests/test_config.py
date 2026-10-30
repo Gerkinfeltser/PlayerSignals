@@ -36,19 +36,96 @@ class ConfigValidation(unittest.TestCase):
         slots = self.lua.table()
         expected = [None] * 8
         values = [
-            ('quote " slash \\ pipe | controls \x00\x01\b\f\n\r\t end', 'intent_\\|"'),
-            ('café 雪', ''),
-            ('{"intent":"metadata-like"}', 'navigate'),
-            ('tail', 'last'),
+            ('quote " slash \\ pipe | controls \x00\x01\b\f\n\r\t end', 'intent_\\|"', 'intent'),
+            ('café 雪', '', 'navigation'),
+            ('{"intent":"metadata-like"}', 'drink_alcohol', 'action'),
+            ('tail', 'last', 'intent'),
         ]
         for index, value in zip((1, 3, 4, 8), values):
             slot = self.lua.table()
-            slot['label'], slot['intent'] = value
+            slot['label'] = value[0]
+            slot['kind'] = 'submenu' if value[2] == 'navigation' else value[2]
+            if value[2] == 'action':
+                slot['actionName'], slot['intent'] = value[1], 'offer_drink'
+            else:
+                slot['intent'] = value[1]
             slots[index] = slot
             expected[index - 1] = list(value)
 
         payload = self.module.wheelPayload(slots)
         self.assertEqual(json.loads(payload), expected)
+
+    def test_action_slots_validate_metadata_and_event_pair(self):
+        config = minimal()
+        config['wheels']['main'] = [
+            {'label': 'Drink', 'action': {'name': 'drink_alcohol', 'args': {'drinkName': ''}}}
+        ]
+        self.parse(config)
+        config['wheels']['main'][0].update(event='both', intent='offer_drink')
+        catalog = copy.deepcopy(self.catalog)
+        catalog['intents']['offer_drink'] = copy.deepcopy(catalog['intents']['offer'])
+        self.parse(config, json.dumps(catalog))
+
+        for invalid in (
+            {'label': 'Drink', 'action': {'args': {}}},
+            {'label': 'Drink', 'action': {'name': 'x'}},
+            {'label': 'Drink', 'action': {'name': '', 'args': {}}},
+            {'label': 'Drink', 'action': {'name': 3, 'args': {}}},
+            {'label': 'Drink', 'action': 'x'},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': []}},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': {}, 'extra': True}},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'intent': 'confirm'},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'control': 'close'},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'submenu': 'main'},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'event': 'both', 'intent': 'confirm', 'control': 'close'},
+            {'label': 'Gesture', 'intent': 'confirm', 'event': 'both'},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'event': 'both'},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'event': 'bad', 'intent': 'confirm'},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'event': 'both', 'intent': 'missing'},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'args': {}},
+            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'unknown': True},
+        ):
+            with self.subTest(slot=invalid):
+                config = minimal()
+                config['wheels']['main'] = [invalid]
+                self.rejects(config)
+
+    def test_action_name_may_match_catalog_id_without_intent_resolution(self):
+        config = minimal()
+        config['wheels']['main'] = [
+            {'label': 'Confirm action', 'action': {'name': 'confirm', 'args': {}}}
+        ]
+        self.parse(config)
+
+    def test_action_argument_json_keeps_nested_values_and_number_tokens(self):
+        layout = ('{"schemaVersion":1,"root":"main","input":{"openKeyCode":184},'
+                  '"wheels":{"main":[{"label":"Action","action":{"name":"x","args":'
+                  '{"big":900719925474099312345,"decimal":1.2300,"exponent":2E+10,'
+                  '"unicode":"雪","truth":true,"nothing":null,"nested":[{"n":-0.25e-2}]}}}]}}')
+        parsed = self.module.validateText(layout, self.catalog_text)
+        args = '{"big":900719925474099312345,"decimal":1.2300,"exponent":2E+10,' \
+               '"unicode":"雪","truth":true,"nothing":null,"nested":[{"n":-0.25e-2}]}'
+        self.assertEqual(parsed.wheels.data.main.data[1].data.action.data.args.raw, args)
+
+    def test_action_args_reject_wrong_containers_and_malformed_numbers(self):
+        for args in (None, False, 0, 'object', []):
+            config = minimal()
+            config['wheels']['main'] = [{'label': 'Action', 'action': {'name': 'x', 'args': args}}]
+            with self.subTest(args=args):
+                self.rejects(config)
+        for token in ('01', '1.', '1e', '1e+', '+1', '.5'):
+            text = ('{"schemaVersion":1,"root":"main","input":{"openKeyCode":184},'
+                    '"wheels":{"main":[{"label":"Action","action":{"name":"x","args":{"n":'
+                    + token + '}}}]}}')
+            with self.subTest(token=token), self.assertRaises(LuaError):
+                self.module.validateText(text, self.catalog_text)
+
+    def test_present_false_slot_kinds_are_rejected_with_slot_diagnostic(self):
+        for kind in ('action', 'intent', 'submenu', 'control'):
+            config = minimal()
+            config['wheels']['main'] = [{'label': 'Invalid', kind: False}]
+            with self.subTest(kind=kind), self.assertRaisesRegex(LuaError, r'wheels\.main\[1\]'):
+                self.parse(config)
 
     def test_numeric_types_and_boundaries(self):
         for field in ('schemaVersion', 'openKeyCode'):

@@ -21,10 +21,11 @@
     .sector[aria-disabled="true"] { opacity: .25; }
     #center-hit { fill: #292c29 !important; }
     #center:hover #center-hit, #center:focus #center-hit { fill: #53452e !important; }
-    #wheelSvg foreignObject, .nearbyLabel { pointer-events: none; }
+    #wheelSvg foreignObject, .nearbyLabel, .actionLabel { pointer-events: none; }
     .sectorLabel, .hubContent { width: 100%; height: 100%; display: grid; align-content: center; overflow-wrap: anywhere; text-align: center; }
     .sectorLabel { font: 600 110px/1.12 Georgia, serif; color: #fff3d9; }
     .nearbyLabel { fill: #28291f; font: 700 72px Georgia, serif; text-anchor: middle; dominant-baseline: middle; }
+    .actionLabel { fill: #f0ce89; font: 700 58px Georgia, serif; text-anchor: middle; dominant-baseline: middle; }
     .hubContent { font: 100px/1.15 Georgia, serif; }
     #caption, #destination { margin: 12px 0; }
     #destination { color: #f0ce89; font-size: .78em; }
@@ -35,7 +36,7 @@
 <main aria-label="PlayerSignals communication wheel">
     <h1>PlayerSignals</h1>
     <!-- RADIAL_ART_BEGIN -->
-<svg viewBox="0 0 3600 3600" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;" id="wheelSvg" role="group" aria-label="Choose a gesture">
+<svg viewBox="0 0 3600 3600" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;" id="wheelSvg" role="group" aria-label="Choose a gesture or action">
     
     <g id="Artboard11" serif:id="Artboard1">
         <g id="Ring">
@@ -190,7 +191,7 @@
     </defs>
 </svg>
 <!-- RADIAL_ART_END -->
-    <p id="help">Inner piece: target NPC · Outer chevron: everyone nearby · No target NPC: both address nearby<br>← / →: gesture · ↑: inner · ↓: nearby · Enter / Space: select · Tab / Escape / center: cancel<br>Either Shift key still overrides an inner selection to everyone nearby.</p>
+    <p id="help">Inner piece: target NPC · Outer chevron: everyone nearby · Actions always target the captured NPC<br>← / →: gesture · ↑: target · ↓: nearby (actions stay target) · Enter / Space: select · Tab / Escape / center: cancel<br>Either Shift key still overrides an inner gesture selection to everyone nearby.</p>
 </main>
 <script>
 (() => {
@@ -234,13 +235,16 @@
         badge.setAttribute("x", outer.x + (outer.x - 1800) / distance * 70);
         badge.setAttribute("y", outer.y + (outer.y - 1800) / distance * 70);
         badge.setAttribute("aria-hidden", "true"); badge.textContent = "ALL"; wheel.appendChild(badge);
+        const actionBadge = document.createElementNS(NS, "text"); actionBadge.classList.add("actionLabel");
+        actionBadge.setAttribute("x", point.x); actionBadge.setAttribute("y", point.y + 245);
+        actionBadge.setAttribute("aria-hidden", "true"); actionBadge.textContent = "ACTION"; wheel.appendChild(actionBadge);
         for (const [region, mode] of [[target, "target"], [nearby, "nearby"]]) {
             region.setAttribute("role", "button"); region.setAttribute("tabindex", "-1"); region.setAttribute("aria-disabled", "true");
             region.addEventListener("click", () => choose(index, mode));
             region.addEventListener("mouseenter", () => { if (available(index, mode) && armed) region.focus(); });
             region.addEventListener("focus", () => highlight(index, mode));
         }
-        return { group, target, nearby, content, badge };
+        return { group, target, nearby, content, badge, actionBadge };
     });
     const cancel = document.getElementById("center");
     cancel.classList.add("centerCancel"); cancel.setAttribute("role", "button"); cancel.setAttribute("aria-label", "Cancel"); cancel.setAttribute("tabindex", "-1");
@@ -254,13 +258,14 @@
     cancel.addEventListener("mouseenter", () => { if (armed) cancel.focus(); });
     function showCancel() { focused = -1; clearHighlight(); caption.textContent = "Cancel"; destination.textContent = ""; fit(hub, 100); }
     cancel.addEventListener("focus", showCancel);
-    function available(index, mode) { return Boolean(entries[index] && (mode === "target" || (mode === "nearby" && entries[index][1]))); }
+    function available(index, mode) { return Boolean(entries[index] && (mode === "target" || (mode === "nearby" && entries[index][2] === "intent"))); }
     function clearHighlight() { sectors.forEach(({ target, nearby }) => { target.classList.remove("hot"); nearby.classList.remove("hot"); }); }
     function highlight(index, mode) {
         if (!armed || !available(index, mode)) return;
         focused = index; focusedMode = mode; clearHighlight(); sectors[index][mode].classList.add("hot");
-        caption.textContent = entries[index][0];
-        destination.textContent = entries[index][1] ? (mode === "nearby" ? "Everyone nearby" : "Target NPC") : "Navigation";
+        const [label, , kind] = entries[index];
+        caption.textContent = label;
+        destination.textContent = kind === "navigation" ? "Navigation" : kind === "action" ? "Target NPC · Action" : mode === "nearby" ? "Everyone nearby" : "Target NPC";
         fit(hub, 100);
     }
     function focusRegion(index, mode) {
@@ -285,13 +290,13 @@
         finished = true; armed = false; surface.dataset.armed = "false";
         if (window.magelight) window.magelight.send("__escapecapture", "0");
         completedRequest = request; disable();
-        const intent = index < 0 ? "" : entries[index][1];
-        window.psWheelChoice(request + "|" + index + "|" + intent + "|" + (index < 0 ? "cancel" : intent ? mode : "navigate"));
+        const [ , identity, kind] = index < 0 ? ["", "", "navigation"] : entries[index];
+        window.psWheelChoice(request + "|" + index + "|" + identity + "|" + (index < 0 ? "cancel" : kind === "navigation" ? "navigate" : kind === "action" ? "target" : mode));
     }
     function failClosed(token = "") {
         request = token; armed = false; finished = !token; focused = -1; focusedMode = "target";
         surface.dataset.armed = "false"; entries.fill(null); disable(); clearHighlight();
-        sectors.forEach(({ content, nearby, badge }) => { content.textContent = ""; nearby.style.display = "none"; badge.style.display = "none"; });
+        sectors.forEach(({ content, nearby, badge, actionBadge }) => { content.textContent = ""; nearby.style.display = "none"; badge.style.display = actionBadge.style.display = "none"; });
         caption.textContent = ""; destination.textContent = "";
         if (window.magelight) window.magelight.send("__escapecapture", "0");
     }
@@ -304,15 +309,17 @@
         if (completedRequest === nextRequest) { failClosed(); return; }
         let batch;
         try { batch = JSON.parse(payload.slice(divider + 1)); } catch (_) { failClosed(nextRequest); return; }
-        if (!Array.isArray(batch) || batch.length !== 8 || batch.some(item => item !== null && (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== "string" || typeof item[1] !== "string"))) { failClosed(nextRequest); return; }
+        if (!Array.isArray(batch) || batch.length !== 8 || batch.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation"].includes(item[2])))) { failClosed(nextRequest); return; }
         failClosed(nextRequest); finished = false;
         batch.forEach((item, index) => {
             entries[index] = item;
-            const { target, nearby, content, badge } = sectors[index];
+            const { target, nearby, content, badge, actionBadge } = sectors[index];
             content.textContent = item ? item[0] : ""; fit(content, 110);
-            target.setAttribute("aria-label", item ? item[0] + (item[1] ? " — Target NPC" : "") : "Empty slot");
+            const kind = item?.[2];
+            target.setAttribute("aria-label", item ? item[0] + (kind === "action" ? " — Action, Target NPC" : kind === "intent" ? " — Target NPC" : " — Navigation") : "Empty slot");
             nearby.setAttribute("aria-label", item ? item[0] + " — Everyone nearby" : "Empty slot");
-            nearby.style.display = badge.style.display = item && item[1] ? "" : "none";
+            nearby.style.display = badge.style.display = item && kind === "intent" ? "" : "none";
+            actionBadge.style.display = item && kind === "action" ? "" : "none";
         });
     };
     window.psWheelArm = token => {
@@ -335,7 +342,7 @@
         else if (armed && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
             event.preventDefault();
             if (event.key === "ArrowLeft" || event.key === "ArrowRight") focusRegion(firstAvailable(focused, event.key === "ArrowLeft" ? -1 : 1), focusedMode);
-            else focusRegion(focused < 0 ? entries.findIndex(Boolean) : focused, event.key === "ArrowDown" ? "nearby" : "target");
+            else focusRegion(focused < 0 ? entries.findIndex(Boolean) : focused, event.key === "ArrowDown" && entries[focused < 0 ? entries.findIndex(Boolean) : focused]?.[2] === "intent" ? "nearby" : "target");
         } else if (armed && (event.key === "Enter" || event.key === " ")) {
             if (document.activeElement === cancel) { event.preventDefault(); choose(-1); }
             else if (focused >= 0 && document.activeElement === sectors[focused][focusedMode]) { event.preventDefault(); choose(focused, focusedMode); }

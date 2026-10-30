@@ -110,13 +110,19 @@ Event OnMagelightWheelChoice(string eventName, string strArg, float numArg, Form
     While i < count && token == _generation && request == _mlRequest
         If JArray.valueType(_mlSlots, i) == 5
             Int slot = JArray.getObj(_mlSlots, i)
-            If JMap.hasKey(slot, "intent")
-                String intent = JMap.getStr(slot, "intent")
-                If token == _generation && request == _mlRequest && _mlResult == "" && (strArg == request + "|" + i + "|" + intent + "|target" || strArg == request + "|" + i + "|" + intent + "|nearby")
+            String kind = JMap.getStr(slot, "kind")
+            String identity = ""
+            If kind == "intent"
+                identity = JMap.getStr(slot, "intent")
+            ElseIf kind == "action"
+                identity = JMap.getStr(slot, "actionName")
+            EndIf
+            If kind == "intent" || kind == "action"
+                If token == _generation && request == _mlRequest && _mlResult == "" && (strArg == request + "|" + i + "|" + identity + "|target" || (kind == "intent" && strArg == request + "|" + i + "|" + identity + "|nearby"))
                     _mlResult = strArg
                     Return
                 EndIf
-            Else
+            ElseIf kind == "submenu" || kind == "control"
                 If token == _generation && request == _mlRequest && _mlResult == "" && strArg == request + "|" + i + "||navigate"
                     _mlResult = strArg
                     Return
@@ -338,6 +344,40 @@ Bool Function ValidateNative(Int config)
                 If !JValue.isMap(entry) || JMap.valueType(entry, "label") != 6
                     Return False
                 EndIf
+                If JMap.valueType(entry, "kind") != 6
+                    Return False
+                EndIf
+                String entryKind = JMap.getStr(entry, "kind")
+                If entryKind == "action"
+                    If JMap.valueType(entry, "actionName") != 6 || JMap.getStr(entry, "actionName") == "" || JMap.valueType(entry, "argsJson") != 6 || JMap.getStr(entry, "argsJson") == ""
+                        Return False
+                    EndIf
+                    If JMap.hasKey(entry, "event")
+                        If JMap.valueType(entry, "event") != 6 || JMap.valueType(entry, "intent") != 6
+                            Return False
+                        EndIf
+                        String eventMode = JMap.getStr(entry, "event")
+                        If eventMode != "persistent" && eventMode != "shortLived" && eventMode != "both"
+                            Return False
+                        EndIf
+                    ElseIf JMap.hasKey(entry, "intent")
+                        Return False
+                    EndIf
+                ElseIf entryKind == "intent"
+                    If JMap.valueType(entry, "intent") != 6
+                        Return False
+                    EndIf
+                ElseIf entryKind == "submenu"
+                    If JMap.valueType(entry, "submenu") != 6 || !JMap.hasKey(wheels, JMap.getStr(entry, "submenu"))
+                        Return False
+                    EndIf
+                ElseIf entryKind == "control"
+                    If JMap.valueType(entry, "control") != 6
+                        Return False
+                    EndIf
+                Else
+                    Return False
+                EndIf
                 If JMap.hasKey(entry, "intent")
                     If JMap.valueType(entry, "intent") != 6
                         Return False
@@ -352,12 +392,6 @@ Bool Function ValidateNative(Int config)
                     If JMap.valueType(targetPrefixes, intent) != 6 || JMap.valueType(targetSuffixes, intent) != 6
                         Return False
                     EndIf
-                ElseIf JMap.hasKey(entry, "submenu")
-                    If JMap.valueType(entry, "submenu") != 6 || !JMap.hasKey(wheels, JMap.getStr(entry, "submenu"))
-                        Return False
-                    EndIf
-                ElseIf JMap.valueType(entry, "control") != 6
-                    Return False
                 EndIf
             EndIf
             i += 1
@@ -390,39 +424,68 @@ Event OnKeyDown(Int keyCode)
     If recipient == player
         recipient = None
     EndIf
-    Bool targeted = recipient != None
     ; A local lease keeps the old graph alive across latent OpenMenu, even after reload.
     Int session = JValue.retain(_config, "PlayerSignals")
     Int history = JValue.retain(JArray.object(), "PlayerSignals")
-    String pending = Browse(session, history, token, player)
+    Int selection = Browse(session, history, token, player)
     Bool broadcast = False
-    If pending != ""
-        ; Hold Shift through selection; stock UIExtensions does not return click modifiers.
+    If selection != 0
+        ; Preserve immediate post-Browse Shift sampling before catalog lookups.
         broadcast = Input.IsKeyPressed(42) || Input.IsKeyPressed(54)
     EndIf
-    Bool nearby = StringUtil.Substring(pending, 0, 7) == "nearby|"
-    If nearby
-        pending = StringUtil.Substring(pending, 7)
+    String kind = ""
+    String pending = ""
+    If selection != 0
+        kind = JMap.getStr(selection, "kind")
+        pending = JMap.getStr(selection, "identity")
     EndIf
-    targeted = targeted && !broadcast && !nearby
+    Bool nearby = selection != 0 && JMap.getInt(selection, "nearby") == 1
+    Bool targeted = recipient != None && !broadcast && !nearby
     String feedbackPrefix = ""
     String feedbackSuffix = "."
     String narration = ""
-    If pending != "" && token == _generation && _ready
-        ; Capture text while the session lease is alive, before the final dispatch guard.
-        String name = player.GetDisplayName()
-        If targeted
-            feedbackPrefix = name + " " + JMap.getStr(JMap.getObj(session, "targetNotificationPrefixes"), pending)
-            feedbackSuffix = JMap.getStr(JMap.getObj(session, "targetNotificationSuffixes"), pending) + "."
-        Else
-            feedbackPrefix = name + " " + JMap.getStr(JMap.getObj(session, "notifications"), pending)
+    String actionName = ""
+    String argsJson = ""
+    String eventMode = ""
+    String eventIntent = ""
+    If selection != 0 && token == _generation && _ready
+        If kind == "intent"
+            ; Capture text while the session lease is alive, before the final dispatch guard.
+            String name = player.GetDisplayName()
+            If targeted
+                feedbackPrefix = name + " " + JMap.getStr(JMap.getObj(session, "targetNotificationPrefixes"), pending)
+                feedbackSuffix = JMap.getStr(JMap.getObj(session, "targetNotificationSuffixes"), pending) + "."
+            Else
+                feedbackPrefix = name + " " + JMap.getStr(JMap.getObj(session, "notifications"), pending)
+            EndIf
+            narration = name + " " + JMap.getStr(JMap.getObj(session, "narrations"), pending) + "."
+        ElseIf kind == "action"
+            actionName = JMap.getStr(selection, "actionName")
+            argsJson = JMap.getStr(selection, "argsJson")
+            eventMode = JMap.getStr(selection, "event")
+            eventIntent = JMap.getStr(selection, "intent")
+            If eventMode != "" && recipient
+                String actorName = player.GetDisplayName()
+                If token == _generation && _ready
+                    String recipientName = recipient.GetDisplayName()
+                    If token == _generation && _ready
+                        narration = actorName + " " + JMap.getStr(JMap.getObj(session, "narrations"), eventIntent) + ". This gesture is addressed to " + recipientName + "."
+                    EndIf
+                EndIf
+            EndIf
         EndIf
-        narration = name + " " + JMap.getStr(JMap.getObj(session, "narrations"), pending) + "."
     EndIf
     history = JValue.release(history)
     session = JValue.release(session)
-    If token == _generation && _ready && pending != ""
-        Submit(narration, feedbackPrefix, feedbackSuffix, player, recipient, targeted, token)
+    If token == _generation && _ready && selection != 0
+        If kind == "action"
+            DispatchAction(actionName, argsJson, eventMode, narration, player, recipient, token)
+        ElseIf kind == "intent"
+            Submit(narration, feedbackPrefix, feedbackSuffix, player, recipient, targeted, token)
+        EndIf
+    EndIf
+    If selection != 0
+        selection = JValue.release(selection)
     EndIf
     If token == _generation && UseMagelight()
         ; The overlay may suppress keyup while it owns keyboard focus.
@@ -471,6 +534,106 @@ Function Submit(String narration, String feedbackPrefix, String feedbackSuffix, 
         Debug.Trace("[PlayerSignals] DirectNarration failed: " + result + "; no success notification.", 1)
     EndIf
 EndFunction
+Function DispatchAction(String actionName, String argsJson, String eventMode, String eventText, Actor player, Actor recipient, Int token)
+    String failure = ""
+    If !recipient
+        failure = "no captured NPC"
+    ElseIf recipient.IsDead() || recipient.IsDisabled() || !recipient.Is3DLoaded()
+        failure = "captured NPC is no longer available"
+    EndIf
+    If token != _generation || !_ready
+        Return
+    EndIf
+    If failure == ""
+        Bool registered = SkyrimNetApi.IsActionRegistered(actionName)
+        If token != _generation || !_ready
+            Return
+        EndIf
+        If !registered
+            failure = "action is not registered"
+        EndIf
+    EndIf
+    If failure == "" && actionName == "AccompanyTarget"
+        Bool eligibleStart = SkyrimNetInternal.StartFollow_IsEligible(recipient, "{}", argsJson)
+        If token != _generation || !_ready
+            Return
+        EndIf
+        If !eligibleStart
+            failure = "captured NPC is not eligible"
+        EndIf
+    ElseIf failure == "" && actionName == "StopAccompanying"
+        Bool eligibleStop = SkyrimNetInternal.StopFollow_IsEligible(recipient, "{}", argsJson)
+        If token != _generation || !_ready
+            Return
+        EndIf
+        If !eligibleStop
+            failure = "captured NPC is not eligible"
+        EndIf
+    ElseIf failure == "" && actionName == "WaitHere"
+        Bool eligiblePause = SkyrimNetInternal.PauseFollow_IsEligible(recipient, "{}", argsJson)
+        If token != _generation || !_ready
+            Return
+        EndIf
+        If !eligiblePause
+            failure = "captured NPC is not eligible"
+        EndIf
+    EndIf
+    If failure != ""
+        If token == _generation && _ready
+            Report("Action " + actionName + " not dispatched: " + failure + ".", token)
+        EndIf
+        Return
+    EndIf
+    ; Revalidate immediately before the final generation guard and single API call.
+    If !recipient || recipient.IsDead() || recipient.IsDisabled() || !recipient.Is3DLoaded()
+        failure = "captured NPC is no longer available"
+    EndIf
+    If token != _generation || !_ready
+        Return
+    EndIf
+    If failure != ""
+        Report("Action " + actionName + " not dispatched: " + failure + ".", token)
+        Return
+    EndIf
+    Int result = SkyrimNetApi.ExecuteAction(actionName, recipient, argsJson)
+    If token != _generation || !_ready
+        Return
+    EndIf
+    If result != 0
+        Report("Action " + actionName + " request rejected (" + result + ").", token)
+        Return
+    EndIf
+    If eventMode == ""
+        Return
+    EndIf
+    Bool eventFailed = False
+    If eventMode == "persistent" || eventMode == "both"
+        Int persistentResult = SkyrimNetApi.RegisterPersistentEvent(eventText, player, recipient)
+        If token != _generation || !_ready
+            Return
+        EndIf
+        If persistentResult != 0
+            eventFailed = True
+        EndIf
+    EndIf
+    If eventMode == "shortLived" || eventMode == "both"
+        Int targetFormID = recipient.GetFormID()
+        If token != _generation || !_ready
+            Return
+        EndIf
+        String eventId = "playersignals_" + actionName + "_" + targetFormID
+        Int shortResult = SkyrimNetApi.RegisterShortLivedEvent(eventId, "playersignals_action", eventText, eventText, 60000, player, recipient)
+        If token != _generation || !_ready
+            Return
+        EndIf
+        If shortResult != 0
+            eventFailed = True
+        EndIf
+    EndIf
+    If eventFailed && token == _generation && _ready
+        Report("Action " + actionName + " was dispatched, but its event was not recorded.", token)
+    EndIf
+EndFunction
 
 Event OnKeyUp(Int keyCode, Float holdTime)
     If keyCode == _key
@@ -478,17 +641,20 @@ Event OnKeyUp(Int keyCode, Float holdTime)
     EndIf
 EndEvent
 
-String Function Browse(Int config, Int history, Int token, Actor player)
-    String result = BrowseWheels(config, history, token, player)
+Int Function Browse(Int config, Int history, Int token, Actor player)
+    Int result = BrowseWheels(config, history, token, player)
     If UseMagelight() && token == _generation
         If !FinishMagelight(token)
-            Return ""
+            If result != 0
+                result = JValue.release(result)
+            EndIf
+            Return 0
         EndIf
     EndIf
     Return result
 EndFunction
 
-String Function BrowseWheels(Int config, Int history, Int token, Actor player)
+Int Function BrowseWheels(Int config, Int history, Int token, Actor player)
     Int wheels = JMap.getObj(config, "wheels")
     String current = JMap.getStr(config, "root")
     While token == _generation && _ready
@@ -498,13 +664,12 @@ String Function BrowseWheels(Int config, Int history, Int token, Actor player)
             selected = BrowseMagelight(slots, token)
         Else
             UIMenuBase menu = UIExtensions.GetMenu("UIWheelMenu", True)
-            ; GetMenu/reset may wait in another framework version; recheck before opening.
             If token != _generation || !_ready
-                Return ""
+                Return 0
             EndIf
             If !menu
                 Report("UIExtensions UIWheelMenu is unavailable.")
-                Return ""
+                Return 0
             EndIf
             Int i = 0
             While i < 8
@@ -521,51 +686,62 @@ String Function BrowseWheels(Int config, Int history, Int token, Actor player)
                 i += 1
             EndWhile
             If token != _generation || !_ready
-                Return ""
+                Return 0
             EndIf
             selected = menu.OpenMenu(player)
         EndIf
-        ; Never inspect the result against replacement configuration.
         If token != _generation || !_ready
-            Return ""
+            Return 0
         EndIf
         If selected == 255
-            Report("UIExtensions wheel opening/wait failed; no intent submitted.")
-            Return ""
+            Report("UIExtensions wheel opening/wait failed; no selection submitted.")
+            Return 0
         EndIf
         If selected < 0 || selected > 15
-            Return ""
+            Return 0
         EndIf
         Bool nearby = UseMagelight() && selected >= 8
         If nearby
             selected -= 8
         EndIf
-        If selected > 7 || selected >= JArray.count(slots)
-            Return ""
-        EndIf
-        If JArray.valueType(slots, selected) != 5
-            Return ""
+        If selected > 7 || selected >= JArray.count(slots) || JArray.valueType(slots, selected) != 5
+            Return 0
         EndIf
         Int choice = JArray.getObj(slots, selected)
-        If JMap.hasKey(choice, "intent")
-            If nearby
-                Return "nearby|" + JMap.getStr(choice, "intent")
+        String kind = JMap.getStr(choice, "kind")
+        If kind == "intent" || kind == "action"
+            If nearby && kind != "intent"
+                Return 0
             EndIf
-            Return JMap.getStr(choice, "intent")
+            Int selection = JValue.retain(JMap.object(), "PlayerSignals")
+            JMap.setStr(selection, "kind", kind)
+            If kind == "intent"
+                JMap.setStr(selection, "identity", JMap.getStr(choice, "intent"))
+            Else
+                JMap.setStr(selection, "identity", JMap.getStr(choice, "actionName"))
+                JMap.setStr(selection, "actionName", JMap.getStr(choice, "actionName"))
+                JMap.setStr(selection, "argsJson", JMap.getStr(choice, "argsJson"))
+                JMap.setStr(selection, "event", JMap.getStr(choice, "event"))
+                JMap.setStr(selection, "intent", JMap.getStr(choice, "intent"))
+            EndIf
+            If nearby
+                JMap.setInt(selection, "nearby", 1)
+            EndIf
+            Return selection
         ElseIf nearby
-            Return ""
-        ElseIf JMap.hasKey(choice, "submenu")
+            Return 0
+        ElseIf kind == "submenu"
             JArray.addStr(history, current)
             current = JMap.getStr(choice, "submenu")
-        ElseIf JMap.getStr(choice, "control") == "back" && JArray.count(history) > 0
+        ElseIf kind == "control" && JMap.getStr(choice, "control") == "back" && JArray.count(history) > 0
             Int last = JArray.count(history) - 1
             current = JArray.getStr(history, last)
             JArray.eraseIndex(history, last)
         Else
-            Return ""
+            Return 0
         EndIf
     EndWhile
-    Return ""
+    Return 0
 EndFunction
 Int Function BrowseMagelight(Int slots, Int token)
     If token != _generation || !_ready
@@ -690,16 +866,20 @@ Int Function BrowseMagelight(Int slots, Int token)
         While i < JArray.count(slots) && i < 8
             If JArray.valueType(slots, i) == 5
                 Int slot = JArray.getObj(slots, i)
-                If JMap.hasKey(slot, "intent")
-                    String intent = JMap.getStr(slot, "intent")
-                    If result == _mlRequest + "|" + i + "|" + intent + "|target"
+                String kind = JMap.getStr(slot, "kind")
+                If kind == "intent" || kind == "action"
+                    String identity = JMap.getStr(slot, "intent")
+                    If kind == "action"
+                        identity = JMap.getStr(slot, "actionName")
+                    EndIf
+                    If result == _mlRequest + "|" + i + "|" + identity + "|target"
                         selected = i
                         i = 8
-                    ElseIf result == _mlRequest + "|" + i + "|" + intent + "|nearby"
+                    ElseIf kind == "intent" && result == _mlRequest + "|" + i + "|" + identity + "|nearby"
                         selected = i + 8
                         i = 8
                     EndIf
-                Else
+                ElseIf kind == "submenu" || kind == "control"
                     If result == _mlRequest + "|" + i + "||navigate"
                         selected = i
                         i = 8
@@ -777,7 +957,13 @@ Bool Function FinishMagelight(Int token)
     Return True
 EndFunction
 
-Function Report(String details)
+Function Report(String details, Int token = -1)
+    If token >= 0 && (token != _generation || !_ready)
+        Return
+    EndIf
     Debug.Trace("[PlayerSignals] " + details, 2)
+    If token >= 0 && (token != _generation || !_ready)
+        Return
+    EndIf
     Debug.Notification("PlayerSignals: " + details)
 EndFunction

@@ -21,26 +21,103 @@ $imports = @(
     $UiExtensionsSources,
     $FallbackHeaders
 ) -join ';'
-# Keep the editor SVG authoritative; embed its named regions before Papyrus compilation.
+# Affinity symbol children share layer names; assign runtime IDs only in this document.
 $art = New-Object System.Xml.XmlDocument
 $art.PreserveWhitespace = $true
 $art.XmlResolver = $null
 $art.Load((Join-Path $repo 'media/src/RadialUI.svg'))
 $svg = $art.DocumentElement
-foreach ($id in @('center', 'center-hit') + @(0..7 | ForEach-Object {
-    "slot-$_"; "slot-$_-target"; "slot-$_-target-hit"; "slot-$_-nearby"; "slot-$_-nearby-hit"
-})) {
-    if ($svg.SelectNodes("//*[@id='$id']").Count -ne 1) { throw "Missing or duplicate radial region: $id" }
-}
-$navigation = New-Object System.Xml.XmlDocument
-$navigation.XmlResolver = $null
-$navigation.Load((Join-Path $repo 'media/src/Navigation.svg'))
-$defs = $svg.SelectSingleNode("*[local-name()='defs']")
-foreach ($node in $navigation.SelectNodes("/*/*[local-name()='defs']/* | /*/*[local-name()='g']")) {
-    [void]$defs.AppendChild($art.ImportNode($node, $true))
-}
 $background = $svg.SelectSingleNode("*[local-name()='rect' and @id='Artboard1']")
 if ($background) { [void]$svg.RemoveChild($background) }
+function Find-Layers($parent, $name) {
+    $parent.SelectNodes("./*[local-name()='g']") | Where-Object {
+        $_.GetAttribute('id', 'http://www.serif.com/') -eq $name -or
+        $_.GetAttribute('id') -match ('^' + [regex]::Escape($name) + '\d*$')
+    }
+}
+function Get-FillPath($group, $name) {
+    $paths = @($group.SelectNodes(".//*[local-name()='path']") | Where-Object {
+        $d = $_.GetAttribute('d')
+        $d -match '[zZ]\s*$' -and [regex]::Matches($d, '[Mm]').Count -eq 1 -and
+        $_.GetAttribute('fill') -ne 'none' -and $_.GetAttribute('style') -notmatch 'fill\s*:\s*none\b'
+    })
+    if ($paths.Count -ne 1) { throw "$name needs exactly one closed, filled single-contour hit path" }
+    $paths[0]
+}
+$rings = @($svg.SelectNodes(".//*[local-name()='g']") | Where-Object {
+    $_.GetAttribute('id', 'http://www.serif.com/') -eq 'Ring' -or $_.GetAttribute('id') -eq 'Ring'
+})
+if ($rings.Count -ne 1) { throw 'Expected exactly one Ring group' }
+$pieces = @(Find-Layers $rings[0] 'Piece')
+$centers = @(Find-Layers $rings[0].ParentNode 'center')
+if ($pieces.Count -ne 8 -or $centers.Count -ne 1) { throw 'Expected eight Piece groups and one center beside Ring' }
+$center = $centers[0]
+$centerHit = Get-FillPath $center 'center'
+$slots = [Collections.Generic.HashSet[int]]::new()
+$regions = foreach ($piece in $pieces) {
+    $matrix = @(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+    $transform = $piece.GetAttribute('transform')
+    if ($transform) {
+        if ($transform -notmatch '^matrix\(([^)]+)\)$') { throw "Unsupported Piece transform: $transform" }
+        $matrix = @($Matches[1].Trim() -split '[,\s]+' | ForEach-Object {
+            [double]::Parse($_, [Globalization.CultureInfo]::InvariantCulture)
+        })
+        if ($matrix.Count -ne 6) { throw "Expected six matrix components: $transform" }
+    }
+    $a, $b, $c, $d, $e, $f = $matrix
+    if ($a * $a + $b * $b -eq 0 -or [math]::Abs($a - $d) -gt .00001 -or [math]::Abs($b + $c) -gt .00001) {
+        throw "Piece transform must be a rotation with uniform positive scale: $transform"
+    }
+    $angle = [math]::Atan2($b, $a) * 180 / [math]::PI
+    $step = [int][math]::Round($angle / 45)
+    $slot = ($step % 8 + 8) % 8
+    if ([math]::Abs($angle - $step * 45) -gt .01 -or -not $slots.Add($slot)) {
+        throw "Piece rotation must identify a distinct 45-degree slot: $transform"
+    }
+    $parts = @{}
+    foreach ($name in @('Pie', 'Chevron', 'ChevronKnot', 'Submenu', 'Upmenu')) {
+        $layers = @(Find-Layers $piece $name)
+        if ($layers.Count -ne 1) { throw "Slot $slot needs exactly one $name layer" }
+        $parts[$name] = $layers[0]
+    }
+    @{ Piece = $piece; Slot = $slot; Parts = $parts
+       TargetHit = (Get-FillPath $parts.Pie "Slot $slot Pie")
+       NearbyHit = (Get-FillPath $parts.Chevron "Slot $slot Chevron") }
+}
+# Only reference targets need their Affinity IDs; layer lookup above is already complete.
+$references = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($attribute in $svg.SelectNodes('.//@*')) {
+    foreach ($match in [regex]::Matches($attribute.Value, 'url\(\s*[''"]?#([^''")\s]+)')) { [void]$references.Add($match.Groups[1].Value) }
+    if ($attribute.LocalName -eq 'href' -and $attribute.Value.StartsWith('#')) { [void]$references.Add($attribute.Value.Substring(1)) }
+}
+foreach ($node in $svg.SelectNodes('.//*[@id]')) {
+    if (-not $references.Contains($node.GetAttribute('id'))) { $node.RemoveAttribute('id') }
+}
+foreach ($region in $regions) {
+    $piece = $region.Piece; $slot = $region.Slot; $parts = $region.Parts
+    $piece.SetAttribute('id', "slot-$slot"); $piece.SetAttribute('class', 'sector'); $piece.SetAttribute('data-index', [string]$slot)
+    foreach ($mode in @('target', 'nearby')) {
+        $wrapper = $art.CreateElement('g', $svg.NamespaceURI)
+        $wrapper.SetAttribute('id', "slot-$slot-$mode"); $wrapper.SetAttribute('class', "region $mode-region")
+        [void]$piece.AppendChild($wrapper)
+        $names = if ($mode -eq 'target') { @('Pie', 'Submenu', 'Upmenu') } else { @('Chevron', 'ChevronKnot') }
+        foreach ($name in $names) { [void]$wrapper.AppendChild($parts[$name]) }
+        $hit = if ($mode -eq 'target') { $region.TargetHit } else { $region.NearbyHit }
+        $hit.SetAttribute('id', "slot-$slot-$mode-hit"); $hit.SetAttribute('class', 'hit-area')
+    }
+    $parts.Submenu.SetAttribute('class', 'navigation-art submenu-art')
+    $parts.Upmenu.SetAttribute('class', 'navigation-art back-art')
+    $parts.Submenu.SetAttribute('aria-hidden', 'true'); $parts.Upmenu.SetAttribute('aria-hidden', 'true')
+}
+$center.SetAttribute('id', 'center')
+$centerHit.SetAttribute('id', 'center-hit'); $centerHit.SetAttribute('class', 'hit-area')
+$ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($node in $svg.SelectNodes('descendant-or-self::*[@id]')) {
+    if (-not $ids.Add($node.GetAttribute('id'))) { throw "Duplicate generated SVG ID: $($node.GetAttribute('id'))" }
+}
+foreach ($id in $references) {
+    if (-not $ids.Contains($id)) { throw "Unresolved SVG reference: $id" }
+}
 $svg.SetAttribute('id', 'wheelSvg')
 $svg.SetAttribute('role', 'group')
 $svg.SetAttribute('aria-label', 'Choose a gesture or action')

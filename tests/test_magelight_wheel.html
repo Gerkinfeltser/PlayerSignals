@@ -15,6 +15,13 @@ frame.addEventListener("load", async () => {
         view.psWheelChoice = payload => replies.push(payload);
         const assert = (ok, message) => { if (!ok) throw Error(message); };
         const surface = doc.querySelector("main"), svg = doc.querySelector("#wheelSvg");
+        const ids = [...doc.querySelectorAll("[id]")].map(node => node.id);
+        assert(new Set(ids).size === ids.length, "Generated document contains duplicate IDs");
+        for (const node of svg.querySelectorAll("*")) for (const attribute of node.attributes) {
+            const references = [...attribute.value.matchAll(/url\(\s*['"]?#([^'")\s]+)/g)].map(match => match[1]);
+            if (attribute.localName === "href" && attribute.value.startsWith("#")) references.push(attribute.value.slice(1));
+            for (const id of references) assert(doc.getElementById(id), "Generated artwork lost reference #" + id);
+        }
         const visible = () => getComputedStyle(surface).visibility === "visible";
         const region = (index, mode = "target") => doc.getElementById(`slot-${index}-${mode}`);
         const click = element => element.dispatchEvent(new view.MouseEvent("click", {bubbles:true}));

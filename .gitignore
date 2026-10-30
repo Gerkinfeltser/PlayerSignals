@@ -16,3 +16,7 @@ Thumbs.db
 # Python test bytecode
 __pycache__/
 *.pyc
+
+# Internal docs
+openspec
+docs-dev

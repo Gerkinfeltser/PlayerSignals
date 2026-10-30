@@ -322,8 +322,9 @@
         if (!Array.isArray(batch) || batch.length !== 8 || batch.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back"].includes(item[2])))) { failClosed(nextRequest); return; }
         failClosed(nextRequest); finished = false;
         batch.forEach((item, index) => {
-            // Lua keeps the appended marker for UIExtensions; remove exactly that suffix in this view only.
+            // Lua keeps the appended markers for UIExtensions; remove one typed suffix in this view only.
             if (item?.[2] === "submenu" && item[0].endsWith(" >")) item[0] = item[0].slice(0, -2);
+            if (item?.[2] === "back" && item[0].endsWith(" <")) item[0] = item[0].slice(0, -2);
             entries[index] = item;
             const { target, nearby, content, badge, actionBadge } = sectors[index];
             content.textContent = item ? item[0] : ""; fit(content, 110);

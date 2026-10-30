@@ -21,11 +21,12 @@
     .sector[aria-disabled="true"] { opacity: .25; }
     #center-hit { fill: #292c29 !important; }
     #center:hover #center-hit, #center:focus #center-hit { fill: #53452e !important; }
-    #wheelSvg foreignObject, .nearbyLabel, .actionLabel { pointer-events: none; }
+    #wheelSvg foreignObject, .nearbyLabel, .actionLabel, .slotIcon { pointer-events: none; }
     .sectorLabel, .hubContent { width: 100%; height: 100%; display: grid; align-content: center; overflow-wrap: anywhere; text-align: center; }
     .sectorLabel { font: 600 110px/1.12 Georgia, serif; color: #fff3d9; }
     .nearbyLabel { fill: #28291f; font: 700 72px Georgia, serif; text-anchor: middle; dominant-baseline: middle; }
     .actionLabel { fill: #f0ce89; font: 700 58px Georgia, serif; text-anchor: middle; dominant-baseline: middle; }
+    .slotIcon { fill: #f0ce89; font: 100px "Sitka Text", "Cambria", "Times New Roman", Georgia, serif; text-anchor: middle; dominant-baseline: middle; }
     .hubContent { font: 100px/1.15 Georgia, serif; }
     #caption, #destination { margin: 12px 0; }
     #destination { color: #f0ce89; font-size: .78em; }
@@ -244,7 +245,12 @@
             region.addEventListener("mouseenter", () => { if (available(index, mode) && armed) region.focus(); });
             region.addEventListener("focus", () => highlight(index, mode));
         }
-        return { group, target, nearby, content, badge, actionBadge };
+        const icon = document.createElementNS(NS, "text"); icon.classList.add("slotIcon");
+        const dx = point.x - 1800, dy = point.y - 1800, radius = Math.hypot(dx, dy);
+        icon.setAttribute("x", 1800 + dx / radius * 530);
+        icon.setAttribute("y", 1800 + dy / radius * 530);
+        icon.setAttribute("aria-hidden", "true"); wheel.appendChild(icon);
+        return { group, target, nearby, content, badge, actionBadge, icon };
     });
     const cancel = document.getElementById("center");
     cancel.classList.add("centerCancel"); cancel.setAttribute("role", "button"); cancel.setAttribute("aria-label", "Cancel"); cancel.setAttribute("tabindex", "-1");
@@ -296,7 +302,7 @@
     function failClosed(token = "") {
         request = token; armed = false; finished = !token; focused = -1; focusedMode = "target";
         surface.dataset.armed = "false"; entries.fill(null); disable(); clearHighlight();
-        sectors.forEach(({ content, nearby, badge, actionBadge }) => { content.textContent = ""; nearby.style.display = "none"; badge.style.display = actionBadge.style.display = "none"; });
+        sectors.forEach(({ content, nearby, badge, actionBadge, icon }) => { content.textContent = ""; icon.textContent = ""; nearby.style.display = "none"; badge.style.display = actionBadge.style.display = "none"; });
         caption.textContent = ""; destination.textContent = "";
         if (window.magelight) window.magelight.send("__escapecapture", "0");
     }
@@ -309,12 +315,31 @@
         if (completedRequest === nextRequest) { failClosed(); return; }
         let batch;
         try { batch = JSON.parse(payload.slice(divider + 1)); } catch (_) { failClosed(nextRequest); return; }
-        if (!Array.isArray(batch) || batch.length !== 8 || batch.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation"].includes(item[2])))) { failClosed(nextRequest); return; }
+        const validIcon = icon => {
+            if (typeof icon !== "string" || !icon.length || /[\u0000-\u0020\u007f-\u009f]/u.test(icon)) return false;
+            let scalars = 0;
+            for (let i = 0; i < icon.length; i++, scalars++) {
+                const code = icon.charCodeAt(i);
+                if (code >= 0xd800 && code <= 0xdbff) {
+                    if (++i >= icon.length) return false;
+                    const low = icon.charCodeAt(i);
+                    if (low < 0xdc00 || low > 0xdfff) return false;
+                } else if (code >= 0xdc00 && code <= 0xdfff) return false;
+                if (scalars === 4) return false;
+            }
+            return scalars >= 1;
+        };
+        if (!Array.isArray(batch) || batch.length !== 8 || batch.some(item => item !== null && (!Array.isArray(item) || item.length !== 4 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation"].includes(item[2]) || !validIcon(item[3])))) { failClosed(nextRequest); return; }
         failClosed(nextRequest); finished = false;
         batch.forEach((item, index) => {
             entries[index] = item;
-            const { target, nearby, content, badge, actionBadge } = sectors[index];
-            content.textContent = item ? item[0] : ""; fit(content, 110);
+            const { target, nearby, content, badge, actionBadge, icon } = sectors[index];
+            content.textContent = item ? item[0] : ""; icon.textContent = item ? item[3] : ""; fit(content, 110);
+            let iconSize = 100; icon.style.fontSize = iconSize + "px";
+            for (let attempt = 0; attempt < 4 && icon.getBBox().width > 150; attempt++) {
+                iconSize *= 140 / icon.getBBox().width;
+                icon.style.fontSize = iconSize + "px";
+            }
             const kind = item?.[2];
             target.setAttribute("aria-label", item ? item[0] + (kind === "action" ? " — Action, Target NPC" : kind === "intent" ? " — Target NPC" : " — Navigation") : "Empty slot");
             nearby.setAttribute("aria-label", item ? item[0] + " — Everyone nearby" : "Empty slot");

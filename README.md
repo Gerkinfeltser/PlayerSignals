@@ -6,6 +6,8 @@ PlayerSignals is a small configurable communication wheel for Skyrim. Pick one o
 
 **Limited-test release.** Both Papyrus scripts compiled with 0 errors/warnings, all 15 configuration tests passed in a fresh process, and focused loader/submission smokes passed. The 2026-10-02 ASSOS session recorded eight gestures with the player as originator: seven received NPC responses, while the final no-audience gesture correctly produced none. One ADT removal test retained saved Papyrus remnants; a ReSaver-cleaned copy loaded without PlayerSignals missing-script warnings in an approximately eight-second post-load window. This is not guaranteed clean removal or long-term save safety. The earlier integrated build failed at a locked, unchanged ESP; separate generation verified its existing ESP/SEQ, and the corrected controller PEX was subsequently compiled and packaged. Physical Shift timing, exhaustive menu/error cases, upgrade coverage, and long-term removal behavior remain unverified. See the [plan](docs/plans/player-signals.md) for evidence and limits.
 
+**Experimental branch `dev`:** Magelight is enabled in the built payload, using the authored SVG wheel with separate captured-NPC bodies and everyone-nearby chevrons. Browser checks and compilation pass; the owner reported no errant camera movement on the preceding focus revision. The new artwork/region dispatch still needs native acceptance. See the [Magelight spike](docs/spikes/magelight-wheel.md), not the production status above, for this branch's current evidence.
+
 - [Specification](docs/specs/player-signals.md): behavior, JSON schemas, 25 shipped narration/group-notification defaults, dynamic registry, targeting contract, and acceptance criteria.
 - [Player guide](PlayerSignals/PlayerSignals-README.md): friendly setup, wheel customization, targeting, and troubleshooting; this file is inside the packaged mod root.
 - [Implementation plan](docs/plans/player-signals.md): active direct-API cutover and separately labeled historical evidence.
@@ -55,7 +57,7 @@ Edit `PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json` and, for intent IDs 
 
 Each wheel has 1–8 ordered slots. A slot is `null` (disabled) or a nonempty label and exactly one of `intent`, `submenu`, or `control` (`back` / `close`). The catalog ships 25 default intent IDs, but the validated lowercase-ASCII ID registry is dynamic. Every layout ID must exist in `intents.json`; every wheel and catalog entry is validated. Unknown properties/IDs, wrong types, broken submenu references, cycles, and oversized wheels fail closed.
 
-Labels, slot order, disabled slots, repeated supported intents, wheel names/submenus, and opening key are customizable without recompiling. Positions 1–4 run down the left side; positions 5–8 run down the right. Submenus display ` >`; Back displays ` <`. Leave these markers out of JSON. Keep labels short—there is no automatic truncation.
+Labels, slot order, disabled slots, repeated supported intents, wheel names/submenus, and opening key are customizable without recompiling. UIExtensions positions 1–4 run down the left and 5–8 down the right; experimental Magelight positions run clockwise from the top. Submenus display ` >`; Back displays ` <`. Do not duplicate markers in JSON. No custom label is truncated or assigned a hard character limit.
 
 `intents.json` defines each supported ID and its three phrases: `narration`, group `notification`, and `targetedNotification`. Add an ID by adding its catalog record and referencing it from `layout.json`; edit phrases in that record. Phrase values omit your character's name and final period; exactly one literal `{target}` marker appears only in `targetedNotification`. Use plain JSON without comments or trailing commas. Both files are read on load, so changes apply after loading a save. No Lua/Papyrus edit, recompile, YAML narration file, or external trigger bundle is needed.
 
@@ -68,6 +70,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build/build.ps1
 python -m pip install "lupa==2.8"
 python -m unittest discover -s tests -v
 ```
+
+The build embeds `media/src/RadialUI.svg` into the Magelight page, preserving its named paths/transforms while omitting the editor background. Edit that SVG for geometry; the marked SVG section in `PlayerSignals/Magelight/PlayerSignals/index.html` is generated. Only the built `PlayerSignals/` payload belongs in MO2.
 
 Scoped source-derived smokes, separately passed unittests, and the failed full-build attempt are summarized above and detailed in the plan; none establish in-game behavior.
 

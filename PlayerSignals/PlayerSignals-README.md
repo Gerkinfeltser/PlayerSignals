@@ -37,11 +37,13 @@ You'll see a small notification with your character's name only if SkyrimNet's A
 
 Open a submenu by choosing an entry ending in **`>`**, such as **Social >**. Choose **Back <** to return to the previous wheel. **Close** exits the main wheel, and **Tab** cancels. Opening submenus, going Back, or cancelling doesn't send a narration. Browsing isn't secretly agreeing to everything. Convenient!
 
+**Experimental Magelight branch:** the authored radial wheel has eight fixed positions clockwise from the top. Click a gray gesture body for the captured NPC, or its white **ALL** chevron for everyone nearby without Shift. With no captured NPC, both address nearby; Shift still overrides an inner selection. Navigation entries have no separate group chevron. Hover changes the center label/destination. Left/Right changes gesture, Up selects its inner body, Down selects its nearby chevron, and Enter/Space selects the focused region. Center, Tab or Escape cancels; use native Escape during blank loading/navigation. Null positions remain disabled. This revision is browser-checked and built, not yet game-verified; see `docs/spikes/magelight-wheel.md` for evidence and limits.
+
 The wheel won't open while you're in a blocking menu, another custom menu, or a gameplay state where the required controls are disabled.
 
 ## Who are you talking to?
 
-The NPC under your crosshair when the wheel opens is captured for that choice. Moving your crosshair while the wheel is open does not change the captured NPC. If that NPC is no longer alive, enabled, and loaded when you make the selection, PlayerSignals fails closed: it does not silently choose a different NPC or switch to everyone.
+The NPC under your crosshair when the wheel opens is captured for that choice. Moving your crosshair while the wheel is open does not change the captured NPC. For a targeted selection, if that NPC is no longer alive, enabled, and loaded, PlayerSignals fails closed: it does not silently choose a different NPC or switch to everyone. Shift or the experimental wheel's explicit nearby chevron intentionally chooses group mode instead.
 
 If no NPC was captured, the narration is addressed to everyone nearby. You can also choose that mode intentionally: hold either **Left Shift** or **Right Shift** through the selection until the wheel closes. PlayerSignals checks Shift when the final selection returns from the wheel; it does not promise to sample the exact click instant. Shift overrides a captured NPC and uses group narration and feedback without that NPC's name.
 
@@ -99,9 +101,9 @@ An entry looks like this:
 
 `label` is the text you see. `intent` is what the selection means. Rename the label to suit you, but keep the intent ID unless you want a different gesture.
 
-Move the entire entry to change its position. **Positions 1–4 run down the left side; positions 5–8 run down the right side.** The order isn't clockwise. The text at the bottom of the wheel is the highlighted option's caption, not an extra slot.
+Move the entire entry to change its position. **UIExtensions:** positions 1–4 run down the left side and 5–8 down the right; the order isn't clockwise. Its bottom caption repeats the highlighted option and is not an extra slot. **Experimental Magelight:** positions 1–8 run clockwise from the top, and the center repeats the highlighted label and destination.
 
-Keep labels short. “Request” fits more comfortably than “Ask for something,” and the wheel doesn't automatically shrink or trim long text. Fit depends on the letters, UI scale, and position, not just a fixed character count.
+Keep labels short for comfortable reading. UIExtensions does not automatically shrink or trim long text. Experimental Magelight wraps and shrinks sector text and shows the complete highlighted label in a wrapping caption. Neither backend imposes a fixed character limit or truncates authored labels.
 
 ### Submenus and disabled slots
 

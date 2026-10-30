@@ -31,6 +31,25 @@ class ConfigValidation(unittest.TestCase):
         with self.assertRaises(LuaError):
             self.parse(value, catalog_text)
 
+
+    def test_wheel_payload_preserves_eight_slots_and_json_strings(self):
+        slots = self.lua.table()
+        expected = [None] * 8
+        values = [
+            ('quote " slash \\ pipe | controls \x00\x01\b\f\n\r\t end', 'intent_\\|"'),
+            ('café 雪', ''),
+            ('{"intent":"metadata-like"}', 'navigate'),
+            ('tail', 'last'),
+        ]
+        for index, value in zip((1, 3, 4, 8), values):
+            slot = self.lua.table()
+            slot['label'], slot['intent'] = value
+            slots[index] = slot
+            expected[index - 1] = list(value)
+
+        payload = self.module.wheelPayload(slots)
+        self.assertEqual(json.loads(payload), expected)
+
     def test_numeric_types_and_boundaries(self):
         for field in ('schemaVersion', 'openKeyCode'):
             for invalid in (True, False, 1.0, '1', None, 0, 256, -1):

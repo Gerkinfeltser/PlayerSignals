@@ -4,79 +4,345 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PlayerSignals</title>
 <style>
-    :root { color-scheme: dark; font: 20px Georgia, serif; color: #f5ebd2; }
-    body { margin: 0; height: 100vh; display: grid; place-items: center; background: transparent; }
-    main { width: min(92vw, 900px); }
-    h1, p { text-align: center; text-shadow: 0 2px 3px #000; }
-    #wheel { display: grid; grid-template-rows: repeat(4, minmax(64px, auto)); grid-auto-flow: column; grid-template-columns: 1fr 1fr; gap: 12px 12vw; }
-    button { font: inherit; color: inherit; background: #191815ed; border: 1px solid #b5a482; padding: 12px; overflow-wrap: anywhere; cursor: pointer; }
-    button:focus-visible { outline: 3px solid #fff1bb; outline-offset: 3px; }
-    button:hover:enabled { background: #51432e; }
-    button:disabled { visibility: hidden; }
-    @media (max-height: 550px) { :root { font-size: 16px; } #wheel { grid-template-rows: repeat(4, minmax(36px, auto)); gap: 8px 8vw; } h1, p { margin: 8px; } }
+    :root { color-scheme: dark; font: 18px Georgia, serif; color: #fff3d9; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: transparent; }
+    main { width: min(96vw, 800px); text-align: center; visibility: hidden; }
+    main[data-armed="true"] { visibility: visible; }
+    h1 { margin: 4px; font-size: 1.2em; text-shadow: 0 2px 3px #000; }
+    #wheelSvg { display: block; width: min(90vw, 78vh, 700px); height: auto; margin: auto; overflow: visible; }
+    #wheelSvg path { pointer-events: none; }
+    #wheelSvg .hit-area { pointer-events: all; cursor: pointer; }
+    #wheelSvg [aria-disabled="true"] .hit-area { pointer-events: none; }
+    .target-region .hit-area { fill: #464740 !important; fill-opacity: .95 !important; }
+    .target-region.hot .hit-area { fill: #72562c !important; }
+    .nearby-region.hot .hit-area { fill: #e9bd6c !important; }
+    .region:focus, #center:focus { outline: none; }
+    .region.hot .hit-area, #center:focus .hit-area { stroke: #ffdc8c; stroke-width: 12; }
+    .sector[aria-disabled="true"] { opacity: .25; }
+    #center-hit { fill: #292c29 !important; }
+    #center:hover #center-hit, #center:focus #center-hit { fill: #53452e !important; }
+    #wheelSvg foreignObject, .nearbyLabel { pointer-events: none; }
+    .sectorLabel, .hubContent { width: 100%; height: 100%; display: grid; align-content: center; overflow-wrap: anywhere; text-align: center; }
+    .sectorLabel { font: 600 110px/1.12 Georgia, serif; color: #fff3d9; }
+    .nearbyLabel { fill: #28291f; font: 700 72px Georgia, serif; text-anchor: middle; dominant-baseline: middle; }
+    .hubContent { font: 100px/1.15 Georgia, serif; }
+    #caption, #destination { margin: 12px 0; }
+    #destination { color: #f0ce89; font-size: .78em; }
+    .hubHint { margin-top: 24px; font-size: 64px; color: #c5c1b5; }
+    #help { margin: 4px auto; max-width: 740px; font-size: .78em; line-height: 1.4; text-shadow: 0 1px 3px #000; }
+    @media (max-height: 650px) { :root { font-size: 15px; } h1 { margin: 0; } #help { margin: 0; } }
 </style>
 <main aria-label="PlayerSignals communication wheel">
     <h1>PlayerSignals</h1>
-    <div id="wheel" role="group" aria-label="Choose a gesture"></div>
-    <p>Arrow keys: focus · Enter: select · Tab / Escape: cancel<br>Hold either Shift through final selection to address everyone.</p>
+    <!-- RADIAL_ART_BEGIN -->
+<svg viewBox="0 0 3600 3600" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;" id="wheelSvg" role="group" aria-label="Choose a gesture">
+    
+    <g id="Artboard11" serif:id="Artboard1">
+        <g id="Ring">
+            <g id="slot-3" class="sector" data-index="3" transform="matrix(-0.707107,0.707107,-0.707107,-0.707107,4348.57,1799.41)">
+                <g id="slot-3-target" class="region target-region">
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.876,1358.71L1357.54,1623.27C1365.43,1626.49 1370.59,1634.17 1370.59,1642.69L1370.59,1950.79C1370.59,1959.25 1365.51,1966.88 1357.7,1970.15L709.908,2241.09C702.053,2244.38 692.993,2242.59 686.973,2236.57L265.239,1814.84C257.045,1806.64 257.045,1793.36 265.239,1785.16L687.103,1363.3C693.078,1357.32 702.054,1355.52 709.876,1358.71ZM701.941,1378.14L280.077,1800L701.811,2221.73L1349.61,1950.79L1349.61,1642.69L701.941,1378.14Z" />
+                        <path id="slot-3-target-hit" class="hit-area" d="M701.941,1378.14L1349.61,1642.69L1349.61,1950.79L701.811,2221.73L280.077,1800L701.941,1378.14Z" style="fill:rgb(120,120,120);fill-opacity:0.85;" />
+                    </g>
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.621,1392.9L1333.66,1647.81C1336.79,1649.09 1338.84,1652.14 1338.84,1655.52L1338.84,1938.08C1338.84,1941.44 1336.82,1944.47 1333.72,1945.77L709.474,2206.86C706.355,2208.16 702.756,2207.46 700.366,2205.07L301.193,1805.89C297.939,1802.64 297.939,1797.36 301.193,1794.11L700.577,1394.72C702.95,1392.35 706.515,1391.63 709.621,1392.9ZM706.47,1400.62L307.086,1800L706.258,2199.17L1330.51,1938.08L1330.51,1655.52L706.47,1400.62Z" />
+                    </g>
+                </g>
+                <g id="slot-3-nearby" class="region nearby-region" transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-51.6157)">
+                    <path d="M726.368,1412.42L532.025,1800L725.353,2185.13L726.785,2197.01L711.925,2261.78L682.195,2270.33L224.362,1812.5L224.362,1787.5L682.195,1329.67L711.826,1337.81L727.696,1400.14L726.368,1412.42ZM710.565,1404.5L694.695,1342.17L236.863,1800L694.695,2257.83L709.554,2193.06L512.247,1800L710.565,1404.5Z" style="fill:url(#_Linear1);" />
+                    <path id="slot-3-nearby-hit" class="hit-area" d="M710.565,1404.5L512.247,1800L709.554,2193.06L694.695,2257.83L236.863,1800L694.695,1342.17L710.565,1404.5Z" style="fill:url(#_Linear2);" />
+                </g>
+            </g>
+            <g id="slot-1" class="sector" data-index="1" transform="matrix(0.707107,0.707107,-0.707107,0.707107,1800.7,-746.632)">
+                <g id="slot-1-target" class="region target-region">
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.876,1358.71L1357.54,1623.27C1365.43,1626.49 1370.59,1634.17 1370.59,1642.69L1370.59,1950.79C1370.59,1959.25 1365.51,1966.88 1357.7,1970.15L709.908,2241.09C702.053,2244.38 692.993,2242.59 686.973,2236.57L265.239,1814.84C257.045,1806.64 257.045,1793.36 265.239,1785.16L687.103,1363.3C693.078,1357.32 702.054,1355.52 709.876,1358.71ZM701.941,1378.14L280.077,1800L701.811,2221.73L1349.61,1950.79L1349.61,1642.69L701.941,1378.14Z" />
+                        <path id="slot-1-target-hit" class="hit-area" d="M701.941,1378.14L1349.61,1642.69L1349.61,1950.79L701.811,2221.73L280.077,1800L701.941,1378.14Z" style="fill:rgb(120,120,120);fill-opacity:0.85;" />
+                    </g>
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.621,1392.9L1333.66,1647.81C1336.79,1649.09 1338.84,1652.14 1338.84,1655.52L1338.84,1938.08C1338.84,1941.44 1336.82,1944.47 1333.72,1945.77L709.474,2206.86C706.355,2208.16 702.756,2207.46 700.366,2205.07L301.193,1805.89C297.939,1802.64 297.939,1797.36 301.193,1794.11L700.577,1394.72C702.95,1392.35 706.515,1391.63 709.621,1392.9ZM706.47,1400.62L307.086,1800L706.258,2199.17L1330.51,1938.08L1330.51,1655.52L706.47,1400.62Z" />
+                    </g>
+                </g>
+                <g id="slot-1-nearby" class="region nearby-region" transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-51.6157)">
+                    <path d="M726.368,1412.42L532.025,1800L725.353,2185.13L726.785,2197.01L711.925,2261.78L682.195,2270.33L224.362,1812.5L224.362,1787.5L682.195,1329.67L711.826,1337.81L727.696,1400.14L726.368,1412.42ZM710.565,1404.5L694.695,1342.17L236.863,1800L694.695,2257.83L709.554,2193.06L512.247,1800L710.565,1404.5Z" style="fill:url(#_Linear3);" />
+                    <path id="slot-1-nearby-hit" class="hit-area" d="M710.565,1404.5L512.247,1800L709.554,2193.06L694.695,2257.83L236.863,1800L694.695,1342.17L710.565,1404.5Z" style="fill:url(#_Linear4);" />
+                </g>
+            </g>
+            <g id="slot-7" class="sector" data-index="7" transform="matrix(0.707107,-0.707107,0.707107,0.707107,-745.34,1801.24)">
+                <g id="slot-7-target" class="region target-region">
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.876,1358.71L1357.54,1623.27C1365.43,1626.49 1370.59,1634.17 1370.59,1642.69L1370.59,1950.79C1370.59,1959.25 1365.51,1966.88 1357.7,1970.15L709.908,2241.09C702.053,2244.38 692.993,2242.59 686.973,2236.57L265.239,1814.84C257.045,1806.64 257.045,1793.36 265.239,1785.16L687.103,1363.3C693.078,1357.32 702.054,1355.52 709.876,1358.71ZM701.941,1378.14L280.077,1800L701.811,2221.73L1349.61,1950.79L1349.61,1642.69L701.941,1378.14Z" />
+                        <path id="slot-7-target-hit" class="hit-area" d="M701.941,1378.14L1349.61,1642.69L1349.61,1950.79L701.811,2221.73L280.077,1800L701.941,1378.14Z" style="fill:rgb(120,120,120);fill-opacity:0.85;" />
+                    </g>
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.621,1392.9L1333.66,1647.81C1336.79,1649.09 1338.84,1652.14 1338.84,1655.52L1338.84,1938.08C1338.84,1941.44 1336.82,1944.47 1333.72,1945.77L709.474,2206.86C706.355,2208.16 702.756,2207.46 700.366,2205.07L301.193,1805.89C297.939,1802.64 297.939,1797.36 301.193,1794.11L700.577,1394.72C702.95,1392.35 706.515,1391.63 709.621,1392.9ZM706.47,1400.62L307.086,1800L706.258,2199.17L1330.51,1938.08L1330.51,1655.52L706.47,1400.62Z" />
+                    </g>
+                </g>
+                <g id="slot-7-nearby" class="region nearby-region" transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-51.6157)">
+                    <path d="M726.368,1412.42L532.025,1800L725.353,2185.13L726.785,2197.01L711.925,2261.78L682.195,2270.33L224.362,1812.5L224.362,1787.5L682.195,1329.67L711.826,1337.81L727.696,1400.14L726.368,1412.42ZM710.565,1404.5L694.695,1342.17L236.863,1800L694.695,2257.83L709.554,2193.06L512.247,1800L710.565,1404.5Z" style="fill:url(#_Linear5);" />
+                    <path id="slot-7-nearby-hit" class="hit-area" d="M710.565,1404.5L512.247,1800L709.554,2193.06L694.695,2257.83L236.863,1800L694.695,1342.17L710.565,1404.5Z" style="fill:url(#_Linear6);" />
+                </g>
+            </g>
+            <g id="slot-5" class="sector" data-index="5" transform="matrix(-0.707107,-0.707107,0.707107,-0.707107,1802.53,4347.28)">
+                <g id="slot-5-target" class="region target-region">
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.876,1358.71L1357.54,1623.27C1365.43,1626.49 1370.59,1634.17 1370.59,1642.69L1370.59,1950.79C1370.59,1959.25 1365.51,1966.88 1357.7,1970.15L709.908,2241.09C702.053,2244.38 692.993,2242.59 686.973,2236.57L265.239,1814.84C257.045,1806.64 257.045,1793.36 265.239,1785.16L687.103,1363.3C693.078,1357.32 702.054,1355.52 709.876,1358.71ZM701.941,1378.14L280.077,1800L701.811,2221.73L1349.61,1950.79L1349.61,1642.69L701.941,1378.14Z" />
+                        <path id="slot-5-target-hit" class="hit-area" d="M701.941,1378.14L1349.61,1642.69L1349.61,1950.79L701.811,2221.73L280.077,1800L701.941,1378.14Z" style="fill:rgb(120,120,120);fill-opacity:0.85;" />
+                    </g>
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.621,1392.9L1333.66,1647.81C1336.79,1649.09 1338.84,1652.14 1338.84,1655.52L1338.84,1938.08C1338.84,1941.44 1336.82,1944.47 1333.72,1945.77L709.474,2206.86C706.355,2208.16 702.756,2207.46 700.366,2205.07L301.193,1805.89C297.939,1802.64 297.939,1797.36 301.193,1794.11L700.577,1394.72C702.95,1392.35 706.515,1391.63 709.621,1392.9ZM706.47,1400.62L307.086,1800L706.258,2199.17L1330.51,1938.08L1330.51,1655.52L706.47,1400.62Z" />
+                    </g>
+                </g>
+                <g id="slot-5-nearby" class="region nearby-region" transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-51.6157)">
+                    <path d="M726.368,1412.42L532.025,1800L725.353,2185.13L726.785,2197.01L711.925,2261.78L682.195,2270.33L224.362,1812.5L224.362,1787.5L682.195,1329.67L711.826,1337.81L727.696,1400.14L726.368,1412.42ZM710.565,1404.5L694.695,1342.17L236.863,1800L694.695,2257.83L709.554,2193.06L512.247,1800L710.565,1404.5Z" style="fill:url(#_Linear7);" />
+                    <path id="slot-5-nearby-hit" class="hit-area" d="M710.565,1404.5L512.247,1800L709.554,2193.06L694.695,2257.83L236.863,1800L694.695,1342.17L710.565,1404.5Z" style="fill:url(#_Linear8);" />
+                </g>
+            </g>
+            <g id="slot-6" class="sector" data-index="6" transform="matrix(6.12323e-17,-1,1,6.12323e-17,1.29211,3601.94)">
+                <g id="slot-6-target" class="region target-region">
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.876,1358.71L1357.54,1623.27C1365.43,1626.49 1370.59,1634.17 1370.59,1642.69L1370.59,1950.79C1370.59,1959.25 1365.51,1966.88 1357.7,1970.15L709.908,2241.09C702.053,2244.38 692.993,2242.59 686.973,2236.57L265.239,1814.84C257.045,1806.64 257.045,1793.36 265.239,1785.16L687.103,1363.3C693.078,1357.32 702.054,1355.52 709.876,1358.71ZM701.941,1378.14L280.077,1800L701.811,2221.73L1349.61,1950.79L1349.61,1642.69L701.941,1378.14Z" />
+                        <path id="slot-6-target-hit" class="hit-area" d="M701.941,1378.14L1349.61,1642.69L1349.61,1950.79L701.811,2221.73L280.077,1800L701.941,1378.14Z" style="fill:rgb(120,120,120);fill-opacity:0.85;" />
+                    </g>
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.621,1392.9L1333.66,1647.81C1336.79,1649.09 1338.84,1652.14 1338.84,1655.52L1338.84,1938.08C1338.84,1941.44 1336.82,1944.47 1333.72,1945.77L709.474,2206.86C706.355,2208.16 702.756,2207.46 700.366,2205.07L301.193,1805.89C297.939,1802.64 297.939,1797.36 301.193,1794.11L700.577,1394.72C702.95,1392.35 706.515,1391.63 709.621,1392.9ZM706.47,1400.62L307.086,1800L706.258,2199.17L1330.51,1938.08L1330.51,1655.52L706.47,1400.62Z" />
+                    </g>
+                </g>
+                <g id="slot-6-nearby" class="region nearby-region" transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-51.6157)">
+                    <path d="M726.368,1412.42L532.025,1800L725.353,2185.13L726.785,2197.01L711.925,2261.78L682.195,2270.33L224.362,1812.5L224.362,1787.5L682.195,1329.67L711.826,1337.81L727.696,1400.14L726.368,1412.42ZM710.565,1404.5L694.695,1342.17L236.863,1800L694.695,2257.83L709.554,2193.06L512.247,1800L710.565,1404.5Z" style="fill:url(#_Linear9);" />
+                    <path id="slot-6-nearby-hit" class="hit-area" d="M710.565,1404.5L512.247,1800L709.554,2193.06L694.695,2257.83L236.863,1800L694.695,1342.17L710.565,1404.5Z" style="fill:url(#_Linear10);" />
+                </g>
+            </g>
+            <g id="slot-4" class="sector" data-index="4" transform="matrix(-1,-1.22465e-16,1.22465e-16,-1,3603.23,3600.65)">
+                <g id="slot-4-target" class="region target-region">
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.876,1358.71L1357.54,1623.27C1365.43,1626.49 1370.59,1634.17 1370.59,1642.69L1370.59,1950.79C1370.59,1959.25 1365.51,1966.88 1357.7,1970.15L709.908,2241.09C702.053,2244.38 692.993,2242.59 686.973,2236.57L265.239,1814.84C257.045,1806.64 257.045,1793.36 265.239,1785.16L687.103,1363.3C693.078,1357.32 702.054,1355.52 709.876,1358.71ZM701.941,1378.14L280.077,1800L701.811,2221.73L1349.61,1950.79L1349.61,1642.69L701.941,1378.14Z" />
+                        <path id="slot-4-target-hit" class="hit-area" d="M701.941,1378.14L1349.61,1642.69L1349.61,1950.79L701.811,2221.73L280.077,1800L701.941,1378.14Z" style="fill:rgb(120,120,120);fill-opacity:0.85;" />
+                    </g>
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.621,1392.9L1333.66,1647.81C1336.79,1649.09 1338.84,1652.14 1338.84,1655.52L1338.84,1938.08C1338.84,1941.44 1336.82,1944.47 1333.72,1945.77L709.474,2206.86C706.355,2208.16 702.756,2207.46 700.366,2205.07L301.193,1805.89C297.939,1802.64 297.939,1797.36 301.193,1794.11L700.577,1394.72C702.95,1392.35 706.515,1391.63 709.621,1392.9ZM706.47,1400.62L307.086,1800L706.258,2199.17L1330.51,1938.08L1330.51,1655.52L706.47,1400.62Z" />
+                    </g>
+                </g>
+                <g id="slot-4-nearby" class="region nearby-region" transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-51.6157)">
+                    <path d="M726.368,1412.42L532.025,1800L725.353,2185.13L726.785,2197.01L711.925,2261.78L682.195,2270.33L224.362,1812.5L224.362,1787.5L682.195,1329.67L711.826,1337.81L727.696,1400.14L726.368,1412.42ZM710.565,1404.5L694.695,1342.17L236.863,1800L694.695,2257.83L709.554,2193.06L512.247,1800L710.565,1404.5Z" style="fill:url(#_Linear11);" />
+                    <path id="slot-4-nearby-hit" class="hit-area" d="M710.565,1404.5L512.247,1800L709.554,2193.06L694.695,2257.83L236.863,1800L694.695,1342.17L710.565,1404.5Z" style="fill:url(#_Linear12);" />
+                </g>
+            </g>
+            <g id="slot-2" class="sector" data-index="2" transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.94,-1.29211)">
+                <g id="slot-2-target" class="region target-region">
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.876,1358.71L1357.54,1623.27C1365.43,1626.49 1370.59,1634.17 1370.59,1642.69L1370.59,1950.79C1370.59,1959.25 1365.51,1966.88 1357.7,1970.15L709.908,2241.09C702.053,2244.38 692.993,2242.59 686.973,2236.57L265.239,1814.84C257.045,1806.64 257.045,1793.36 265.239,1785.16L687.103,1363.3C693.078,1357.32 702.054,1355.52 709.876,1358.71ZM701.941,1378.14L280.077,1800L701.811,2221.73L1349.61,1950.79L1349.61,1642.69L701.941,1378.14Z" />
+                        <path id="slot-2-target-hit" class="hit-area" d="M701.941,1378.14L1349.61,1642.69L1349.61,1950.79L701.811,2221.73L280.077,1800L701.941,1378.14Z" style="fill:rgb(120,120,120);fill-opacity:0.85;" />
+                    </g>
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.621,1392.9L1333.66,1647.81C1336.79,1649.09 1338.84,1652.14 1338.84,1655.52L1338.84,1938.08C1338.84,1941.44 1336.82,1944.47 1333.72,1945.77L709.474,2206.86C706.355,2208.16 702.756,2207.46 700.366,2205.07L301.193,1805.89C297.939,1802.64 297.939,1797.36 301.193,1794.11L700.577,1394.72C702.95,1392.35 706.515,1391.63 709.621,1392.9ZM706.47,1400.62L307.086,1800L706.258,2199.17L1330.51,1938.08L1330.51,1655.52L706.47,1400.62Z" />
+                    </g>
+                </g>
+                <g id="slot-2-nearby" class="region nearby-region" transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-51.6157)">
+                    <path d="M726.368,1412.42L532.025,1800L725.353,2185.13L726.785,2197.01L711.925,2261.78L682.195,2270.33L224.362,1812.5L224.362,1787.5L682.195,1329.67L711.826,1337.81L727.696,1400.14L726.368,1412.42ZM710.565,1404.5L694.695,1342.17L236.863,1800L694.695,2257.83L709.554,2193.06L512.247,1800L710.565,1404.5Z" style="fill:url(#_Linear13);" />
+                    <path id="slot-2-nearby-hit" class="hit-area" d="M710.565,1404.5L512.247,1800L709.554,2193.06L694.695,2257.83L236.863,1800L694.695,1342.17L710.565,1404.5Z" style="fill:url(#_Linear14);" />
+                </g>
+            </g>
+            <g id="slot-0" class="sector" data-index="0">
+                <g id="slot-0-target" class="region target-region">
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.876,1358.71L1357.54,1623.27C1365.43,1626.49 1370.59,1634.17 1370.59,1642.69L1370.59,1950.79C1370.59,1959.25 1365.51,1966.88 1357.7,1970.15L709.908,2241.09C702.053,2244.38 692.993,2242.59 686.973,2236.57L265.239,1814.84C257.045,1806.64 257.045,1793.36 265.239,1785.16L687.103,1363.3C693.078,1357.32 702.054,1355.52 709.876,1358.71ZM701.941,1378.14L280.077,1800L701.811,2221.73L1349.61,1950.79L1349.61,1642.69L701.941,1378.14Z" />
+                        <path id="slot-0-target-hit" class="hit-area" d="M701.941,1378.14L1349.61,1642.69L1349.61,1950.79L701.811,2221.73L280.077,1800L701.941,1378.14Z" style="fill:rgb(120,120,120);fill-opacity:0.85;" />
+                    </g>
+                    <g transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-1.61571)">
+                        <path d="M709.621,1392.9L1333.66,1647.81C1336.79,1649.09 1338.84,1652.14 1338.84,1655.52L1338.84,1938.08C1338.84,1941.44 1336.82,1944.47 1333.72,1945.77L709.474,2206.86C706.355,2208.16 702.756,2207.46 700.366,2205.07L301.193,1805.89C297.939,1802.64 297.939,1797.36 301.193,1794.11L700.577,1394.72C702.95,1392.35 706.515,1391.63 709.621,1392.9ZM706.47,1400.62L307.086,1800L706.258,2199.17L1330.51,1938.08L1330.51,1655.52L706.47,1400.62Z" />
+                    </g>
+                </g>
+                <g id="slot-0-nearby" class="region nearby-region" transform="matrix(6.12323e-17,1,-1,6.12323e-17,3601.62,-51.6157)">
+                    <path d="M726.368,1412.42L532.025,1800L725.353,2185.13L726.785,2197.01L711.925,2261.78L682.195,2270.33L224.362,1812.5L224.362,1787.5L682.195,1329.67L711.826,1337.81L727.696,1400.14L726.368,1412.42ZM710.565,1404.5L694.695,1342.17L236.863,1800L694.695,2257.83L709.554,2193.06L512.247,1800L710.565,1404.5Z" style="fill:url(#_Linear15);" />
+                    <path id="slot-0-nearby-hit" class="hit-area" d="M710.565,1404.5L512.247,1800L709.554,2193.06L694.695,2257.83L236.863,1800L694.695,1342.17L710.565,1404.5Z" style="fill:url(#_Linear16);" />
+                </g>
+            </g>
+        </g>
+        <g id="center">
+            <g id="center_bg" transform="matrix(0.601567,0,0,0.601567,718.578,713.83)">
+                <path id="center-hit" class="hit-area" d="M1800,1053.98L2327.52,1272.48L2546.02,1800L2327.52,2327.52L1800,2546.02L1272.48,2327.52L1053.98,1800L1272.48,1272.48L1800,1053.98Z" style="fill:rgb(120,120,120);fill-opacity:0.96;" />
+                <path d="M1810.92,1027.61L2338.44,1246.12C2345.43,1249.01 2350.99,1254.57 2353.89,1261.56L2572.39,1789.08C2575.29,1796.07 2575.29,1803.93 2572.39,1810.92L2353.89,2338.44C2350.99,2345.43 2345.43,2350.99 2338.44,2353.89L1810.92,2572.39C1803.93,2575.29 1796.07,2575.29 1789.08,2572.39L1261.56,2353.89C1254.57,2350.99 1249.01,2345.43 1246.12,2338.44L1027.61,1810.92C1024.71,1803.93 1024.71,1796.07 1027.61,1789.08L1246.12,1261.56C1249.01,1254.57 1254.57,1249.01 1261.56,1246.12L1789.08,1027.61C1796.07,1024.71 1803.93,1024.71 1810.92,1027.61ZM1800,1053.98L1272.48,1272.48L1053.98,1800L1272.48,2327.52L1800,2546.02L2327.52,2327.52L2546.02,1800L2327.52,1272.48L1800,1053.98Z" />
+            </g>
+            <g id="center1" serif:id="center" transform="matrix(0.601567,0,0,0.601567,718.578,713.83)">
+                <path d="M1805.3,1096.16L2293.94,1298.56C2297.34,1299.97 2300.03,1302.66 2301.44,1306.06L2503.84,1794.7C2505.24,1798.09 2505.24,1801.91 2503.84,1805.3L2301.44,2293.94C2300.03,2297.34 2297.34,2300.03 2293.94,2301.44L1805.3,2503.84C1801.91,2505.24 1798.09,2505.24 1794.7,2503.84L1306.06,2301.44C1302.66,2300.03 1299.97,2297.34 1298.56,2293.94L1096.16,1805.3C1094.76,1801.91 1094.76,1798.09 1096.16,1794.7L1298.56,1306.06C1299.97,1302.66 1302.66,1299.97 1306.06,1298.56L1794.7,1096.16C1798.09,1094.76 1801.91,1094.76 1805.3,1096.16ZM1800,1108.96L1311.36,1311.36L1108.96,1800L1311.36,2288.64L1800,2491.04L2288.64,2288.64L2491.04,1800L2288.64,1311.36L1800,1108.96Z" />
+            </g>
+        </g>
+    </g>
+    <defs>
+        <linearGradient id="_Linear1" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:black;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:black;stop-opacity:0.6" /><stop offset="1" style="stop-color:black;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear2" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:white;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:white;stop-opacity:0.6" /><stop offset="1" style="stop-color:white;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear3" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:black;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:black;stop-opacity:0.6" /><stop offset="1" style="stop-color:black;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear4" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:white;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:white;stop-opacity:0.6" /><stop offset="1" style="stop-color:white;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear5" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:black;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:black;stop-opacity:0.6" /><stop offset="1" style="stop-color:black;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear6" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:white;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:white;stop-opacity:0.6" /><stop offset="1" style="stop-color:white;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear7" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:black;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:black;stop-opacity:0.6" /><stop offset="1" style="stop-color:black;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear8" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:white;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:white;stop-opacity:0.6" /><stop offset="1" style="stop-color:white;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear9" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:black;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:black;stop-opacity:0.6" /><stop offset="1" style="stop-color:black;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear10" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:white;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:white;stop-opacity:0.6" /><stop offset="1" style="stop-color:white;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear11" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:black;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:black;stop-opacity:0.6" /><stop offset="1" style="stop-color:black;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear12" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:white;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:white;stop-opacity:0.6" /><stop offset="1" style="stop-color:white;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear13" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:black;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:black;stop-opacity:0.6" /><stop offset="1" style="stop-color:black;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear14" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:white;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:white;stop-opacity:0.6" /><stop offset="1" style="stop-color:white;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear15" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:black;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:black;stop-opacity:0.6" /><stop offset="1" style="stop-color:black;stop-opacity:0.8" /></linearGradient>
+        <linearGradient id="_Linear16" x1="0" y1="0" x2="1" y2="0" gradientUnits="userSpaceOnUse" gradientTransform="matrix(2.83442e-13,-915.665,915.665,2.83442e-13,694.695,2257.83)"><stop offset="0" style="stop-color:white;stop-opacity:0.8" /><stop offset="0.5" style="stop-color:white;stop-opacity:0.6" /><stop offset="1" style="stop-color:white;stop-opacity:0.8" /></linearGradient>
+    </defs>
+</svg>
+<!-- RADIAL_ART_END -->
+    <p id="help">Inner piece: target NPC · Outer chevron: everyone nearby · No target NPC: both address nearby<br>← / →: gesture · ↑: inner · ↓: nearby · Enter / Space: select · Tab / Escape / center: cancel<br>Either Shift key still overrides an inner selection to everyone nearby.</p>
 </main>
 <script>
 (() => {
     "use strict";
-    let request = "", armed = false, finished = false;
-    const labels = Array(8).fill(""), intents = Array(8).fill("");
-    const wheel = document.getElementById("wheel");
-    const buttons = labels.map((_, index) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.disabled = true;
-        button.addEventListener("click", () => choose(index));
-        wheel.appendChild(button);
-        window["psWheelLabel" + index] = label => {
-            labels[index] = label;
-            button.textContent = label;
-            button.disabled = !armed || !label;
-        };
-        window["psWheelIntent" + index] = intent => { intents[index] = intent; };
-        return button;
-    });
-    function choose(index) {
-        if (!armed || finished || (index >= 0 && !labels[index])) return;
-        finished = true;
-        armed = false;
-        buttons.forEach(button => { button.disabled = true; });
-        // The host owns closure. Claim once before its yielding Papyrus wrapper releases focus.
-        window.psWheelChoice(request + "|" + index + "|" + (index < 0 ? "" : intents[index]));
+    const NS = "http://www.w3.org/2000/svg";
+    const wheel = document.getElementById("wheelSvg");
+    const surface = document.querySelector("main");
+    const entries = Array(8).fill(null);
+    let request = "", completedRequest = "", armed = false, finished = false, focused = -1, focusedMode = "target";
+    function rootPoint(path) {
+        const box = path.getBBox();
+        const point = wheel.createSVGPoint(); point.x = box.x + box.width / 2; point.y = box.y + box.height / 2;
+        return point.matrixTransform(wheel.getCTM().inverse().multiply(path.getCTM()));
     }
-    window.psWheelBegin = token => {
-        request = token;
-        armed = false;
-        finished = false;
-        labels.fill("");
-        intents.fill("");
-        buttons.forEach(button => { button.textContent = ""; button.disabled = true; });
+    function textBox(x, y, width, height, className) {
+        const box = document.createElementNS(NS, "foreignObject");
+        box.setAttribute("x", x); box.setAttribute("y", y); box.setAttribute("width", width); box.setAttribute("height", height);
+        box.setAttribute("aria-hidden", "true");
+        const content = document.createElement("div"); content.className = className; box.appendChild(content); wheel.appendChild(box);
+        return content;
+    }
+    function fit(content, size) {
+        content.style.fontSize = size + "px";
+        for (let attempt = 0; attempt < 4; attempt++) {
+            const scale = Math.min(1, content.clientWidth / Math.max(1, content.scrollWidth), content.clientHeight / Math.max(1, content.scrollHeight));
+            if (scale >= 1) break;
+            size *= scale * .95;
+            content.style.fontSize = size + "px";
+        }
+    }
+    const sectors = entries.map((_, index) => {
+        const group = document.getElementById("slot-" + index);
+        const target = document.getElementById("slot-" + index + "-target");
+        const nearby = document.getElementById("slot-" + index + "-nearby");
+        const point = rootPoint(document.getElementById("slot-" + index + "-target-hit"));
+        const content = textBox(point.x - 350, point.y - 170, 700, 340, "sectorLabel");
+        content.dataset.index = index;
+        const outer = rootPoint(document.getElementById("slot-" + index + "-nearby-hit"));
+        const distance = Math.hypot(outer.x - 1800, outer.y - 1800);
+        const badge = document.createElementNS(NS, "text"); badge.classList.add("nearbyLabel");
+        badge.setAttribute("x", outer.x + (outer.x - 1800) / distance * 70);
+        badge.setAttribute("y", outer.y + (outer.y - 1800) / distance * 70);
+        badge.setAttribute("aria-hidden", "true"); badge.textContent = "ALL"; wheel.appendChild(badge);
+        for (const [region, mode] of [[target, "target"], [nearby, "nearby"]]) {
+            region.setAttribute("role", "button"); region.setAttribute("tabindex", "-1"); region.setAttribute("aria-disabled", "true");
+            region.addEventListener("click", () => choose(index, mode));
+            region.addEventListener("mouseenter", () => { if (available(index, mode) && armed) region.focus(); });
+            region.addEventListener("focus", () => highlight(index, mode));
+        }
+        return { group, target, nearby, content, badge };
+    });
+    const cancel = document.getElementById("center");
+    cancel.classList.add("centerCancel"); cancel.setAttribute("role", "button"); cancel.setAttribute("aria-label", "Cancel"); cancel.setAttribute("tabindex", "-1");
+    const hub = textBox(1480, 1510, 640, 560, "hubContent");
+    hub.parentElement.removeAttribute("aria-hidden");
+    const caption = document.createElement("div"); caption.id = "caption"; caption.setAttribute("aria-live", "polite");
+    const destination = document.createElement("div"); destination.id = "destination";
+    const hint = document.createElement("div"); hint.className = "hubHint"; hint.textContent = "Center: cancel";
+    hub.append(caption, destination, hint);
+    cancel.addEventListener("click", () => choose(-1));
+    cancel.addEventListener("mouseenter", () => { if (armed) cancel.focus(); });
+    function showCancel() { focused = -1; clearHighlight(); caption.textContent = "Cancel"; destination.textContent = ""; fit(hub, 100); }
+    cancel.addEventListener("focus", showCancel);
+    function available(index, mode) { return Boolean(entries[index] && (mode === "target" || (mode === "nearby" && entries[index][1]))); }
+    function clearHighlight() { sectors.forEach(({ target, nearby }) => { target.classList.remove("hot"); nearby.classList.remove("hot"); }); }
+    function highlight(index, mode) {
+        if (!armed || !available(index, mode)) return;
+        focused = index; focusedMode = mode; clearHighlight(); sectors[index][mode].classList.add("hot");
+        caption.textContent = entries[index][0];
+        destination.textContent = entries[index][1] ? (mode === "nearby" ? "Everyone nearby" : "Target NPC") : "Navigation";
+        fit(hub, 100);
+    }
+    function focusRegion(index, mode) {
+        if (index < 0) return;
+        mode = available(index, mode) ? mode : "target";
+        const region = sectors[index][mode];
+        if (document.activeElement === region) highlight(index, mode); else region.focus();
+    }
+    function firstAvailable(from, step) {
+        for (let offset = 1; offset <= 8; offset++) { const index = (from + step * offset + 80) % 8; if (entries[index]) return index; }
+        return -1;
+    }
+    function disable() {
+        sectors.forEach(({ group, target, nearby }) => {
+            group.setAttribute("aria-disabled", "true");
+            for (const region of [target, nearby]) { region.setAttribute("aria-disabled", "true"); region.setAttribute("tabindex", "-1"); }
+        });
+        cancel.setAttribute("tabindex", "-1");
+    }
+    function choose(index, mode = "cancel") {
+        if (!armed || finished || (index >= 0 && !available(index, mode))) return;
+        finished = true; armed = false; surface.dataset.armed = "false";
+        if (window.magelight) window.magelight.send("__escapecapture", "0");
+        completedRequest = request; disable();
+        const intent = index < 0 ? "" : entries[index][1];
+        window.psWheelChoice(request + "|" + index + "|" + intent + "|" + (index < 0 ? "cancel" : intent ? mode : "navigate"));
+    }
+    function failClosed(token = "") {
+        request = token; armed = false; finished = !token; focused = -1; focusedMode = "target";
+        surface.dataset.armed = "false"; entries.fill(null); disable(); clearHighlight();
+        sectors.forEach(({ content, nearby, badge }) => { content.textContent = ""; nearby.style.display = "none"; badge.style.display = "none"; });
+        caption.textContent = ""; destination.textContent = "";
+        if (window.magelight) window.magelight.send("__escapecapture", "0");
+    }
+    window.psWheelBegin = payload => {
+        surface.dataset.armed = "false";
+        if (typeof payload !== "string") { failClosed(); return; }
+        const divider = payload.indexOf("|");
+        if (divider < 1) { failClosed(); return; }
+        const nextRequest = payload.slice(0, divider);
+        if (completedRequest === nextRequest) { failClosed(); return; }
+        let batch;
+        try { batch = JSON.parse(payload.slice(divider + 1)); } catch (_) { failClosed(nextRequest); return; }
+        if (!Array.isArray(batch) || batch.length !== 8 || batch.some(item => item !== null && (!Array.isArray(item) || item.length !== 2 || typeof item[0] !== "string" || typeof item[1] !== "string"))) { failClosed(nextRequest); return; }
+        failClosed(nextRequest); finished = false;
+        batch.forEach((item, index) => {
+            entries[index] = item;
+            const { target, nearby, content, badge } = sectors[index];
+            content.textContent = item ? item[0] : ""; fit(content, 110);
+            target.setAttribute("aria-label", item ? item[0] + (item[1] ? " — Target NPC" : "") : "Empty slot");
+            nearby.setAttribute("aria-label", item ? item[0] + " — Everyone nearby" : "Empty slot");
+            nearby.style.display = badge.style.display = item && item[1] ? "" : "none";
+        });
     };
     window.psWheelArm = token => {
         if (token !== request || finished || !request) return;
-        armed = true;
-        buttons.forEach((button, index) => { button.disabled = !labels[index]; });
-        const first = buttons.find(button => !button.disabled);
-        if (first) first.focus();
+        armed = true; surface.dataset.armed = "true";
+        if (window.magelight) window.magelight.send("__escapecapture", "1");
+        sectors.forEach(({ group, target, nearby }, index) => {
+            group.setAttribute("aria-disabled", String(!entries[index]));
+            for (const [region, mode] of [[target, "target"], [nearby, "nearby"]]) {
+                const enabled = available(index, mode); region.setAttribute("aria-disabled", String(!enabled)); region.setAttribute("tabindex", enabled ? "0" : "-1");
+            }
+        });
+        cancel.setAttribute("tabindex", "0");
+        const first = entries.findIndex(Boolean);
+        if (first >= 0) focusRegion(first, "target");
+        else if (document.activeElement === cancel) showCancel(); else cancel.focus();
     };
     document.addEventListener("keydown", event => {
-        if (event.key === "Escape" || event.key === "Tab") {
+        if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); choose(-1); }
+        else if (armed && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
             event.preventDefault();
-            choose(-1);
-        } else if (armed && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
-            event.preventDefault();
-            const enabled = buttons.filter(button => !button.disabled);
-            const step = ["ArrowUp", "ArrowLeft"].includes(event.key) ? -1 : 1;
-            const current = enabled.indexOf(document.activeElement);
-            if (enabled.length) enabled[(current + step + enabled.length) % enabled.length].focus();
+            if (event.key === "ArrowLeft" || event.key === "ArrowRight") focusRegion(firstAvailable(focused, event.key === "ArrowLeft" ? -1 : 1), focusedMode);
+            else focusRegion(focused < 0 ? entries.findIndex(Boolean) : focused, event.key === "ArrowDown" ? "nearby" : "target");
+        } else if (armed && (event.key === "Enter" || event.key === " ")) {
+            if (document.activeElement === cancel) { event.preventDefault(); choose(-1); }
+            else if (focused >= 0 && document.activeElement === sectors[focused][focusedMode]) { event.preventDefault(); choose(focused, focusedMode); }
         }
     });
-    // Preserve Tab/Escape as whole-session cancellation, not submenu Back.
-    if (window.magelight) window.magelight.send("__escapecapture", "1");
+    failClosed();
+    if (window.magelight) window.magelight.on("__uimode", state => { if (state === "0" || state === "1") failClosed(); });
 })();
 </script>
 </html>

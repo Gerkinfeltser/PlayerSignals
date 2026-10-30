@@ -211,6 +211,32 @@ function M.validateText(text, catalogText)
     return validate(decode(text), catalog.intents.data)
 end
 
+local function jsonString(value)
+    assert(type(value) == 'string', 'wheel label/intent must be a string')
+    return '"' .. string.gsub(value, '[%z\1-\31\127\\"]', function(byte)
+        if byte == '"' then return '\\"' end
+        if byte == '\\' then return '\\\\' end
+        return string.format('\\u%04x', string.byte(byte))
+    end) .. '"'
+end
+
+function M.wheelPayload(slots)
+    local ok, result = pcall(function()
+        local entries = {}
+        for i = 1, 8 do
+            local slot = slots[i]
+            if slot == nil then
+                entries[i] = 'null'
+            else
+                entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(slot.intent or '') .. ']'
+            end
+        end
+        return '[' .. table.concat(entries, ',') .. ']'
+    end)
+    if ok then return result end
+    return ''
+end
+
 function M.load(args)
     local ok, result = pcall(function()
         local function readFile(path)

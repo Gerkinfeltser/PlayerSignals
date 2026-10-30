@@ -109,28 +109,6 @@ Move the entire entry to change its position. **UIExtensions:** positions 1–4 
 
 Keep labels short for comfortable reading. UIExtensions does not automatically shrink or trim long text. Experimental Magelight wraps and shrinks sector text and shows the complete highlighted label in a wrapping caption. Neither backend imposes a fixed character limit or truncates authored labels.
 
-### Optional wheel icons
-
-In the experimental Magelight wheel, any non-null slot may include an optional `icon` override. If omitted, its entry type uses this default glyph:
-
-| Entry type | Default |
-|---|---|
-| Intent / gesture | ✦ |
-| Action | ❖ |
-| Submenu | ◈ |
-| Back | ⚐ |
-| Close | ✕ |
-
-For example, add `icon` to an ordinary intent slot:
-
-```json
-{ "label": "Yes", "intent": "confirm", "icon": "★" }
-```
-
-The override must be 1–4 Unicode scalar values—not 1–4 bytes or grapheme clusters. A supplementary-plane character counts as one scalar value. ASCII whitespace and C0/C1 control characters are not allowed. Empty strings, explicit `null`, and other invalid values fail shared configuration validation; omit `icon` to use the entry-type default.
-
-Magelight displays the icon as literal text, not markup. Whether a custom glyph has a visible shape depends on the fonts installed at runtime; coverage is not guaranteed. UIExtensions stays text-only and continues showing its existing labels and navigation markers, without icon prefixes. Save the edited JSON and **load a save** to apply changes. The revised Magelight icon rendering has not been verified in-game; this documentation makes no native rendering or acceptance claim.
-
 ### Submenus and disabled slots
 
 ```json

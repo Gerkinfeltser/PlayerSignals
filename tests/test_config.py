@@ -36,10 +36,10 @@ class ConfigValidation(unittest.TestCase):
         slots = self.lua.table()
         expected = [None] * 8
         values = [
-            ('quote " slash \\ pipe | controls \x00\x01\b\f\n\r\t end', 'intent_\\|"', 'intent', '✦'),
-            ('café 雪', '', 'navigation', '◈'),
-            ('{"intent":"metadata-like"}', 'drink_alcohol', 'action', '❖'),
-            ('tail', 'last', 'intent', '✦'),
+            ('quote " slash \\ pipe | controls \x00\x01\b\f\n\r\t end', 'intent_\\|"', 'intent'),
+            ('café 雪', '', 'navigation'),
+            ('{"intent":"metadata-like"}', 'drink_alcohol', 'action'),
+            ('tail', 'last', 'intent'),
         ]
         for index, value in zip((1, 3, 4, 8), values):
             slot = self.lua.table()
@@ -54,46 +54,6 @@ class ConfigValidation(unittest.TestCase):
 
         payload = self.module.wheelPayload(slots)
         self.assertEqual(json.loads(payload), expected)
-
-    def test_icons_validate_scalar_count_and_reject_invalid_values_everywhere(self):
-        for valid in ('✦', '😀😀😀😀', 'a\uFE0F\u0301'):
-            config = minimal()
-            config['wheels']['main'][0]['icon'] = valid
-            self.assertEqual(self.parse(config).wheels.data.main.data[1].data.icon, valid)
-        escaped = json.dumps(minimal()).replace('"Yes"', r'"Yes","icon":"\ud83d\ude00\ud83d\ude00\ud83d\ude00\ud83d\ude00"')
-        parsed = self.module.validateText(escaped, self.catalog_text)
-        self.assertEqual(parsed.wheels.data.main.data[1].data.icon, '😀' * 4)
-        for invalid in (None, False, 1, '', 'abcde', 'a b', 'a\tb', 'a\x00b', 'a\x7fb', 'a\u0085b', '😀' * 5):
-            config = minimal()
-            config['wheels']['hidden'] = [{'label': 'Hidden', 'intent': 'confirm', 'icon': invalid}]
-            with self.subTest(icon=invalid), self.assertRaises(LuaError):
-                self.parse(config)
-
-    def test_wheel_payload_defaults_and_icon_override_preserve_tuple_identity(self):
-        slots = self.lua.table()
-        for index, (kind, label) in enumerate((('intent', 'Intent'), ('action', 'Action'),
-                                                ('submenu', 'Submenu'), ('back', 'Back'),
-                                                ('close', 'Close')), 1):
-            slot = self.lua.table()
-            slot['label'] = label
-            if kind == 'action':
-                slot['kind'], slot['actionName'], slot['intent'] = 'action', 'action_name', 'event_intent'
-            elif kind in ('back', 'close'):
-                slot['kind'], slot['control'] = 'control', kind
-            else:
-                slot['kind'] = kind
-                slot['intent' if kind == 'intent' else 'submenu'] = kind
-            slots[index] = slot
-        slots[1]['icon'] = '<&"'
-        payload = json.loads(self.module.wheelPayload(slots))
-        self.assertEqual(payload[:5], [
-            ['Intent', 'intent', 'intent', '<&"'],
-            ['Action', 'action_name', 'action', '❖'],
-            ['Submenu', '', 'navigation', '◈'],
-            ['Back', '', 'navigation', '⚐'],
-            ['Close', '', 'navigation', '✕'],
-        ])
-        self.assertEqual(payload[5:], [None, None, None])
 
     def test_action_slots_validate_metadata_and_event_pair(self):
         config = minimal()

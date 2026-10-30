@@ -61,18 +61,6 @@ Each wheel has 1–8 ordered slots. A slot is `null` (disabled) or has a nonempt
 
 Labels, slot order, disabled slots, repeated supported intents, wheel names/submenus, and opening key are customizable without recompiling. UIExtensions positions 1–4 run down the left and 5–8 down the right; experimental Magelight positions run clockwise from the top. Submenus display ` >`; Back displays ` <`. Do not duplicate markers in JSON. No custom label is truncated or assigned a hard character limit.
 
-In the experimental Magelight wheel, each non-null slot may also set an optional `icon` string. When omitted, the entry type supplies a default:
-
-| Entry type | Default |
-|---|---|
-| Intent / gesture | ✦ |
-| Action | ❖ |
-| Submenu | ◈ |
-| Back | ⚐ |
-| Close | ✕ |
-
-An explicit icon must contain 1–4 Unicode scalar values (not bytes or grapheme clusters; a supplementary-plane character counts as one) and no ASCII whitespace or C0/C1 control characters. For example: `{ "label": "Yes", "intent": "confirm", "icon": "★" }`. The icon is rendered as literal text; available glyph shapes depend on the fonts installed at runtime. UIExtensions remains text-only: it ignores icons and keeps its existing labels and navigation markers. Invalid, empty, or explicit `null` icons fail shared configuration validation; omit `icon` to use the default. Save the JSON and load a save to apply it. The revised Magelight icon rendering remains runtime-unverified.
-
 `intents.json` defines each supported ID and its three phrases: `narration`, group `notification`, and `targetedNotification`. Add an ID by adding its catalog record and referencing it from `layout.json`; edit phrases in that record. Phrase values omit your character's name and final period; exactly one literal `{target}` marker appears only in `targetedNotification`. Use plain JSON without comments or trailing commas. Both files are read on load, so changes apply after loading a save. No Lua/Papyrus edit, recompile, YAML narration file, or external trigger bundle is needed.
 
 For exact schema rules and all shipped narration defaults, see the internal `docs-dev/specs/player-signals.md` and the installed [player guide](PlayerSignals/PlayerSignals-README.md).
@@ -88,8 +76,6 @@ python -m unittest discover -s tests -v
 The build embeds `media/src/RadialUI.svg` into the Magelight page, preserving its named paths/transforms while omitting the editor background. Edit that SVG for geometry; the marked SVG section in `PlayerSignals/Magelight/PlayerSignals/index.html` is generated. Only the built `PlayerSignals/` payload belongs in MO2.
 
 Current action revision: all **21 configuration tests** pass; source-derived controller/loader smokes and browser interaction checks pass; the full build compiles both scripts with **0 errors and 0 warnings** and completes ESP/SEQ generation. These are offline results, not native action or NPC-effect acceptance. Per the owner's revised decision, short-lived event data and description both contain the same rendered intent phrase; the inspected no-schema formatter can therefore expose the phrase rather than action/FormID metadata.
-
-Wheel-icon revision: **23 configuration tests** pass, including Unicode icon boundaries and payload defaults/overrides. Browser checks cover literal icons, all eight slices' width/separation/hit testing, invalid payload clearing and unchanged selection behavior; the full build succeeds with unchanged ESP/SEQ hashes. These remain offline checks, not in-game icon acceptance.
 
 ## License
 

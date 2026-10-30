@@ -134,18 +134,6 @@ end
 local function nonempty(v, path)
     assert(type(v) == 'string' and #v > 0, path .. ': expected nonempty string')
 end
-local function icon(value, path)
-    assert(type(value) == 'string', path .. ': expected string')
-    local count = 0
-    for i = 1, #value do
-        local byte = string.byte(value, i)
-        assert(not (byte <= 32 or byte == 127 or (byte >= 128 and byte <= 159 and string.byte(value, i - 1) == 194)),
-            path .. ': ASCII whitespace and control characters are not allowed')
-        if byte < 128 or byte >= 192 then count = count + 1 end
-    end
-    assert(count >= 1 and count <= 4, path .. ': expected 1..4 Unicode scalar values')
-end
-
 local function validateCatalog(root)
     local r = object(root, 'root', {schemaVersion=true, intents=true})
     assert(type(r.schemaVersion) == 'number' and r.schemaVersion == 1, 'schemaVersion: expected integer 1')
@@ -189,9 +177,8 @@ local function validate(root, intents)
         for i, slot in ipairs(wheel.data) do
             if slot ~= null then
                 local path = 'wheels.' .. name .. '[' .. i .. ']'
-                local e = object(slot, path, {label=true, intent=true, submenu=true, control=true, action=true, event=true, icon=true})
+                local e = object(slot, path, {label=true, intent=true, submenu=true, control=true, action=true, event=true})
                 nonempty(e.label, path .. '.label')
-                if e.icon ~= nil then icon(e.icon, path .. '.icon') end
                 local kinds = 0
                 for _, kind in ipairs({'intent','submenu','control','action'}) do
                     if e[kind] ~= nil then kinds = kinds + 1 end
@@ -255,8 +242,6 @@ local function jsonString(value)
     end) .. '"'
 end
 
-local defaultIcons = {intent='✦', action='❖', submenu='◈', back='⚐', close='✕'}
-
 function M.wheelPayload(slots)
     local ok, result = pcall(function()
         local entries = {}
@@ -269,10 +254,7 @@ function M.wheelPayload(slots)
                 if slot.kind == 'action' or slot.actionName ~= nil then kind = 'action'
                 elseif slot.kind == 'intent' then kind = 'intent' end
                 local identity = kind == 'action' and slot.actionName or kind == 'intent' and slot.intent or ''
-                local iconKind = kind == 'navigation' and slot.kind == 'submenu' and 'submenu' or
-                    kind == 'navigation' and slot.kind == 'control' and slot.control or kind
-                local iconValue = slot.icon or defaultIcons[iconKind]
-                entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. ',' .. jsonString(iconValue) .. ']'
+                entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. ']'
             end
         end
         return '[' .. table.concat(entries, ',') .. ']'

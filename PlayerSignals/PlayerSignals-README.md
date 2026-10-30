@@ -115,7 +115,7 @@ Keep labels short for comfortable reading. UIExtensions does not automatically s
 { "label": "People", "submenu": "social" }
 ```
 
-This displays **People >** and opens the wheel named `social`. The destination must exist under `wheels`.
+This opens the wheel named `social`; the destination must exist under `wheels`. Magelight displays **People** on a notched, blue-slate submenu slice; hover/focus still uses the distinct bronze-gold highlight. UIExtensions displays **People >**.
 
 ```json
 { "label": "Return", "control": "back" }
@@ -123,7 +123,7 @@ This displays **People >** and opens the wheel named `social`. The destination m
 
 This displays **Return <**. Back returns to the wheel you came from; at the root, it closes the menu. Use `"control": "close"` for a Close entry.
 
-**Leave the arrows out of your JSON labels.** PlayerSignals adds them automatically. A `null` entry disables that position without shifting the later entries.
+**Leave the navigation arrows out of your JSON labels.** Lua adds them for UIExtensions; Magelight strips only the generated submenu ` >` suffix while keeping Back's ` <`. The root Close slot remains unchanged. A `null` entry disables that position without shifting the later entries. Inline glyphs can be typed directly into labels.
 
 Each wheel supports **1–8 positions**, and each non-null entry needs a label plus one primary kind: `intent`, `action`, `submenu`, or `control`. An action may additionally carry the paired `event` and catalog `intent` fields described below. Don't link submenus into a loop. Reusing the same supported intent in more than one slot is fine.
 

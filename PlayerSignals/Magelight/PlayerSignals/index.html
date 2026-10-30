@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PlayerSignals</title>
 <style>
-    :root { color-scheme: dark; font: 18px Georgia, serif; color: #fff3d9; }
+    :root { --submenu-fill: #455766; color-scheme: dark; font: 18px Georgia, serif; color: #fff3d9; }
     body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: transparent; }
     main { width: min(96vw, 800px); text-align: center; visibility: hidden; }
     main[data-armed="true"] { visibility: visible; }
@@ -14,6 +14,11 @@
     #wheelSvg .hit-area { pointer-events: all; cursor: pointer; }
     #wheelSvg [aria-disabled="true"] .hit-area { pointer-events: none; }
     .target-region .hit-area { fill: #464740 !important; fill-opacity: .95 !important; }
+    /* Cool slate identifies submenu type; the warm fill below still means focus/hover. */
+    .target-region.submenu .hit-area { fill: var(--submenu-fill) !important; }
+    .target-region.submenu > g { clip-path: url(#submenu-notch); }
+    .submenu-edge { display: none; fill: none; stroke: #b7a17d; stroke-width: 14; }
+    .submenu .submenu-edge { display: initial; }
     .target-region.hot .hit-area { fill: #72562c !important; }
     .nearby-region.hot .hit-area { fill: #e9bd6c !important; }
     .region:focus, #center:focus { outline: none; }
@@ -222,6 +227,11 @@
             content.style.fontSize = size + "px";
         }
     }
+    const submenuClip = document.createElementNS(NS, "clipPath");
+    submenuClip.id = "submenu-notch"; submenuClip.setAttribute("clipPathUnits", "userSpaceOnUse");
+    const submenuShape = document.createElementNS(NS, "path");
+    submenuShape.setAttribute("d", "M701.941,1378.14L1349.61,1642.69L1349.61,1950.79L701.811,2221.73L350,1870L470,1800L350,1730Z");
+    submenuClip.appendChild(submenuShape); wheel.querySelector("defs").appendChild(submenuClip);
     const sectors = entries.map((_, index) => {
         const group = document.getElementById("slot-" + index);
         const target = document.getElementById("slot-" + index + "-target");
@@ -244,6 +254,9 @@
             region.addEventListener("mouseenter", () => { if (available(index, mode) && armed) region.focus(); });
             region.addEventListener("focus", () => highlight(index, mode));
         }
+        const edge = document.createElementNS(NS, "path");
+        edge.classList.add("submenu-edge"); edge.setAttribute("d", "M350,1870L470,1800L350,1730");
+        target.firstElementChild.appendChild(edge);
         return { group, target, nearby, content, badge, actionBadge };
     });
     const cancel = document.getElementById("center");
@@ -265,7 +278,7 @@
         focused = index; focusedMode = mode; clearHighlight(); sectors[index][mode].classList.add("hot");
         const [label, , kind] = entries[index];
         caption.textContent = label;
-        destination.textContent = kind === "navigation" ? "Navigation" : kind === "action" ? "Target NPC · Action" : mode === "nearby" ? "Everyone nearby" : "Target NPC";
+        destination.textContent = kind === "navigation" || kind === "submenu" ? "Navigation" : kind === "action" ? "Target NPC · Action" : mode === "nearby" ? "Everyone nearby" : "Target NPC";
         fit(hub, 100);
     }
     function focusRegion(index, mode) {
@@ -291,12 +304,12 @@
         if (window.magelight) window.magelight.send("__escapecapture", "0");
         completedRequest = request; disable();
         const [ , identity, kind] = index < 0 ? ["", "", "navigation"] : entries[index];
-        window.psWheelChoice(request + "|" + index + "|" + identity + "|" + (index < 0 ? "cancel" : kind === "navigation" ? "navigate" : kind === "action" ? "target" : mode));
+        window.psWheelChoice(request + "|" + index + "|" + identity + "|" + (index < 0 ? "cancel" : kind === "navigation" || kind === "submenu" ? "navigate" : kind === "action" ? "target" : mode));
     }
     function failClosed(token = "") {
         request = token; armed = false; finished = !token; focused = -1; focusedMode = "target";
         surface.dataset.armed = "false"; entries.fill(null); disable(); clearHighlight();
-        sectors.forEach(({ content, nearby, badge, actionBadge }) => { content.textContent = ""; nearby.style.display = "none"; badge.style.display = actionBadge.style.display = "none"; });
+        sectors.forEach(({ target, content, nearby, badge, actionBadge }) => { target.classList.remove("submenu"); content.textContent = ""; nearby.style.display = "none"; badge.style.display = actionBadge.style.display = "none"; });
         caption.textContent = ""; destination.textContent = "";
         if (window.magelight) window.magelight.send("__escapecapture", "0");
     }
@@ -309,13 +322,16 @@
         if (completedRequest === nextRequest) { failClosed(); return; }
         let batch;
         try { batch = JSON.parse(payload.slice(divider + 1)); } catch (_) { failClosed(nextRequest); return; }
-        if (!Array.isArray(batch) || batch.length !== 8 || batch.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation"].includes(item[2])))) { failClosed(nextRequest); return; }
+        if (!Array.isArray(batch) || batch.length !== 8 || batch.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu"].includes(item[2])))) { failClosed(nextRequest); return; }
         failClosed(nextRequest); finished = false;
         batch.forEach((item, index) => {
+            // Lua keeps the appended marker for UIExtensions; remove exactly that suffix in this view only.
+            if (item?.[2] === "submenu" && item[0].endsWith(" >")) item[0] = item[0].slice(0, -2);
             entries[index] = item;
             const { target, nearby, content, badge, actionBadge } = sectors[index];
             content.textContent = item ? item[0] : ""; fit(content, 110);
             const kind = item?.[2];
+            target.classList.toggle("submenu", kind === "submenu");
             target.setAttribute("aria-label", item ? item[0] + (kind === "action" ? " — Action, Target NPC" : kind === "intent" ? " — Target NPC" : " — Navigation") : "Empty slot");
             nearby.setAttribute("aria-label", item ? item[0] + " — Everyone nearby" : "Empty slot");
             nearby.style.display = badge.style.display = item && kind === "intent" ? "" : "none";

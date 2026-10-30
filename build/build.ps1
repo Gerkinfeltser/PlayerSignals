@@ -31,8 +31,8 @@ $background = $svg.SelectSingleNode("*[local-name()='rect' and @id='Artboard1']"
 if ($background) { [void]$svg.RemoveChild($background) }
 function Find-Layers($parent, $name) {
     $parent.SelectNodes("./*[local-name()='g']") | Where-Object {
-        $_.GetAttribute('id', 'http://www.serif.com/') -eq $name -or
-        $_.GetAttribute('id') -match ('^' + [regex]::Escape($name) + '\d*$')
+        $_.GetAttribute('id', 'http://www.serif.com/') -ieq $name -or
+        $_.GetAttribute('id') -imatch ('^' + [regex]::Escape($name) + '\d*$')
     }
 }
 function Get-FillPath($group, $name) {
@@ -44,48 +44,88 @@ function Get-FillPath($group, $name) {
     if ($paths.Count -ne 1) { throw "$name needs exactly one closed, filled single-contour hit path" }
     $paths[0]
 }
+function Set-CloneIds($node, $suffix) {
+    $localIds = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::Ordinal)
+    foreach ($child in $node.SelectNodes('descendant-or-self::*[@id]')) {
+        $id = $child.GetAttribute('id')
+        $localIds.Add($id, "$id-$suffix")
+        $child.SetAttribute('id', $localIds[$id])
+    }
+    foreach ($attribute in $node.SelectNodes('.//@*')) {
+        $attribute.Value = [regex]::Replace($attribute.Value, 'url\(\s*[''"]?#([^''")\s]+)[''"]?\s*\)', {
+            param($match)
+            $id = $match.Groups[1].Value
+            if ($localIds.ContainsKey($id)) { "url(#$($localIds[$id]))" } else { $match.Value }
+        })
+        if ($attribute.LocalName -eq 'href' -and $attribute.Value.StartsWith('#')) {
+            $id = $attribute.Value.Substring(1)
+            if ($localIds.ContainsKey($id)) { $attribute.Value = '#' + $localIds[$id] }
+        }
+    }
+}
 $rings = @($svg.SelectNodes(".//*[local-name()='g']") | Where-Object {
     $_.GetAttribute('id', 'http://www.serif.com/') -eq 'Ring' -or $_.GetAttribute('id') -eq 'Ring'
 })
 if ($rings.Count -ne 1) { throw 'Expected exactly one Ring group' }
 $pieces = @(Find-Layers $rings[0] 'Piece')
 $centers = @(Find-Layers $rings[0].ParentNode 'center')
-if ($pieces.Count -ne 8 -or $centers.Count -ne 1) { throw 'Expected eight Piece groups and one center beside Ring' }
+if ($centers.Count -ne 1) { throw 'Expected one center beside Ring' }
 $center = $centers[0]
 $centerHit = Get-FillPath $center 'center'
-$centerSplits = @{}
-foreach ($part in @('Top', 'Bottom')) {
-    $layers = @(Find-Layers $rings[0].ParentNode "CenterSplit$part")
-    if ($layers.Count -ne 1) { throw "Expected exactly one CenterSplit$part beside Ring" }
-    $centerSplits[$part] = $layers[0]
-}
-$slots = [Collections.Generic.HashSet[int]]::new()
-$regions = foreach ($piece in $pieces) {
-    $matrix = @(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
-    $transform = $piece.GetAttribute('transform')
-    if ($transform) {
-        if ($transform -notmatch '^matrix\(([^)]+)\)$') { throw "Unsupported Piece transform: $transform" }
+$splitTemplates = @(Find-Layers $rings[0].ParentNode 'CenterSplit')
+if ($splitTemplates.Count -eq 0) { $splitTemplates = @(Find-Layers $rings[0].ParentNode 'CenterSplitTop') }
+if ($splitTemplates.Count -ne 1) { throw 'Expected one CenterSplit top-half template (CenterSplitTop is also accepted)' }
+$splitTemplate = $splitTemplates[0]
+$sourceBottoms = @(Find-Layers $rings[0].ParentNode 'CenterSplitBottom')
+if ($sourceBottoms.Count) { Write-Warning 'Ignoring source CenterSplitBottom; rotating the top-half template instead.' }
+$templates = @($pieces | Where-Object {
+    $transform = $_.GetAttribute('transform')
+    $identity = -not $transform
+    if ($transform -match '^matrix\(([^)]+)\)$') {
         $matrix = @($Matches[1].Trim() -split '[,\s]+' | ForEach-Object {
             [double]::Parse($_, [Globalization.CultureInfo]::InvariantCulture)
         })
-        if ($matrix.Count -ne 6) { throw "Expected six matrix components: $transform" }
+        $identity = $matrix.Count -eq 6 -and $matrix[0] -eq 1 -and $matrix[1] -eq 0 -and
+            $matrix[2] -eq 0 -and $matrix[3] -eq 1 -and $matrix[4] -eq 0 -and $matrix[5] -eq 0
     }
-    $a, $b, $c, $d, $e, $f = $matrix
-    if ($a * $a + $b * $b -eq 0 -or [math]::Abs($a - $d) -gt .00001 -or [math]::Abs($b + $c) -gt .00001) {
-        throw "Piece transform must be a rotation with uniform positive scale: $transform"
+    $identity
+})
+if ($templates.Count -ne 1) { throw 'Expected exactly one identity Piece template (slot 0)' }
+if ($pieces.Count -gt 1) { Write-Warning "Ignoring $($pieces.Count - 1) non-identity Piece copies; using the slot-0 template." }
+$template = $templates[0]
+# Definitions use the referencing element's coordinate system; keep them once, outside the clones.
+$defs = $svg.SelectSingleNode("./*[local-name()='defs']")
+if (-not $defs) { $defs = $art.CreateElement('defs', $svg.NamespaceURI); [void]$svg.AppendChild($defs) }
+$definitionKinds = "local-name()='defs' or local-name()='clipPath' or local-name()='linearGradient' or local-name()='radialGradient' or local-name()='filter' or local-name()='mask' or local-name()='pattern' or local-name()='marker' or local-name()='symbol'"
+foreach ($layer in @($template, $splitTemplate)) {
+    foreach ($definition in @($layer.SelectNodes(".//*[$definitionKinds][not(ancestor::*[$definitionKinds])]"))) {
+        [void]$defs.AppendChild($definition)
     }
-    $angle = [math]::Atan2($b, $a) * 180 / [math]::PI
-    $step = [int][math]::Round($angle / 45)
-    $slot = ($step % 8 + 8) % 8
-    if ([math]::Abs($angle - $step * 45) -gt .01 -or -not $slots.Add($slot)) {
-        throw "Piece rotation must identify a distinct 45-degree slot: $transform"
-    }
+}
+$splitParent = $splitTemplate.ParentNode
+foreach ($name in @('CenterSplit', 'CenterSplitTop', 'CenterSplitBottom')) {
+    foreach ($layer in @(Find-Layers $splitParent $name)) { [void]$splitParent.RemoveChild($layer) }
+}
+$centerSplits = @{}
+foreach ($part in @('Top', 'Bottom')) {
+    $split = $splitTemplate.CloneNode($true)
+    Set-CloneIds $split "centerSplit$part"
+    if ($part -eq 'Bottom') { $split.SetAttribute('transform', ('rotate(180 1800 1800) ' + $splitTemplate.GetAttribute('transform')).Trim()) }
+    [void]$splitParent.AppendChild($split)
+    $centerSplits[$part] = $split
+}
+foreach ($piece in $pieces) { [void]$rings[0].RemoveChild($piece) }
+$regions = foreach ($slot in 0..7) {
+    $piece = $template.CloneNode($true)
+    $piece.SetAttribute('transform', "rotate($($slot * 45) 1800 1800)")
+    [void]$rings[0].AppendChild($piece)
     $parts = @{}
     foreach ($name in @('Pie', 'Chevron', 'ChevronKnot', 'Submenu', 'Upmenu')) {
         $layers = @(Find-Layers $piece $name)
         if ($layers.Count -ne 1) { throw "Slot $slot needs exactly one $name layer" }
         $parts[$name] = $layers[0]
     }
+    Set-CloneIds $piece "slot-$slot"
     @{ Piece = $piece; Slot = $slot; Parts = $parts
        TargetHit = (Get-FillPath $parts.Pie "Slot $slot Pie")
        NearbyHit = (Get-FillPath $parts.Chevron "Slot $slot Chevron") }

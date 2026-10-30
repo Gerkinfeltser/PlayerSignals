@@ -32,6 +32,13 @@ foreach ($id in @('center', 'center-hit') + @(0..7 | ForEach-Object {
 })) {
     if ($svg.SelectNodes("//*[@id='$id']").Count -ne 1) { throw "Missing or duplicate radial region: $id" }
 }
+$navigation = New-Object System.Xml.XmlDocument
+$navigation.XmlResolver = $null
+$navigation.Load((Join-Path $repo 'media/src/Navigation.svg'))
+$defs = $svg.SelectSingleNode("*[local-name()='defs']")
+foreach ($node in $navigation.SelectNodes("/*/*[local-name()='defs']/* | /*/*[local-name()='g']")) {
+    [void]$defs.AppendChild($art.ImportNode($node, $true))
+}
 $background = $svg.SelectSingleNode("*[local-name()='rect' and @id='Artboard1']")
 if ($background) { [void]$svg.RemoveChild($background) }
 $svg.SetAttribute('id', 'wheelSvg')

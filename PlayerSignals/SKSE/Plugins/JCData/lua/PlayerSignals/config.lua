@@ -253,7 +253,8 @@ function M.wheelPayload(slots)
                 local kind = 'navigation'
                 if slot.kind == 'action' or slot.actionName ~= nil then kind = 'action'
                 elseif slot.kind == 'intent' then kind = 'intent'
-                elseif slot.kind == 'submenu' then kind = 'submenu' end
+                elseif slot.kind == 'submenu' then kind = 'submenu'
+                elseif slot.kind == 'control' and slot.control == 'back' then kind = 'back' end
                 local identity = kind == 'action' and slot.actionName or kind == 'intent' and slot.intent or ''
                 entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. ']'
             end

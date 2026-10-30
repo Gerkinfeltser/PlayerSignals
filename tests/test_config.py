@@ -39,14 +39,16 @@ class ConfigValidation(unittest.TestCase):
             ('quote " slash \\ pipe | controls \x00\x01\b\f\n\r\t end', 'intent_\\|"', 'intent'),
             ('café 雪 >', '', 'submenu'),
             ('{"intent":"metadata-like"}', 'drink_alcohol', 'action'),
-            ('Back <', '', 'navigation'),
+            ('Back <', '', 'back'),
             ('Close', '', 'navigation'),
             ('tail', 'last', 'intent'),
         ]
         for index, value in zip((1, 3, 4, 6, 7, 8), values):
             slot = self.lua.table()
             slot['label'] = value[0]
-            slot['kind'] = 'control' if value[2] == 'navigation' else value[2]
+            slot['kind'] = 'control' if value[2] in ('navigation', 'back') else value[2]
+            if value[2] in ('navigation', 'back'):
+                slot['control'] = 'back' if value[2] == 'back' else 'close'
             if value[2] == 'action':
                 slot['actionName'], slot['intent'] = value[1], 'offer_drink'
             else:

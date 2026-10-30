@@ -115,7 +115,7 @@ Keep labels short for comfortable reading. UIExtensions does not automatically s
 { "label": "People", "submenu": "social" }
 ```
 
-This opens the wheel named `social`; the destination must exist under `wheels`. Magelight displays **People** on a notched, blue-slate submenu slice; hover/focus still uses the distinct bronze-gold highlight. UIExtensions displays **People >**.
+This opens the wheel named `social`; the destination must exist under `wheels`. Magelight displays **People** on a blue-slate submenu slice with the owner's inward-pointing Submenu artwork; hover/focus still uses the distinct bronze-gold highlight. Back uses the owner's outward-pointing Upmenu artwork. UIExtensions displays **People >**.
 
 ```json
 { "label": "Return", "control": "back" }

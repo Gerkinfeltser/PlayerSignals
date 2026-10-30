@@ -22,7 +22,7 @@ frame.addEventListener("load", async () => {
         const layout = await (await fetch("../PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json")).json();
         const slotEntry = s => {
             if (!s) return null;
-            const kind = s.action ? "action" : s.intent ? "intent" : s.submenu ? "submenu" : "navigation";
+            const kind = s.action ? "action" : s.intent ? "intent" : s.submenu ? "submenu" : s.control === "back" ? "back" : "navigation";
             const identity = s.action?.name || s.intent || "";
             return [s.label + (s.submenu ? " >" : s.control === "back" ? " <" : ""), identity, kind];
         };
@@ -56,7 +56,7 @@ frame.addEventListener("load", async () => {
                     view.psWheelArm("stale"); assert(!visible(), "Stale request revealed page");
                     view.psWheelArm(token); click(region(i, mode));
                     const entry = slotEntry(slots[i]);
-                    assert(replies.pop() === `${token}|${i}|${entry[1]}|${["navigation", "submenu"].includes(entry[2]) ? "navigate" : mode}`, "Slot identity/kind/destination lost");
+                    assert(replies.pop() === `${token}|${i}|${entry[1]}|${["navigation", "submenu", "back"].includes(entry[2]) ? "navigate" : mode}`, "Slot identity/kind/destination lost");
                     assert(!visible(), "Selection left old choices visible");
                     click(region(i, mode)); view.psWheelArm(token); click(region(i, mode));
                     view.psWheelBegin(token + "|" + slotsPayload(slots)); view.psWheelArm(token); click(region(i, mode));
@@ -73,16 +73,30 @@ frame.addEventListener("load", async () => {
         doc.documentElement.style.setProperty("--submenu-fill", "#334658");
         assert(fill(0) !== idleTint && fill(1) === selectedTint, "Retuning submenu tint changed selection or had no effect");
         doc.documentElement.style.removeProperty("--submenu-fill");
-        for (let i = 0; i < 8; i++) {
-            const path = doc.getElementById(`slot-${i}-target-hit`);
-            const point = svg.createSVGPoint(); point.x = 320; point.y = 1800;
-            const cut = point.matrixTransform(path.getScreenCTM());
-            assert(doc.elementFromPoint(cut.x, cut.y)?.closest(".region") !== region(i), "Submenu notch retained its old hit area");
-            point.x = 900;
-            const body = point.matrixTransform(path.getScreenCTM());
-            assert(doc.elementFromPoint(body.x, body.y)?.closest(".region") === region(i), "Submenu notch stole the body hit area");
-        }
+        const checkArt = (kind, other) => {
+            for (let i = 0; i < 8; i++) {
+                const art = region(i).querySelector("." + kind + "-art");
+                assert(getComputedStyle(art).display !== "none" && getComputedStyle(region(i).querySelector("." + other + "-art")).display === "none", "Wrong navigation artwork displayed");
+                const box = art.getBBox(), point = svg.createSVGPoint();
+                point.x = box.x + box.width / 2; point.y = box.y + box.height / 2;
+                const root = point.matrixTransform(svg.getCTM().inverse().multiply(art.getCTM()));
+                const dx = root.x - 1800, dy = root.y - 1800, radius = Math.hypot(dx, dy);
+                assert(radius > 450 && radius < 800 && (dx * Math.sin(i * Math.PI / 4) - dy * Math.cos(i * Math.PI / 4)) / radius > .99, "Authored navigation art lost its near-hub position or clockwise rotation");
+                const screen = point.matrixTransform(art.getScreenCTM());
+                assert(doc.elementFromPoint(screen.x, screen.y)?.closest(".region") === region(i), "Navigation art stole its slice's hit area");
+                const path = doc.getElementById(`slot-${i}-target-hit`);
+                point.x = 320; point.y = 1800;
+                const restoredTip = point.matrixTransform(path.getScreenCTM());
+                assert(doc.elementFromPoint(restoredTip.x, restoredTip.y)?.closest(".region") === region(i), "Removed runtime notch still clips the slice tip");
+            }
+        };
+        checkArt("submenu", "back");
         key("Escape"); assert(replies.pop() === "submenu-shapes|-1||cancel", "Submenu shape cancellation failed");
+        arm("back-shapes", Array.from({length:8}, (_, i) => ({label:"Up " + i, control:"back"})));
+        checkArt("back", "submenu");
+        assert(fill(1) !== idleTint, "Back acquired submenu tint");
+        key("ArrowDown"); key("Enter");
+        assert(replies.pop() === "back-shapes|0||navigate", "Back acquired nearby mode or lost navigation callback");
         const markers = [
             {label:"Literal >", intent:"greet"},
             {label:"Menu > inside", submenu:"child"},
@@ -97,13 +111,13 @@ frame.addEventListener("load", async () => {
             assert(region(index).getAttribute("aria-label").startsWith(label + " — "), "Accessible label retained a generated submenu marker");
         }
         assert(fill(0) !== idleTint, "Non-submenu retained submenu tint");
-        assert(getComputedStyle(region(0).firstElementChild).clipPath === "none" && getComputedStyle(region(3).firstElementChild).clipPath === "none", "Intent or Back retained submenu clipping");
+        assert(getComputedStyle(region(0).querySelector(".submenu-art")).display === "none" && getComputedStyle(region(3).querySelector(".back-art")).display !== "none" && getComputedStyle(region(4).querySelector(".back-art")).display === "none", "Intent, Back or Close displayed the wrong navigation artwork");
         key("Escape"); assert(replies.pop() === "submenu-markers|-1||cancel", "Marker setup cancellation failed");
         arm("submenu-clear", [null]);
-        assert([...doc.querySelectorAll(".submenu-edge")].every(edge => getComputedStyle(edge).display === "none"), "Cleared slots retained submenu decoration");
+        assert([...doc.querySelectorAll(".navigation-art")].every(art => getComputedStyle(art).display === "none"), "Cleared slots retained navigation artwork");
         arm("submenu-before-bad", [{label:"Child",submenu:"child"}]);
         view.psWheelBegin("submenu-bad|[null]");
-        assert(!visible() && [...doc.querySelectorAll(".submenu-edge")].every(edge => getComputedStyle(edge).display === "none"), "Invalid payload retained submenu decoration");
+        assert(!visible() && [...doc.querySelectorAll(".navigation-art")].every(art => getComputedStyle(art).display === "none"), "Invalid payload retained navigation artwork");
         arm("root-close", layout.wheels[layout.root]);
         const closeIndex = layout.wheels[layout.root].findIndex(slot => slot?.control === "close");
         assert(closeIndex === 7 && doc.querySelector('.sectorLabel[data-index="7"]').textContent === "Close", "Shipped root Close changed");
@@ -154,7 +168,7 @@ frame.addEventListener("load", async () => {
             const token = k + "-" + name; arm(token, layout.wheels[name]); key(k);
             assert(replies.pop() === token + "|-1||cancel", k + " failed to cancel " + name);
         }
-        report.textContent = "PASS: submenu notch hit testing in all eight slices; retunable idle tint distinct from hover selection; marker-free submenu labels/caption/accessibility with authored text and Back preserved; cleared/invalid style reset; unchanged root Close; authored clockwise gesture geometry and non-box hit areas; all shipped target/nearby/navigation choices; action target-only behavior; pre-arm/stale/duplicate guards; literal Unicode labels; holes; keyboard destinations; center/Tab/Escape cancellation; native-mode disarm and reopening. Browser-only; no native Papyrus/game proof.";
+        report.textContent = "PASS: authored submenu and Back artwork position/rotation and pointer-safe hit testing in all eight slices; restored slice tips; retunable idle tint distinct from hover selection; marker-free submenu labels/caption/accessibility with authored text and Back preserved; cleared/invalid style reset; unchanged root Close; authored clockwise gesture geometry and non-box hit areas; all shipped target/nearby/navigation choices; action target-only behavior; pre-arm/stale/duplicate guards; literal Unicode labels; holes; keyboard destinations; center/Tab/Escape cancellation; native-mode disarm and reopening. Browser-only; no native Papyrus/game proof.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; throw error; }
 });
 // Model only the host boundary installed before page script execution; render the actual generated page unchanged otherwise.

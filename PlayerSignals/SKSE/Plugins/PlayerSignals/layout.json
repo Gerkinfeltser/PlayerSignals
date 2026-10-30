@@ -13,7 +13,7 @@
       { "label": "Social", "submenu": "social" },
       { "label": "Signals", "submenu": "signals" },
       { "label": "Actions", "submenu": "actions" },
-      { "label": "Close", "control": "close" }
+      null
     ],
     "social": [
       { "label": "Thank you", "intent": "thanks" },
@@ -28,10 +28,21 @@
     "more_social": [
       { "label": "Offer", "intent": "offer" },
       { "label": "Request", "intent": "ask" },
+      null,
+      null,
+      null,
+      null,
+      null,
       { "label": "Back", "control": "back" }
     ],
     "actions": [
       { "label": "Drink alcohol", "action": { "name": "drink_alcohol", "args": { "drinkName": "" } } },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
       { "label": "Back", "control": "back" }
     ],
     "signals": [

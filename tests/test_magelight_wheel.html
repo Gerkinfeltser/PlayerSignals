@@ -22,6 +22,10 @@ frame.addEventListener("load", async () => {
             if (attribute.localName === "href" && attribute.value.startsWith("#")) references.push(attribute.value.slice(1));
             for (const id of references) assert(doc.getElementById(id), "Generated artwork lost reference #" + id);
         }
+        for (const id of ["centerSplitTop", "centerSplitBottom"]) {
+            const split = doc.getElementById(id);
+            assert(split && getComputedStyle(split).display === "none" && getComputedStyle(split).pointerEvents === "none" && split.getAttribute("aria-hidden") === "true" && !split.hasAttribute("tabindex"), "Reserved split hub artwork became visible, interactive or focusable");
+        }
         const visible = () => getComputedStyle(surface).visibility === "visible";
         const region = (index, mode = "target") => doc.getElementById(`slot-${index}-${mode}`);
         const click = element => element.dispatchEvent(new view.MouseEvent("click", {bubbles:true}));
@@ -57,13 +61,15 @@ frame.addEventListener("load", async () => {
         for (const [name, slots] of Object.entries(layout.wheels)) {
             for (let i = 0; i < slots.length; i++) {
                 if (!slots[i]) continue;
-                for (const mode of !slots[i].action && slots[i].intent ? ["target", "nearby"] : ["target"]) {
+                for (const mode of ["target", "nearby"]) {
                     const token = `${name}-${i}-${mode}`;
                     populate(token, slots); click(region(i, mode)); assert(replies.length === 0, "Pre-arm choice escaped");
                     view.psWheelArm("stale"); assert(!visible(), "Stale request revealed page");
-                    view.psWheelArm(token); click(region(i, mode));
+                    view.psWheelArm(token);
                     const entry = slotEntry(slots[i]);
-                    assert(replies.pop() === `${token}|${i}|${entry[1]}|${["navigation", "submenu", "back"].includes(entry[2]) ? "navigate" : mode}`, "Slot identity/kind/destination lost");
+                    assert(getComputedStyle(region(i, "nearby")).display !== "none" && doc.querySelectorAll(".nearbyLabel")[i].style.display === (entry[2] === "intent" ? "" : "none"), "Chevron visibility or gesture-only ALL cue changed");
+                    click(region(i, mode));
+                    assert(replies.pop() === `${token}|${i}|${entry[1]}|${["navigation", "submenu", "back"].includes(entry[2]) ? "navigate" : entry[2] === "action" ? "target" : mode}`, "Slot identity/kind/destination lost");
                     assert(!visible(), "Selection left old choices visible");
                     click(region(i, mode)); view.psWheelArm(token); click(region(i, mode));
                     view.psWheelBegin(token + "|" + slotsPayload(slots)); view.psWheelArm(token); click(region(i, mode));
@@ -91,10 +97,6 @@ frame.addEventListener("load", async () => {
                 assert(radius > 450 && radius < 800 && (dx * Math.sin(i * Math.PI / 4) - dy * Math.cos(i * Math.PI / 4)) / radius > .99, "Authored navigation art lost its near-hub position or clockwise rotation");
                 const screen = point.matrixTransform(art.getScreenCTM());
                 assert(doc.elementFromPoint(screen.x, screen.y)?.closest(".region") === region(i), "Navigation art stole its slice's hit area");
-                const path = doc.getElementById(`slot-${i}-target-hit`);
-                point.x = 320; point.y = 1800;
-                const restoredTip = point.matrixTransform(path.getScreenCTM());
-                assert(doc.elementFromPoint(restoredTip.x, restoredTip.y)?.closest(".region") === region(i), "Removed runtime notch still clips the slice tip");
             }
         };
         checkArt("submenu", "back");
@@ -128,10 +130,15 @@ frame.addEventListener("load", async () => {
         arm("submenu-before-bad", [{label:"Child",submenu:"child"}]);
         view.psWheelBegin("submenu-bad|[null]");
         assert(!visible() && [...doc.querySelectorAll(".navigation-art")].every(art => getComputedStyle(art).display === "none"), "Invalid payload retained navigation artwork");
-        arm("root-close", layout.wheels[layout.root]);
-        const closeIndex = layout.wheels[layout.root].findIndex(slot => slot?.control === "close");
-        assert(closeIndex === 7 && doc.querySelector('.sectorLabel[data-index="7"]').textContent === "Close", "Shipped root Close changed");
-        click(region(closeIndex)); assert(replies.pop() === "root-close|7||navigate", "Root Close callback changed");
+        arm("root-empty", layout.wheels[layout.root]);
+        assert(layout.wheels[layout.root][7] === null, "Root slot 7 must remain empty");
+        click(region(7)); click(region(7, "nearby")); assert(replies.length === 0, "Empty root slot accepted a choice");
+        for (let i = 0; i < 8; i++) assert(getComputedStyle(region(i, "nearby")).display !== "none", "Empty or navigation chevron disappeared");
+        key("Escape"); assert(replies.pop() === "root-empty|-1||cancel", "Root cancellation failed");
+        for (const mode of ["target", "nearby"]) {
+            arm("custom-close-" + mode, [{label:"Custom exit", control:"close"}]);
+            click(region(0, mode)); assert(replies.pop() === `custom-close-${mode}|0||navigate`, "Custom Close lost navigation semantics");
+        }
         const literal = '<img src=x onerror="throw Error()"> | "quoted" \\ Ω 😀\nnext\tline and extra descriptive words to wrap across the hub';
         const sparse = [null, {label:literal, intent:"greet"}, null, null, {label:"Second", intent:"deny"}];
         arm("literal", sparse);
@@ -149,21 +156,30 @@ frame.addEventListener("load", async () => {
         arm("target-key", sparse); key("Enter"); assert(replies.pop() === "target-key|1|greet|target", "Target keyboard selection lost mode");
         const navigation = [null, {label:"Open", submenu:"child"}];
         arm("navigate", navigation);
-        assert(getComputedStyle(region(1, "nearby")).display === "none", "Navigation exposed group chevron");
-        click(region(1, "nearby")); assert(replies.length === 0, "Navigation accepted nearby action");
-        key("ArrowDown"); key("Enter"); assert(replies.pop() === "navigate|1||navigate", "Navigation acquired or retained group mode");
+        assert(getComputedStyle(region(1, "nearby")).display !== "none", "Navigation chevron disappeared");
+        region(1, "nearby").dispatchEvent(new view.MouseEvent("mouseenter", {bubbles:false}));
+        assert(region(1).classList.contains("hot") && region(1, "nearby").classList.contains("hot") && getComputedStyle(doc.getElementById("slot-1-target-hit")).fill === getComputedStyle(doc.getElementById("slot-1-nearby-hit")).fill && doc.getElementById("destination").textContent === "Navigation", "Navigation chevron did not share inner highlight/destination");
+        key("Enter"); assert(replies.pop() === "navigate|1||navigate", "Navigation chevron keyboard selection acquired group mode");
         const action = [null, {label:"Drink", action:{name:"drink_alcohol", args:{drinkName:""}}, event:"both", intent:"offer"}];
         arm("action-hover", action);
         region(1).dispatchEvent(new view.MouseEvent("mouseenter", {bubbles:false}));
         assert(doc.activeElement === region(1) && doc.getElementById("destination").textContent.includes("Target NPC"), "Action hover did not focus target destination");
-        assert(doc.querySelector(".actionLabel").textContent === "ACTION" && getComputedStyle(region(1, "nearby")).display === "none" && doc.querySelector(".nearbyLabel").style.display === "none", "Action exposed nearby chevron or lacked ACTION badge");
+        assert(doc.querySelectorAll(".actionLabel")[1].textContent === "ACTION" && getComputedStyle(region(1, "nearby")).display !== "none" && doc.querySelectorAll(".nearbyLabel")[1].style.display === "none", "Action chevron disappeared, gained ALL, or lacked ACTION badge");
         const actionPoint = rootPoint(Math.PI / 4, 980).matrixTransform(svg.getScreenCTM());
         assert(doc.elementFromPoint(actionPoint.x, actionPoint.y).closest(".region") === region(1), "Action target hit area no longer selects the target region");
-        click(region(1, "nearby")); assert(replies.length === 0, "Action accepted nearby click");
+        region(1, "nearby").dispatchEvent(new view.MouseEvent("mouseenter", {bubbles:false}));
+        assert(region(1).classList.contains("hot") && region(1, "nearby").classList.contains("hot") && doc.getElementById("destination").textContent.includes("Target NPC") && !region(1, "nearby").getAttribute("aria-label").includes("Everyone nearby"), "Action chevron offered a nearby destination");
+        click(region(1, "nearby")); assert(replies.pop() === "action-hover|1|drink_alcohol|target", "Action chevron lost target identity or mode");
+        arm("action-key", action);
         key("ArrowDown"); assert(doc.activeElement === region(1), "ArrowDown moved an action away from target");
-        key("Enter"); assert(replies.pop() === "action-hover|1|drink_alcohol|target", "Action callback lost target identity or mode");
+        key("Enter"); assert(replies.pop() === "action-key|1|drink_alcohol|target", "Action keyboard callback lost target identity or mode");
         for (const token of ["empty", "empty-again"]) {
             arm(token, []); assert(doc.activeElement === doc.getElementById("center") && doc.getElementById("caption").textContent === "Cancel", "Empty wheel lacks cancel focus/feedback");
+            for (let i = 0; i < 8; i++) {
+                assert(getComputedStyle(region(i, "nearby")).display !== "none" && region(i, "nearby").getAttribute("aria-disabled") === "true", "Empty chevron hidden or enabled");
+                click(region(i, "nearby"));
+            }
+            assert(replies.length === 0, "Disabled chevron submitted a choice");
             click(doc.getElementById("center")); assert(replies.pop() === token + "|-1||cancel", "Center cancellation failed");
         }
         view.psWheelBegin("bad|[null]"); view.psWheelArm("bad"); click(region(0)); assert(replies.length === 0, "Malformed batch allowed selection");
@@ -178,7 +194,7 @@ frame.addEventListener("load", async () => {
             const token = k + "-" + name; arm(token, layout.wheels[name]); key(k);
             assert(replies.pop() === token + "|-1||cancel", k + " failed to cancel " + name);
         }
-        report.textContent = "PASS: authored submenu and Back artwork position/rotation and pointer-safe hit testing in all eight slices; restored slice tips; retunable idle tint distinct from hover selection; marker-free submenu and Back labels/caption/accessibility with exactly one typed suffix removed and authored markers preserved; cleared/invalid style reset; unchanged root Close; authored clockwise gesture geometry and non-box hit areas; all shipped target/nearby/navigation choices; action target-only behavior; pre-arm/stale/duplicate guards; literal Unicode labels; holes; keyboard destinations; center/Tab/Escape cancellation; native-mode disarm and reopening. Browser-only; no native Papyrus/game proof.";
+        report.textContent = "PASS: authored submenu and Back artwork/rotation and pointer-safe hit testing; retunable idle tint distinct from selection; typed marker stripping; all eight chevrons visible including inert empty slots; coherent non-gesture inner/chevron highlight and destination; all shipped inner/chevron callbacks; gesture-only ALL/nearby, target-only actions and navigation-only controls including custom Close; empty root slot; pre-arm/stale/duplicate guards; Unicode labels; holes; keyboard destinations; center/Tab/Escape cancellation; native-mode disarm and reopening. Browser-only; no native Papyrus/game proof.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; throw error; }
 });
 // Model only the host boundary installed before page script execution; render the actual generated page unchanged otherwise.

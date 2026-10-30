@@ -53,6 +53,12 @@ $centers = @(Find-Layers $rings[0].ParentNode 'center')
 if ($pieces.Count -ne 8 -or $centers.Count -ne 1) { throw 'Expected eight Piece groups and one center beside Ring' }
 $center = $centers[0]
 $centerHit = Get-FillPath $center 'center'
+$centerSplits = @{}
+foreach ($part in @('Top', 'Bottom')) {
+    $layers = @(Find-Layers $rings[0].ParentNode "CenterSplit$part")
+    if ($layers.Count -ne 1) { throw "Expected exactly one CenterSplit$part beside Ring" }
+    $centerSplits[$part] = $layers[0]
+}
 $slots = [Collections.Generic.HashSet[int]]::new()
 $regions = foreach ($piece in $pieces) {
     $matrix = @(1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
@@ -111,6 +117,12 @@ foreach ($region in $regions) {
 }
 $center.SetAttribute('id', 'center')
 $centerHit.SetAttribute('id', 'center-hit'); $centerHit.SetAttribute('class', 'hit-area')
+foreach ($part in @('Top', 'Bottom')) {
+    $split = $centerSplits[$part]
+    $split.SetAttribute('id', "centerSplit$part")
+    $split.SetAttribute('style', 'display:none;pointer-events:none;')
+    $split.SetAttribute('aria-hidden', 'true')
+}
 $ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 foreach ($node in $svg.SelectNodes('descendant-or-self::*[@id]')) {
     if (-not $ids.Add($node.GetAttribute('id'))) { throw "Duplicate generated SVG ID: $($node.GetAttribute('id'))" }

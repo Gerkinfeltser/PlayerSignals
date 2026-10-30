@@ -37,9 +37,9 @@ If the captured NPC is still alive, enabled, and loaded when you choose, SkyrimN
 
 You'll see a small notification with your character's name only if SkyrimNet's API accepts the narration. For the **Greet** intent, group feedback looks like `Bill greets.`; targeted feedback to the captured NPC Ted looks like `Bill greets Ted.` Think of it as a receipt—not a promise that an NPC heard you or will answer.
 
-Open a submenu by choosing **Social** (**Social >** in UIExtensions), for example. Choose **Back** (**Back <** in UIExtensions) to return to the previous wheel. **Close** exits the main wheel, and **Tab** cancels. Opening submenus, going Back, or cancelling doesn't send a narration. Browsing isn't secretly agreeing to everything. Convenient!
+Open a submenu by choosing **Social** (**Social >** in UIExtensions), for example. Choose **Back** (**Back <** in UIExtensions) to return to the previous wheel; it occupies slot 7 (top-left in Magelight) in every shipped submenu. The root's final slot is empty, with no shipped Close entry. **Tab** cancels; Magelight also offers center-click and **Escape**. Opening submenus, going Back, or cancelling doesn't send a narration.
 
-**Experimental Magelight branch:** the authored radial wheel has eight fixed positions clockwise from the top. Click a gray gesture body for the target NPC, or its white **ALL** chevron for everyone nearby without Shift. With no captured NPC, both gesture regions address nearby; Shift still overrides an inner gesture selection. Navigation and **ACTION** entries have no separate group chevron; actions ignore Shift and require a valid target. Hover changes the center label/destination. Left/Right changes entry, Up selects its inner body, Down selects a gesture's nearby chevron, and Enter/Space selects the focused region. Center, Tab or Escape cancels; use native Escape during blank loading/navigation. Null positions remain disabled. This revision is browser-checked and built, not yet game-verified.
+**Experimental Magelight branch:** the authored radial wheel has eight fixed positions clockwise from the top. Click a gray gesture body for the target NPC, or its white **ALL** chevron for everyone nearby without Shift. With no captured NPC, both gesture regions address nearby; Shift still overrides an inner gesture selection. Chevron and knot art stays visible on every slice, including dimmed, inert empty slots. Only gestures show **ALL** or offer nearby mode. For navigation and **ACTION** entries, the chevron selects the same choice as the inner piece; both highlight together. Actions ignore Shift and require a valid target. Hover changes the center label/destination. Left/Right changes entry, Up selects its inner body, Down selects a gesture's nearby chevron, and Enter/Space selects the focused region. Center, Tab or Escape cancels; use native Escape during blank loading/navigation. This revision is browser-checked and built, not yet game-verified.
 
 The wheel won't open while you're in a blocking menu, another custom menu, or a gameplay state where the required controls are disabled.
 
@@ -66,12 +66,12 @@ The entries below use UIExtensions' navigation markers. Magelight shows the same
 
 | Wheel | Entries |
 |---|---|
-| Main | Confirm / Yes, Deny / No, Greet, Farewell, Social >, Signals >, Actions >, Close |
+| Main | Confirm / Yes, Deny / No, Greet, Farewell, Social >, Signals >, Actions >, empty |
 | Social | Thank you, Sorry, Show respect, Welcome, Well done, More social >, Attitude >, Back < |
 | Signals | Come here, Follow me, Wait here, Quiet, Ready, Watch out, Get attention, Back < |
 | Attitude | Unsure, Let me think, Not understood, Approve, Disapprove, Challenge, Surrender, Back < |
-| More social | Offer, Request, Back < |
-| Actions | Drink alcohol (requires iActions registration), Back < |
+| More social | Offer, Request, empty × 5, Back < |
+| Actions | Drink alcohol (requires iActions registration), empty × 6, Back < |
 
 A few distinctions are worth keeping:
 
@@ -125,7 +125,7 @@ This opens the wheel named `social`; the destination must exist under `wheels`. 
 
 This displays **Return** in Magelight and **Return <** in UIExtensions. Back returns to the wheel you came from; at the root, it closes the menu. Use `"control": "close"` for a Close entry.
 
-**Leave the navigation arrows out of your JSON labels.** Lua adds them for UIExtensions; Magelight strips exactly one generated terminal ` >` from submenu entries and ` <` from Back entries. Authored text and other entry kinds are unchanged. The root Close slot remains unchanged. A `null` entry disables that position without shifting the later entries. Inline glyphs can be typed directly into labels.
+**Leave the navigation arrows out of your JSON labels.** Lua adds them for UIExtensions; Magelight strips exactly one generated terminal ` >` from submenu entries and ` <` from Back entries. Authored text and other entry kinds are unchanged. The shipped root's final slot is empty; custom layouts may still put Close anywhere, with no special darker Close fill. A `null` entry disables that position without shifting the later entries. Inline glyphs can be typed directly into labels.
 
 Each wheel supports **1–8 positions**, and each non-null entry needs a label plus one primary kind: `intent`, `action`, `submenu`, or `control`. An action may additionally carry the paired `event` and catalog `intent` fields described below. Don't link submenus into a loop. Reusing the same supported intent in more than one slot is fine.
 

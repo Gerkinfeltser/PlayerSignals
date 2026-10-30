@@ -59,6 +59,21 @@ class ConfigValidation(unittest.TestCase):
         payload = self.module.wheelPayload(slots)
         self.assertEqual(json.loads(payload), expected)
 
+    def test_shipped_navigation_keeps_all_intents_and_custom_close(self):
+        layout = json.loads(CATALOG.with_name('layout.json').read_text(encoding='utf-8'))
+        self.parse(layout)
+        wheels = layout['wheels']
+        self.assertIsNone(wheels[layout['root']][7])
+        for name, slots in wheels.items():
+            self.assertFalse(any(slot and slot.get('control') == 'close' for slot in slots), name)
+            if name != layout['root']:
+                self.assertEqual(slots[7].get('control'), 'back', name)
+        self.assertEqual({slot['intent'] for slots in wheels.values() for slot in slots
+                          if slot and 'intent' in slot}, set(self.catalog['intents']))
+        custom = minimal()
+        custom['wheels']['main'] = [{'label': 'Exit', 'control': 'close'}]
+        self.parse(custom)
+
     def test_action_slots_validate_metadata_and_event_pair(self):
         config = minimal()
         config['wheels']['main'] = [

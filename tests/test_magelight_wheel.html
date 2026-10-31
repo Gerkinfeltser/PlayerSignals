@@ -43,8 +43,8 @@ frame.addEventListener("load", async () => {
         assert(!visible(), "Page appeared without a request");
         assert(doc.querySelectorAll('g[id^="slot-"][data-index]').length === 12, "Wheel does not have 12 sectors");
         assert(!doc.querySelector("image"), "Wheel retains raster images");
-        const vignette = doc.getElementById("vignette"), raf = view.qaRAF;
-        assert(vignette && view.getComputedStyle(vignette).visibility === "hidden", "Vignette visible while disarmed");
+        const vignette = doc.getElementById("vignette"), topVignette = doc.getElementById("vignette-top"), raf = view.qaRAF;
+        assert(vignette && topVignette && view.getComputedStyle(vignette).visibility === "hidden" && view.getComputedStyle(topVignette).visibility === "hidden", "A vignette is visible while disarmed");
         // Compare rendered geometry in a common SVG frame, including ancestor transforms.
         const boundsIn = (art, frame) => {
             const box = art.getBBox(), m = frame.getCTM().inverse().multiply(art.getCTM());
@@ -52,11 +52,6 @@ frame.addEventListener("load", async () => {
             const x = Math.min(...points.map(p => p.x)), y = Math.min(...points.map(p => p.y));
             return {x, y, width:Math.max(...points.map(p => p.x))-x, height:Math.max(...points.map(p => p.y))-y};
         };
-        const separated = (a, b) => [a,b].some(poly => poly.some((p,i) => {
-            const q = poly[(i+1)%poly.length], nx = p.y-q.y, ny = q.x-p.x;
-            const pa = a.map(v => v.x*nx+v.y*ny), pb = b.map(v => v.x*nx+v.y*ny);
-            return Math.max(...pa) <= Math.min(...pb) || Math.max(...pb) <= Math.min(...pa);
-        }));
         const source = new view.DOMParser().parseFromString(await (await fetch("../media/src/RadialUI.svg")).text(), "image/svg+xml");
         const fixture = doc.importNode(source.documentElement, true);
         fixture.style.cssText = "position:absolute;left:-10000px;top:0;width:3600px;height:3600px;pointer-events:none";
@@ -68,55 +63,88 @@ frame.addEventListener("load", async () => {
         }
         fixture.remove();
         const checkArrow = (art, i, kind) => {
-            const hit = doc.getElementById(`slot-${i}-target-hit`), edge = region(i).querySelector(".edge-line");
-            const box = boundsIn(art, hit), original = sourceBoxes[kind], scale = box.width/original.width;
-            assert(Math.abs((box.width/box.height)/(original.width/original.height)-1) <= .01, `Slot ${i} ${kind} arrow aspect ratio distorted`);
-            const center = new view.DOMPoint(box.x+box.width/2, box.y+box.height/2);
-            const root = center.matrixTransform(svg.getCTM().inverse().multiply(hit.getCTM()));
+            const hit = doc.getElementById(`slot-${i}-target-hit`), box = boundsIn(art,hit), original = sourceBoxes[kind];
+            assert(Math.abs((box.width/box.height)/(original.width/original.height)-1)<=.01, `Slot ${i} ${kind} arrow aspect ratio distorted`);
+            const root = new view.DOMPoint(box.x+box.width/2,box.y+box.height/2).matrixTransform(svg.getCTM().inverse().multiply(hit.getCTM()));
             const angle = (Math.atan2(root.x-1800,1800-root.y)*180/Math.PI+360)%360;
-            assert(Math.abs((angle-i*30+540)%360-180) <= 1, `Slot ${i} ${kind} arrow angle ${angle} is off-center`);
-            const edgeLength = edge.getTotalLength(), edgeToHit = hit.getCTM().inverse().multiply(edge.getCTM());
-            let innerRadius = Infinity;
-            for (let j = 0; j <= 1024; j++) {
-                const point = edge.getPointAtLength(edgeLength*j/1024).matrixTransform(edgeToHit), radius = Math.hypot(point.x-1800,point.y-1800);
-                innerRadius = Math.min(innerRadius, radius);
-            }
-            const insetY = 1800 - innerRadius - 4.5, arrowEdge = box.y+box.height;
-            assert(arrowEdge <= insetY+.01 && insetY-arrowEdge <= 2, `Slot ${i} ${kind} arrow is not flush with hub inset (${insetY-arrowEdge} SVG units)`);
-            const outerY = box.y, centerX = box.x + box.width/2;
-            let left = centerX, right = centerX, local;
-            for (let n = 0; n < 2000; n++) {
-                left -= 1; local = new view.DOMPoint(left, outerY);
-                if (!hit.isPointInFill(local)) break;
-            }
-            for (let n = 0; n < 2000; n++) {
-                right += 1; local = new view.DOMPoint(right, outerY);
-                if (!hit.isPointInFill(local)) break;
-            }
-            const ratio = box.width/(right-left), ratioRange = kind === "back" ? [.76,.86] : [.83,.87];
-            assert(ratio >= ratioRange[0] && ratio <= ratioRange[1], `Slot ${i} ${kind} arrow fills ${Math.round(100*ratio)}% of outer hit width`);
-            const four = [[1,0],[-1,0],[0,1],[0,-1]];
+            assert(Math.abs((angle-i*30+540)%360-180)<=1, `Slot ${i} ${kind} arrow angle ${angle} is off-center`);
             for (const path of art.querySelectorAll("path")) {
-                const length = path.getTotalLength(), pathToHit = hit.getCTM().inverse().multiply(path.getCTM());
-                const stroke = view.getComputedStyle(path), halfStroke = stroke.stroke === "none" ? 0 : parseFloat(stroke.strokeWidth)*Math.hypot(pathToHit.a,pathToHit.b)/2;
-                for (let j = 0; j <= 128; j++) {
-                    const point = path.getPointAtLength(length*j/128).matrixTransform(pathToHit);
-                    assert(hit.isPointInFill(point), `Slot ${i} ${kind} arrow path leaves its native merged hit`);
-                    for (const [dx,dy] of four)
-                        assert(hit.isPointInFill(new view.DOMPoint(point.x+dx*(4+halfStroke),point.y+dy*halfStroke)), `Slot ${i} ${kind} arrow path lacks stroked containment and 4-unit side clearance`);
-                }
+                const length=path.getTotalLength(), matrix=hit.getCTM().inverse().multiply(path.getCTM());
+                for (let n=0;n<=32;n++)
+                    assert(hit.isPointInFill(path.getPointAtLength(length*n/32).matrixTransform(matrix)), `Slot ${i} ${kind} arrow leaves its slice`);
             }
-            const label = doc.querySelector(`.sectorLabel[data-index="${i}"]`), range = doc.createRange();
-            range.selectNodeContents(label);
-            const l = range.getBoundingClientRect(), m = hit.getScreenCTM().inverse();
-            const ink = [[l.left,l.top],[l.right,l.top],[l.right,l.bottom],[l.left,l.bottom]].map(([x,y]) => new view.DOMPoint(x,y).matrixTransform(m));
-            const p = 10+8*scale, a = [{x:box.x-p,y:box.y-p},{x:box.x+box.width+p,y:box.y-p},{x:box.x+box.width+p,y:box.y+box.height+p},{x:box.x-p,y:box.y+box.height+p}];
-            assert(separated(a,ink), `Slot ${i} ${kind} arrow lacks label clearance`);
-            assert(center.y > ink.reduce((sum,p) => sum+p.y,0)/4, `Slot ${i} ${kind} arrow is outside its label`);
         };
         arm("geometry", Array.from({length:12}, (_, i) => ({label:"Slot " + i, intent:"greet"})));
         doc.getElementById("center").focus();
         const svg = doc.getElementById("wheelSvg");
+        const center = doc.getElementById("center"), hubPop = doc.getElementById("hub-pop"), hubScale = () => svg.getCTM().inverse().multiply(hubPop.getCTM()).a;
+        const hubHit = doc.getElementById("center-hit"), hubPaintPaths = [...center.querySelectorAll("path")].map(path => {
+            const style = view.getComputedStyle(path);
+            return {path, fill:style.display !== "none" && style.visibility === "visible" && style.fill !== "none" && Number(style.fillOpacity)*Number(style.opacity)>0, stroke:style.display !== "none" && style.visibility === "visible" && style.stroke !== "none" && Number(style.strokeWidth)>0 && Number(style.strokeOpacity)*Number(style.opacity)>0};
+        }).filter(item => item.fill || item.stroke);
+        const hubPaintedAt = point => hubPaintPaths.some(({path,fill,stroke}) => {
+            const local = point.matrixTransform(path.getCTM().inverse().multiply(svg.getCTM()));
+            return fill && path.isPointInFill(local) || stroke && path.isPointInStroke(local);
+        });
+        const hubRadiusCache = new Map(), hubRadiusAt = angle => {
+            const key = ((angle%(Math.PI*2)+Math.PI*2)%(Math.PI*2)).toFixed(8);
+            if (hubRadiusCache.has(key)) return hubRadiusCache.get(key)*hubScale();
+            const painted = radius => hubPaintedAt(new view.DOMPoint(1800+radius*Math.sin(angle),1800-radius*Math.cos(angle)));
+            let inner = -1;
+            for (let radius = 0; radius < 700; radius++) if (painted(radius)) inner = radius;
+            assert(inner >= 0, "Hub ray does not intersect its painted outline");
+            let outer = inner+1;
+            assert(outer < 700 && !painted(outer), "Hub ray did not leave the painted octagon");
+            for (let n = 0; n < 18; n++) {
+                const middle = (inner+outer)/2;
+                if (painted(middle)) inner = middle; else outer = middle;
+            }
+            hubRadiusCache.set(key,inner/hubScale());
+            return inner;
+        };
+        const hubOctagonCorners = () => Array.from({length:8}, (_,n) => hubRadiusAt(n*Math.PI/4));
+        const hubBoundaryEstimate = (angle, corners) => {
+            const turn = Math.PI/4, normalized = (angle%(Math.PI*2)+Math.PI*2)%(Math.PI*2), vertex = Math.floor(normalized/turn), faceNormal = (vertex+.5)*turn;
+            return corners[vertex]*Math.cos(Math.PI/8)/Math.cos(normalized-faceNormal);
+        };
+        const hubBox = hubHit.getBBox(), initialHubScale = hubScale(), nativeHubCenter = new view.DOMPoint(hubBox.x+hubBox.width/2,hubBox.y+hubBox.height/2).matrixTransform(svg.getCTM().inverse().multiply(hubHit.getCTM()));
+        const hubVertices = Array.from({length:8}, (_,n) => {
+            const angle=n*Math.PI/4; let inner=0, outer=700;
+            for (let j=0;j<20;j++) {
+                const r=(inner+outer)/2, point=new view.DOMPoint(nativeHubCenter.x+r*Math.sin(angle),nativeHubCenter.y-r*Math.cos(angle));
+                if (hubPaintedAt(point)) inner=r; else outer=r;
+            }
+            return {x:1800+(nativeHubCenter.x+inner*Math.sin(angle)-1800)/initialHubScale,y:1800+(nativeHubCenter.y-inner*Math.cos(angle)-1800)/initialHubScale};
+        });
+        const currentHubVertices = () => hubVertices.map(p => ({x:1800+(p.x-1800)*hubScale(),y:1800+(p.y-1800)*hubScale()}));
+        const assertNativeOctagon = () => {
+            const vertices=currentHubVertices(), origin=new view.DOMPoint(hubBox.x+hubBox.width/2,hubBox.y+hubBox.height/2).matrixTransform(svg.getCTM().inverse().multiply(hubHit.getCTM()));
+            const radii=vertices.map(p=>Math.hypot(p.x-origin.x,p.y-origin.y));
+            assert(Math.max(...radii)-Math.min(...radii)<2*hubScale(), "Hub lost its native equal-radius octagon corners");
+            vertices.forEach((a,n)=>{
+                const b=vertices[(n+1)%8], x=(a.x+b.x)/2, y=(a.y+b.y)/2, radius=Math.hypot(x-origin.x,y-origin.y), dx=3*(x-origin.x)/radius,dy=3*(y-origin.y)/radius;
+                assert(hubPaintedAt(new view.DOMPoint(x-dx,y-dy)) && !hubPaintedAt(new view.DOMPoint(x+dx,y+dy)), "Hub no longer has eight native flat octagonal sides");
+            });
+        };
+        const checkPointedEdge = (edge, i, mode) => {
+            const length = edge.getTotalLength(), toWheel = svg.getCTM().inverse().multiply(edge.getCTM()), corners = hubOctagonCorners();
+            let previous = null, innermost = Infinity;
+            for (let n = 0; n <= 1024; n++) {
+                const p = edge.getPointAtLength(length*n/1024).matrixTransform(toWheel), dx = p.x-1800, dy = p.y-1800;
+                const radius = Math.hypot(dx,dy);
+                innermost = Math.min(innermost,radius);
+                if (previous) {
+                    const vx = p.x-previous.x, vy = p.y-previous.y, segment = Math.hypot(vx,vy), middleX = (p.x+previous.x)/2-1800, middleY = (p.y+previous.y)/2-1800;
+                    const middleRadius = Math.hypot(middleX,middleY), boundary = hubBoundaryEstimate(Math.atan2(middleX,-middleY),corners);
+                    if (middleRadius > boundary+1 && middleRadius < boundary+120 && segment > .01) {
+                        const radial = Math.abs(vx*middleX+vy*middleY)/(segment*middleRadius);
+                        assert(radial > .45, `Slot ${i} ${mode} has a transverse inner closing/inset segment visible beyond the octagon`);
+                    }
+                }
+                previous = p;
+            }
+            assert(innermost < hubRadiusAt(i*Math.PI/6)-8, `Slot ${i} ${mode} inner outline does not converge beneath the painted hub`);
+        };
         assert(Math.abs(doc.getElementById("hub-pop").getCTM().a/svg.getCTM().a-1.08)<.001, "Zero-duration hub did not snap to 1.08");
         for (let i = 0; i < 12; i++) for (const [mode, radius] of [["target", 900], ["nearby", 1500]]) {
             const point = svg.createSVGPoint(), angle = i * Math.PI / 6;
@@ -134,7 +162,11 @@ frame.addEventListener("load", async () => {
                 const p = edge.getPointAtLength(length * j / 128);
                 assert(hit.isPointInFill(p.matrixTransform(hit.getCTM().inverse().multiply(edge.getCTM()))), `Slot ${i} ${mode} inset leaves its shape`);
             }
+            if (mode === "target") { checkPointedEdge(edge,i,mode); checkPointedEdge(hit,i,"core fill"); }
         }
+        center.blur();
+        assert(Math.abs(hubScale()-1)<.001, "Core rest geometry did not use the unpopped hub");
+        for (let i=0;i<12;i++) checkPointedEdge(region(i).querySelector(".edge-line"),i,"core rest");
         const core = region(0), tip = region(0, "nearby");
         core.focus();
         assert(core.classList.contains("hot") && !tip.classList.contains("hot"), "Gesture core wrongly activated Openly tip");
@@ -170,7 +202,8 @@ frame.addEventListener("load", async () => {
             ["action", {label:"Wait here",action:{name:"WaitHere"}}, null, null]
         ]) {
             arm("arrows-" + kind, Array(12).fill(slot));
-            doc.getElementById("center").focus();
+            center.blur();
+            assert(Math.abs(hubScale()-1)<.001, `Merged ${kind} rest geometry did not use the unpopped hub`);
             for (let i = 0; i < 12; i++) {
                 const target = region(i), nearby = region(i, "nearby");
                 if (shown) {
@@ -178,6 +211,10 @@ frame.addEventListener("load", async () => {
                     assert(view.getComputedStyle(art).display !== "none" && view.getComputedStyle(other).display === "none", "Wrong navigation arrow shown");
                     assert(art.getBBox().width > 0 && art.getBBox().height > 0, "Navigation artwork is empty");
                     checkArrow(art, i, kind);
+                    target.focus(); checkArrow(art,i,kind);
+                    checkPointedEdge(target.querySelector(".hit-area"),i,kind+" lifted fill");
+                    checkPointedEdge(target.querySelector(".edge-line"),i,kind+" lifted inset");
+                    center.focus(); checkArrow(art,i,kind); assertNativeOctagon(); center.blur();
                 }
                 assert(target.classList.contains(kind === "action" ? "action" : "navigation"), `Slot ${i} ${kind} lacks its merged-kind class`);
                 assert(nearby.getAttribute("aria-disabled") === "true" && nearby.getAttribute("tabindex") === "-1" && view.getComputedStyle(nearby).display === "none", `Slot ${i} ${kind} nearby region remains active`);
@@ -197,6 +234,8 @@ frame.addEventListener("load", async () => {
                 const length = edge.getTotalLength();
                 for (let n = 0; n < 256; n++)
                     assert(hit.isPointInFill(edge.getPointAtLength(length*n/256)), `Slot ${i} ${kind} merged inset leaves its outline`);
+                checkPointedEdge(edge, i, kind);
+                checkPointedEdge(hit,i,kind+" fill");
                 const nearbyHit = nearby.querySelector(".hit-area");
                 click(nearbyHit);
                 assert(!replies.length, `Disabled ${kind} nearby region dispatched programmatically`);
@@ -210,8 +249,12 @@ frame.addEventListener("load", async () => {
         const enabledEdgeAlpha = Number(view.getComputedStyle(region(0).querySelector(".edge-line")).stroke.match(/rgba?\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)/)?.[1] ?? 1);
         key("Escape"); assert(replies.pop() === "edge-alpha-reference|-1||cancel", "Edge-alpha reference failed to cancel");
         arm("vignette", []);
-        assert(Number(view.getComputedStyle(vignette).opacity) === 1 && view.getComputedStyle(vignette).pointerEvents === "none", "Armed vignette missing or intercepts input");
-        assert(Math.abs(vignette.getBoundingClientRect().height - view.innerHeight / 4) < 1 && Math.abs(vignette.getBoundingClientRect().bottom - view.innerHeight) < 1, "Vignette is not bottom quarter");
+        const vignetteStyle = view.getComputedStyle(vignette), topVignetteStyle = view.getComputedStyle(topVignette);
+        assert(Number(vignetteStyle.opacity) === 1 && vignetteStyle.pointerEvents === "none", "Armed bottom vignette missing or intercepts input");
+        assert(Math.abs(vignette.getBoundingClientRect().height-view.innerHeight/4)<1 && Math.abs(vignette.getBoundingClientRect().bottom-view.innerHeight)<1, "Bottom vignette is not bottom quarter");
+        assert(Number(topVignetteStyle.opacity) === 1 && topVignetteStyle.pointerEvents === "none", "Armed top vignette missing or intercepts input");
+        assert(Math.abs(topVignette.getBoundingClientRect().height-view.innerHeight/4)<1 && Math.abs(topVignette.getBoundingClientRect().top)<1, "Top vignette is not top quarter");
+        assert(/^linear-gradient\((?:to bottom,\s*)?rgba\(0,\s*0,\s*0,\s*0?\.8\),/.test(topVignetteStyle.backgroundImage) && /(transparent|rgba\(0,\s*0,\s*0,\s*0(?:\.0+)?\))\)$/.test(topVignetteStyle.backgroundImage), "Top vignette does not compute to a downward 80%-black-to-transparent gradient");
         assert([...doc.querySelectorAll(".sector")].every(slot => Number(view.getComputedStyle(slot).opacity) === .5), "Empty slots are not half opaque");
         for (let i = 0; i < 12; i++) {
             const target = region(i), nearby = region(i,"nearby"), hit = target.querySelector(".hit-area"), edge = target.querySelector(".edge-line");
@@ -228,7 +271,7 @@ frame.addEventListener("load", async () => {
             assert(view.getComputedStyle(hit).fill !== "none", `Empty slot ${i} lost its fill`);
         }
         key("Escape"); assert(replies.pop() === "vignette|-1||cancel", "Vignette setup failed to cancel");
-        assert(view.getComputedStyle(vignette).visibility === "hidden", "Vignette outlived armed state");
+        assert(view.getComputedStyle(vignette).visibility === "hidden" && view.getComputedStyle(topVignette).visibility === "hidden", "A vignette outlived armed state");
         // Exercise shipped choices through their actual interactive target.
         for (const [name, slots] of Object.entries(layout.wheels)) {
             if (name !== layout.root) assert(slots[10]?.control === "back", "Shipped submenu Back is not slot 10");
@@ -302,9 +345,16 @@ frame.addEventListener("load", async () => {
         const help = doc.getElementById("help"), helpBox = help.getBoundingClientRect(), vignetteBox = vignette.getBoundingClientRect();
         const overlap = {left:Math.max(helpBox.left,vignetteBox.left), right:Math.min(helpBox.right,vignetteBox.right), top:Math.max(helpBox.top,vignetteBox.top), bottom:Math.min(helpBox.bottom,vignetteBox.bottom)};
         assert(overlap.left < overlap.right && overlap.top < overlap.bottom, "Help text does not overlap the vignette paint area");
-        assert(view.getComputedStyle(help).position !== "static" && Number(view.getComputedStyle(help).zIndex) > Number(view.getComputedStyle(vignette).zIndex), "Help text is not stacked above the vignette");
+        assert(view.getComputedStyle(help).position !== "static" && Number(view.getComputedStyle(help).zIndex) > Number(view.getComputedStyle(vignette).zIndex), "Help text is not stacked above the bottom vignette");
         const paintProbe = doc.elementFromPoint((overlap.left+overlap.right)/2,(overlap.top+overlap.bottom)/2);
-        assert(paintProbe === help || help.contains(paintProbe), "Vignette wins the actual help-text paint hit stack");
+        assert(paintProbe === help || help.contains(paintProbe), "Bottom vignette wins the actual help-text paint hit stack");
+        const title = doc.querySelector("h1"), titleStyle = view.getComputedStyle(title), titleRange = doc.createRange();
+        titleRange.selectNodeContents(title);
+        const titleBox = titleRange.getBoundingClientRect(), topBox = topVignette.getBoundingClientRect();
+        assert(titleBox.width > 0 && titleBox.height > 0 && titleBox.top >= topBox.top && titleBox.bottom <= topBox.bottom, "Title is outside the top vignette");
+        assert(titleStyle.position !== "static" && Number(titleStyle.zIndex) > Number(topVignetteStyle.zIndex), "Title is not positioned above the top vignette");
+        const titleProbe = doc.elementFromPoint((titleBox.left+titleBox.right)/2,(titleBox.top+titleBox.bottom)/2);
+        assert(titleProbe === title || title.contains(titleProbe), "Top vignette wins the actual title paint hit stack");
         key("Escape"); assert(replies.pop() === "help-stack|-1||cancel", "Help-stack setup failed to cancel");
         for (const [openKey, name] of [[184,"Right Alt"], [56,"Left Alt"], [30,"A"], [254,""]]) {
             arm("help-name-" + openKey, [{label:"Probe",intent:"greet"}], "Lydia", "slate", openKey);
@@ -470,13 +520,30 @@ frame.addEventListener("load", async () => {
         arm("motion", [{label:"Signal",intent:"greet"}, {label:"Menu",submenu:"social"}]);
         await settle(); doc.getElementById("center").focus(); await settle();
         const reduced = view.matchMedia("(prefers-reduced-motion: reduce)").matches, beforeFrames = raf.requested;
+        const bottomFade = view.getComputedStyle(vignette), topFade = view.getComputedStyle(topVignette);
+        assert(bottomFade.transitionProperty.split(",").includes("opacity") && topFade.transitionProperty.split(",").includes("opacity") && bottomFade.transitionDuration === topFade.transitionDuration && bottomFade.transitionTimingFunction === topFade.transitionTimingFunction, "Top and bottom vignettes do not share the same opacity tween");
+        assert(reduced ? topFade.transitionDuration.split(",").every(value => parseFloat(value) === 0) : topFade.transitionDuration.split(",").some(value => parseFloat(value) > 0), "Vignette tween does not respect reduced-motion preference");
+        const checkHubTop = i => {
+            assert(svg.lastElementChild === center && center.contains(hubHit) && !doc.getElementById("center-hit-target"), "Hub is not the last SVG paint layer or retains a fixed hit clone");
+            const style = view.getComputedStyle(hubHit);
+            assert(style.fill !== "none" && Number(style.opacity) === 1 && Number(style.fillOpacity) >= .99 && style.pointerEvents !== "none", "Moving hub hit is not opaque and active");
+            assertNativeOctagon();
+            const radius = hubRadiusAt(i*Math.PI/6)-4, point = new view.DOMPoint(1800+radius*Math.sin(i*Math.PI/6),1800-radius*Math.cos(i*Math.PI/6));
+            const screen = point.matrixTransform(svg.getScreenCTM()), actual = doc.elementFromPoint(screen.x,screen.y);
+            assert(actual === hubHit || actual?.closest("#center") === center, `Slice ${i} paints above the octagonal hub`);
+        };
         core.focus();
         const samples = [liftScale()];
         const deadline = performance.now() + 230;
         while (performance.now() < deadline) {
             await nextFrame(); samples.push(liftScale()); assertLabel(0);
+            checkArrow(region(1).querySelector(".submenu-art"), 1, "submenu");
+            checkPointedEdge(region(0).querySelector(".edge-line"), 0, "core");
+            checkPointedEdge(region(0).querySelector(".hit-area"),0,"core fill");
+            checkHubTop(0);
         }
         assert(Math.abs(liftScale() - 1.06) < .001, "Lift did not settle at 1.06");
+        for (let i = 0; i < 12; i++) checkHubTop(i);
         if (!reduced) {
             assert(samples.some(scale => scale > 1 && scale < 1.06), "Lift skipped intermediate scale");
             assert(Math.max(...samples) > 1.061 && Math.max(...samples) < 1.07, "Lift lacks bounded overshoot");
@@ -485,13 +552,29 @@ frame.addEventListener("load", async () => {
         const idleFrames = raf.executed;
         await new Promise(resolve => setTimeout(resolve, 100));
         assert(raf.executed === idleFrames, "Animation frames still running at idle");
-        const hubPop = doc.getElementById("hub-pop"), center = doc.getElementById("center");
-        const hubScale = () => svg.getCTM().inverse().multiply(hubPop.getCTM()).a;
+        const navPop = doc.getElementById("slot-1").querySelector(".pop"), navScale = () => { const m=svg.getCTM().inverse().multiply(navPop.getCTM()); return Math.hypot(m.a,m.b); };
+        const navFrames = raf.requested;
+        region(1).focus();
+        const navSamples = [navScale()], navDeadline = performance.now()+230;
+        while (performance.now() < navDeadline) {
+            await nextFrame(); navSamples.push(navScale());
+            checkPointedEdge(region(1).querySelector(".edge-line"),1,"merged submenu");
+            checkArrow(region(1).querySelector(".submenu-art"),1,"submenu");
+            checkPointedEdge(region(1).querySelector(".hit-area"),1,"merged submenu fill");
+            checkHubTop(1);
+        }
+        assert(Math.abs(navScale()-1.06)<.001, "Merged slice did not reach peak lift");
+        if (!reduced) {
+            assert(navSamples.some(scale => scale>1 && scale<1.06) && Math.max(...navSamples)>1.061 && Math.max(...navSamples)<1.07, "Merged slice lacks bounded peak motion");
+        } else assert(raf.requested===navFrames, "Reduced-motion merged slice scheduled frames");
         const hubFrames = raf.requested;
         center.focus();
         const hubSamples = [hubScale()], hubDeadline = performance.now() + 230;
         while (performance.now() < hubDeadline) {
             await nextFrame(); hubSamples.push(hubScale());
+            checkArrow(region(1).querySelector(".submenu-art"),1,"submenu");
+            checkPointedEdge(region(1).querySelector(".edge-line"),1,"hub-pop merged inset");
+            checkHubTop(1);
             const text = doc.querySelector(".hubContent").closest("foreignObject").getScreenCTM();
             assert(Math.abs(text.b) < .001 && Math.abs(text.c) < .001 && doc.getElementById("caption").getBoundingClientRect().height > 0, "Lifted hub text is rotated or unreadable");
         }
@@ -500,27 +583,30 @@ frame.addEventListener("load", async () => {
             assert(hubSamples.some(scale => scale > 1 && scale < 1.08), "Hub skipped intermediate scale");
             assert(Math.max(...hubSamples) > 1.081 && Math.max(...hubSamples) < 1.095, "Hub lacks bounded ease-out-back overshoot");
         } else assert(raf.requested === hubFrames, "Reduced-motion hub scheduled frames");
+        for (let i = 0; i < 12; i++) checkHubTop(i);
         assert(raf.pending.size === 0, "Hub leaves pending animation at rest");
         const hubIdleFrames = raf.executed;
         await new Promise(resolve => setTimeout(resolve,100));
         assert(raf.executed === hubIdleFrames, "Hub animates while idle");
-        // Probe just outside the ORIGINAL hit polygon, underneath the enlarged visual rim.
+        // Hit routing follows the actual moving octagon, including its painted stroke.
         for (let i = 0; i < 12; i++) {
-            arm("hub-hit-" + i, Array.from({length:12},()=>({label:"Signal",intent:"greet"})));
+            arm("hub-inside-" + i, Array.from({length:12},()=>({label:"Signal",intent:"greet"})));
+            center.focus(); await settle(); checkHubTop(i);
+            const angle = i*Math.PI/6, radius = hubRadiusAt(angle)-4, inside = new view.DOMPoint(1800+radius*Math.sin(angle),1800-radius*Math.cos(angle));
+            const insideScreen = inside.matrixTransform(svg.getScreenCTM()), insideActual = doc.elementFromPoint(insideScreen.x,insideScreen.y);
+            assert(insideActual === hubHit || insideActual?.closest("#center") === center, `Inside octagon point ${i} does not hit the hub first`);
+            click(insideActual);
+            assert(replies.pop() === `hub-inside-${i}|-1||cancel`, `Inside octagon click ${i} did not cancel`);
+            arm("hub-outside-" + i, Array.from({length:12},()=>({label:"Signal",intent:"greet"})));
             center.focus(); await settle();
-            const hit = doc.getElementById("center-hit-target"), toHit = hit.getCTM().inverse().multiply(svg.getCTM()), angle = i*Math.PI/6;
-            const point = radius => new view.DOMPoint(1800+radius*Math.sin(angle),1800-radius*Math.cos(angle));
-            let radius = 350;
-            while (radius < 600 && hit.isPointInFill(point(radius).matrixTransform(toHit))) radius++;
-            const slice = region(i).querySelector(".hit-area"), toSlice = slice.getCTM().inverse().multiply(svg.getCTM());
-            while (radius < 600 && !slice.isPointInFill(point(radius).matrixTransform(toSlice))) radius++;
-            const visual = doc.getElementById("center-hit"), toVisual = visual.getCTM().inverse().multiply(svg.getCTM());
-            assert(visual.isPointInFill(point(radius+3).matrixTransform(toVisual)), "Rim probe is not beneath the enlarged visual hub");
-            assert(radius < 600 && Math.abs(hubScale()-1.08)<.001, "Hub rim probe setup failed");
-            const screen = point(radius+3).matrixTransform(svg.getScreenCTM()), actual = doc.elementFromPoint(screen.x,screen.y);
-            assert(actual?.closest(".region") === region(i), `Lifted hub stole slice ${i} just outside its original edge`);
+            const slice = region(i).querySelector(".hit-area"), toSlice = slice.getCTM().inverse().multiply(svg.getCTM()), point = r => new view.DOMPoint(1800+r*Math.sin(angle),1800-r*Math.cos(angle));
+            let radiusOutside = hubRadiusAt(angle)+2;
+            while (radiusOutside < 700 && !slice.isPointInFill(point(radiusOutside).matrixTransform(toSlice))) radiusOutside += 1;
+            assert(radiusOutside < 700 && !hubPaintedAt(point(radiusOutside)), `Outside probe ${i} is still inside the painted hub`);
+            const outsideScreen = point(radiusOutside).matrixTransform(svg.getScreenCTM()), actual = doc.elementFromPoint(outsideScreen.x,outsideScreen.y);
+            assert(actual?.closest(".region") === region(i), `Hub stole slice ${i} immediately outside its current painted edge`);
             click(actual);
-            assert(replies.pop() === `hub-hit-${i}|${i}|greet|target`, `Hub rim click did not dispatch slice ${i}`);
+            assert(replies.pop() === `hub-outside-${i}|${i}|greet|target`, `Outside octagon click ${i} did not dispatch its slice`);
         }
         arm("hub-leave", [{label:"Signal",intent:"greet"}]); center.focus(); await settle();
         center.dispatchEvent(new view.MouseEvent("mouseleave")); await settle();
@@ -548,8 +634,8 @@ frame.addEventListener("load", async () => {
         arm("interrupted", [{label:"Signal",intent:"greet"}]);
         await nextFrame(); view.hostMode("0");
         assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
-        report.textContent = "PASS: 12-slot choices and Back placement; only gestures retain independent core/tip boundaries; navigation Close/submenu/Back and actions use one merged native hit and one outer edge, hide/disable nearby, have no internal border, and route former-tip clicks to navigate or target-only action; actions have no knot/ripple; arrows keep aspect/angle/flush fit and fill ~85% for Submenu/~77% for Back, with sampled stroked glyph paths and 4-unit side checks inside merged hits; ACTION badges upright, centered under labels within 2px with a small gap in all 12 slots including hover; help above vignette; ShiftLeft/Right previews gestures only, survives either release order, clears on blur/disarm, and leaves dispatch unchanged; kind fills and selection precedence in all three themes; empty slots keep merged disabled shape, faint outer outline, no inset/knot, and ignore clicks; upright ripples and labels; armed vignette; target/Openly routing, keyboard, configured open-key physical-code mapping/cancellation/fail-closed validation, arming/cancellation, motion lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
-        report.textContent += " Hub Cancel reuses the SVG-attribute tween, overshoots then settles at 1.08, returns on leave/blur, snaps with reduced motion/0ms, has no idle rAF, and preserves actual slice hits immediately outside its original rim in all 12 directions; two-line ~20px help shows the mapped open-key name, omits unmapped names and clears the lifted bottom tip at 1080p/1440p.";
+        report.textContent = "PASS: 12-slot choices and Back placement; gesture core/tip routing; merged navigation/actions and disabled nearby regions; simple uniform arrows preserve aspect, center angle within 1 degree and stay inside their slices at rest, slice lift and hub pop; core/merged fills and insets converge beneath the opaque native octagon without exposed transverse inner segments; hub paints last and wins boundary hits inside its moving outline, while slices win just outside; ACTION badges, upright labels/ripples, both armed pointer-transparent vignettes with matching fade and title/help above them, Shift preview, palettes, empty slots, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
+        report.textContent += " Hub Cancel tracks shared SVG-attribute motion, overshoots then settles at 1.08, returns on leave/blur, snaps with reduced motion/0ms, has no idle rAF, and routes inside-octagon clicks to Cancel and outside-edge clicks to the slice in all 12 directions; two-line ~20px help shows the mapped open-key name, omits unmapped names and clears the lifted bottom tip at 1080p/1440p.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

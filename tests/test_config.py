@@ -56,8 +56,19 @@ class ConfigValidation(unittest.TestCase):
             slots[index] = slot
             expected[index - 1] = list(value)
 
-        payload = self.module.wheelPayload(slots)
-        self.assertEqual(json.loads(payload), expected)
+        for theme in ('slate', 'moss', 'ember'):
+            payload = self.module.wheelPayload(slots, theme)
+            self.assertEqual(json.loads(payload), {'theme': theme, 'slots': expected})
+        self.assertEqual(self.module.wheelPayload(slots, 'unknown'), '')
+
+    def test_theme_enum_and_absent_default(self):
+        self.assertEqual(self.parse(minimal())['theme'], 'slate')
+        for theme in ('slate', 'moss', 'ember'):
+            with self.subTest(theme=theme):
+                self.assertEqual(self.parse(dict(minimal(), theme=theme))['theme'], theme)
+        for theme in ('unknown', 'SLATE', '', None, False, 1, [], {}):
+            with self.subTest(theme=theme), self.assertRaisesRegex(LuaError, 'theme: expected slate, moss or ember'):
+                self.parse(dict(minimal(), theme=theme))
 
     def test_shipped_compass_layout_reaches_every_intent_except_deny(self):
         layout = json.loads(CATALOG.with_name('layout.json').read_text(encoding='utf-8'))

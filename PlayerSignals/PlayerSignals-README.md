@@ -39,7 +39,7 @@ You'll see a small notification with your character's name only if SkyrimNet's A
 
 Open a submenu by choosing **Social** (**Social >** in UIExtensions), for example. Choose **Back** (**Back <** in UIExtensions) to return to the previous wheel; it occupies slot 7 (top-left in Magelight) in every shipped submenu. The root ends with **Actions** (top-left; **Calm down** is at the right) and has no shipped Close entry. **Tab** cancels; Magelight also offers center-click and **Escape**. Opening submenus, going Back, or cancelling doesn't send a narration.
 
-**Experimental Magelight branch:** the authored radial wheel has eight fixed positions clockwise from the top. Click a gray gesture body for the target NPC, or its white **ALL** chevron for everyone nearby without Shift. With no captured NPC, both gesture regions address nearby; Shift still overrides an inner gesture selection. Chevron remains visible on every slice. ChevronKnot is hidden only on submenu and Back slices; gesture, action, empty, and custom Close slices keep it. Only gestures show **ALL** or offer nearby mode. For navigation and **ACTION** entries, the chevron selects the same choice as the inner piece; both highlight together. Actions ignore Shift and require a valid target. Hover changes the center label/destination. Left/Right changes entry, Up selects its inner body, Down selects a gesture's nearby chevron, and Enter/Space selects the focused region. Center, Tab or Escape cancels; use native Escape during blank loading/navigation. This revision is browser-checked and built, not yet game-verified.
+**Experimental Magelight branch:** the authored radial wheel has eight fixed positions clockwise from the top. Click a gesture body for the target NPC, or its outer chevron for everyone nearby without Shift. With no captured NPC, both gesture regions address nearby; Shift still overrides an inner gesture selection. All slices keep the knot artwork. Submenus, Back and actions show their chevron outline only on hover/focus; either region brightens both. Gesture core hover brightens the core only; outer hover brightens both. Empty slots stay faded and inert. There is no ALL text label. Only gestures offer nearby mode. For navigation and **ACTION** entries, the outer region selects the same choice as the core. Actions ignore Shift and require a valid target. Hover changes the center label/destination. Left/Right changes entry, Up selects its inner body, Down selects a gesture's nearby chevron, and Enter/Space selects the focused region. Center, Tab or Escape cancels; use native Escape during blank loading/navigation. Hover fades/brightness ease over 160 ms without delaying input; reduced-motion preferences disable these tweens. This revision is browser-checked and built, not yet game-verified.
 
 The wheel won't open while you're in a blocking menu, another custom menu, or a gameplay state where the required controls are disabled.
 
@@ -96,6 +96,16 @@ In **MO2**, these are paths inside the installed mod folder—not a `Data` folde
 
 You can change labels, reorder entries, move supported intents between wheels, make submenus, disable slots, and change the opening key in `layout.json`. Edit or add IDs and phrase text in `intents.json`. A new ID must also be referenced by a layout entry. These JSON edits need no script recompilation.
 
+### Wheel colour theme (Magelight)
+
+Add one optional top-level property in `layout.json`, alongside `schemaVersion`, `root`, `input` and `wheels`:
+
+```json
+"theme": "moss",
+```
+
+Choose `slate` for the original grey/blue-slate and gold, `moss` for muted dark green, or `ember` for muted dark red/rust. Omit the property to use `slate` (as the shipped layout does). Keep the comma between JSON properties. Unknown names and non-string values reject the layout. Save the file, then load a save to apply it; no recompilation is needed. UIExtensions ignores this setting. All three keep cream text and the same Chevron/Knot line colours, with selection overriding idle/submenu fills.
+
 ### Rename or move an entry
 
 An entry looks like this:
@@ -116,7 +126,7 @@ Keep labels short for comfortable reading. UIExtensions does not automatically s
 { "label": "People", "submenu": "social" }
 ```
 
-This opens the wheel named `social`; the destination must exist under `wheels`. Magelight displays **People** on a blue-slate submenu slice with the owner's inward-pointing Submenu artwork; hover/focus still uses the distinct bronze-gold highlight. Back uses the owner's outward-pointing Upmenu artwork. UIExtensions displays **People >**.
+This opens the wheel named `social`; the destination must exist under `wheels`. Magelight displays **People** on a theme-tinted submenu slice with the owner's inward-pointing Submenu artwork; hover/focus uses the distinct selection fill. Back uses the owner's outward-pointing Upmenu artwork. UIExtensions displays **People >**.
 
 ```json
 { "label": "Return", "control": "back" }

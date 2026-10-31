@@ -161,9 +161,12 @@ local function validateCatalog(root)
     end
     return r
 end
+local themes = {slate=true, moss=true, ember=true}
 local function validate(root, intents)
-    local r = object(root, 'root', {schemaVersion=true, root=true, input=true, wheels=true})
+    local r = object(root, 'root', {schemaVersion=true, root=true, input=true, wheels=true, theme=true})
     assert(type(r.schemaVersion) == 'number' and r.schemaVersion == 1, 'schemaVersion: expected integer 1')
+    if r.theme == nil then r.theme = 'slate' end
+    assert(type(r.theme) == 'string' and themes[r.theme], 'theme: expected slate, moss or ember')
     nonempty(r.root, 'root')
     local input = object(r.input, 'input', {openKeyCode=true})
     assert(type(input.openKeyCode) == 'number' and input.openKeyCode >= 1 and input.openKeyCode <= 255, 'input.openKeyCode: expected integer 1..255')
@@ -242,8 +245,9 @@ local function jsonString(value)
     end) .. '"'
 end
 
-function M.wheelPayload(slots)
+function M.wheelPayload(slots, theme)
     local ok, result = pcall(function()
+        assert(type(theme) == 'string' and themes[theme], 'theme: expected slate, moss or ember')
         local entries = {}
         for i = 1, 8 do
             local slot = slots[i]
@@ -259,7 +263,7 @@ function M.wheelPayload(slots)
                 entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. ']'
             end
         end
-        return '[' .. table.concat(entries, ',') .. ']'
+        return '{"theme":' .. jsonString(theme) .. ',"slots":[' .. table.concat(entries, ',') .. ']}'
     end)
     if ok then return result end
     return ''
@@ -292,6 +296,7 @@ function M.load(args)
         -- Build native containers directly: no metadata/reference-string reinterpretation.
         -- Numeric fields use the native JSON integer decoder only after raw validation.
         local root = JValue.objectFromPrototype('{"schemaVersion":1,"input":{"openKeyCode":' .. r.input.data.openKeyCode .. '}}')
+        root.theme = r.theme
         local notifications = JMap.object(); root.notifications = notifications
         local narrations = JMap.object(); root.narrations = narrations
         local targetNotificationPrefixes = JMap.object(); root.targetNotificationPrefixes = targetNotificationPrefixes

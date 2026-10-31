@@ -138,7 +138,7 @@ Function PrimeMagelight(Int token)
         Return
     EndIf
     String request = _mlRequest
-    String payload = JValue.evalLuaStr(_mlSlots, "return jrequire('PlayerSignals.config').wheelPayload(jobject)")
+    String payload = JValue.evalLuaStr(_mlSlots, "return jrequire('PlayerSignals.config').wheelPayload(jobject, '" + JMap.getStr(_config, "theme") + "')")
     If token != _generation || request != _mlRequest
         Return
     EndIf

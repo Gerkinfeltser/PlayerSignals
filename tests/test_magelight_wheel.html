@@ -61,9 +61,9 @@ frame.addEventListener("load", async () => {
             const identity = s.action?.name || s.intent || "";
             return [s.label + (s.submenu ? " >" : s.control === "back" ? " <" : ""), identity, kind];
         };
-        const slotsPayload = slots => JSON.stringify(Array.from({length:8}, (_, i) => slotEntry(slots[i])));
-        const populate = (token, slots) => { view.psWheelBegin(token + "|" + slotsPayload(slots)); assert(!visible(), "Page appeared before arm"); };
-        const arm = (token, slots) => { populate(token, slots); view.psWheelArm(token); assert(visible(), "Valid arm failed to reveal page"); };
+        const slotsPayload = (slots, theme = "slate") => JSON.stringify({theme, slots: Array.from({length:8}, (_, i) => slotEntry(slots[i]))});
+        const populate = (token, slots, theme) => { view.psWheelBegin(token + "|" + slotsPayload(slots, theme)); assert(!visible(), "Page appeared before arm"); };
+        const arm = (token, slots, theme) => { populate(token, slots, theme); view.psWheelArm(token); assert(visible(), "Valid arm failed to reveal page"); };
         // Settle styles synchronously for state assertions; exercise real tweens separately below.
         doc.documentElement.style.setProperty("--ps-tween", "0ms");
         assert(!visible(), "Page appeared before first focus entry");
@@ -158,6 +158,40 @@ frame.addEventListener("load", async () => {
         assert(getComputedStyle(region(0)).transitionDuration === "0s" && getComputedStyle(outline(0)).transitionDuration === "0s", "Tween off switch failed");
         click(region(0));
         assert(replies.pop() === "tween|0||navigate", "Input waited for tween completion");
+        const paletteFills = [];
+        for (const theme of ["slate", "moss", "ember"]) {
+            arm("theme-" + theme, [{label:"Gesture",intent:"greet"}, {label:"Menu",submenu:"child"}], theme);
+            assert(doc.documentElement.classList.contains(theme) && ["slate","moss","ember"].filter(name => doc.documentElement.classList.contains(name)).length === 1, "Theme did not replace the previous root class");
+            doc.getElementById("center").focus();
+            const core = region(0), outer = region(0, "nearby"), util = region(1);
+            const hitFill = node => getComputedStyle(node.querySelector(".hit-area")).fill;
+            const idleCore = hitFill(core), idleMenu = hitFill(util);
+            hover(core);
+            const selection = hitFill(core);
+            assert(selection !== idleCore && brightness(core) > 1 && brightness(outer) === 1, theme + " signal core hover changed outer or lost selection");
+            hover(outer);
+            const outerFill = hitFill(outer);
+            assert(brightness(core) > 1 && brightness(outer) > 1 && Number(getComputedStyle(outline(0)).opacity) === 1, theme + " signal outer hover failed");
+            util.focus();
+            assert(hitFill(util) === selection && hitFill(util) !== idleMenu && brightness(util) > 1 && brightness(region(1,"nearby")) > 1, theme + " submenu tint overrode selection/hover");
+            doc.getElementById("center").focus();
+            assert(Number(getComputedStyle(outline(1)).opacity) === 0 && knotVisible(1), theme + " util idle outline/knot failed");
+            region(1,"nearby").focus();
+            assert(hitFill(util) === selection && Number(getComputedStyle(outline(1)).opacity) === 1 && brightness(region(1,"nearby")) > 1, theme + " util outer focus failed");
+            paletteFills.push([idleCore, idleMenu, selection, outerFill]);
+            click(core);
+            assert(replies.pop() === `theme-${theme}|0|greet|target`, "Theme changed callback identity");
+        }
+        for (let field = 0; field < 4; field++) assert(new Set(paletteFills.map(fills => fills[field])).size === 3, "Theme fills are not distinct");
+        for (const theme of ["unknown", null, false]) {
+            const token = "bad-theme-" + String(theme);
+            view.psWheelBegin(token + "|" + slotsPayload([{label:"Gesture",intent:"greet"}], theme));
+            view.psWheelArm(token);
+            click(region(0));
+            assert(replies.length === 0 && region(0).getAttribute("aria-disabled") === "true", "Invalid theme allowed a selection");
+            key("Escape");
+            assert(replies.pop() === token + "|-1||cancel", "Invalid theme trapped cancellation");
+        }
         arm("submenu-shapes", Array.from({length:8}, (_, i) => ({label:"Menu " + i, submenu:"child"})));
         const fill = i => getComputedStyle(doc.getElementById(`slot-${i}-target-hit`)).fill;
         const idleTint = fill(1), selectedTint = fill(0);
@@ -293,7 +327,7 @@ frame.addEventListener("load", async () => {
             const token = k + "-" + name; arm(token, layout.wheels[name]); key(k);
             assert(replies.pop() === token + "|-1||cancel", k + " failed to cancel " + name);
         }
-        report.textContent = "PASS: per-kind idle/core/outer pointer and keyboard brightness, outline opacity and visible knots; inert faded empty slots; eased brighten/dim and outline fade, tween off switch and reduced-motion duration; no ALL label; authored navigation art/rotation and hit testing; retunable submenu tint and gold selection; marker stripping; shipped callbacks including Calm down; target-only actions and navigation; pre-arm/stale/duplicate guards; Unicode labels; keyboard destinations; cancellation; native-mode disarm/reopening. Browser-only; no native Papyrus/game proof.";
+        report.textContent = "PASS: slate/moss/ember distinct idle, submenu, selection and hover fills; one root theme class; selection precedence and per-theme core/outer hover/focus; invalid-theme selection rejection with cancellation retained; per-kind idle/core/outer pointer and keyboard brightness, outline opacity and visible knots; inert faded empty slots; eased brighten/dim and outline fade, tween off switch and reduced-motion duration; no ALL label; authored navigation art/rotation and hit testing; retunable submenu tint; marker stripping; shipped callbacks including Calm down; target-only actions and navigation; pre-arm/stale/duplicate guards; Unicode labels; keyboard destinations; cancellation; native-mode disarm/reopening. Browser-only; no native Papyrus/game proof.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; throw error; }
 });
 // Model only the host boundary installed before page script execution; render the actual generated page unchanged otherwise.

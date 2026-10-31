@@ -43,6 +43,13 @@
     .sector[aria-disabled="true"] { opacity: .25; }
     #center-hit { fill: #292c29 !important; }
     #center:hover #center-hit, #center:focus #center-hit { fill: #53452e !important; }
+    :root { --ps-bounce: 200ms; }
+    #center { transform-origin: 1800px 1800px; transform-box: view-box; }
+    .region { transform-origin: center; transform-box: fill-box; }
+    .region.hot { animation: ps-center-bounce var(--ps-bounce) ease-out; }
+    #center:hover, #center:focus { animation: ps-center-bounce var(--ps-bounce) ease-out; }
+    @keyframes ps-center-bounce { 0% { transform: scale(1); } 35% { transform: scale(1.08); } 65% { transform: scale(.97); } 85% { transform: scale(1.015); } 100% { transform: scale(1); } }
+    @media (prefers-reduced-motion: reduce) { #center:hover, #center:focus, .region.hot { animation: none; } }
     #wheelSvg foreignObject, .actionLabel { pointer-events: none; }
     .sectorLabel, .hubContent { width: 100%; height: 100%; display: grid; align-content: center; overflow-wrap: anywhere; text-align: center; }
     .sectorLabel { font: 600 110px/1.12 Georgia, serif; color: #fff3d9; }

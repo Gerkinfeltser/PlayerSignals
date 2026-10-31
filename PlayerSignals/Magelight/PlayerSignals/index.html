@@ -27,9 +27,12 @@
     .nearby-region.linked > g:first-child { opacity: 0; }
     .nearby-region.linked.hot > g:first-child { opacity: 1; }
     .nearby-region.signal .chevron-knot { display: none; }
-    .nearby-region.signal .hit-area { fill: var(--hover-fill) !important; }
+    .nearby-region.signal > g:first-child > path:not(.hit-area) { opacity: 0; }
+    .nearby-region.signal .hit-area { fill: var(--hover-fill) !important; fill-opacity: 0; stroke: #797c78; stroke-width: 12; transition: fill-opacity var(--ps-tween) ease; }
+    .nearby-region.signal.hot .hit-area { fill-opacity: 1; }
     .broadcast-symbol { display: none; pointer-events: none; }
-    .signal .broadcast-symbol { display: initial; }
+    .signal .broadcast-symbol { display: initial; opacity: .6; filter: grayscale(1) brightness(3); transition: opacity var(--ps-tween) ease, filter var(--ps-tween) ease; }
+    .signal.hot .broadcast-symbol { opacity: 1; filter: grayscale(0) brightness(1); }
     .region.hot { filter: brightness(1.3); }
     @media (prefers-reduced-motion: reduce) { :root { --ps-tween: 0ms; } }
     .target-region.hot .hit-area { fill: var(--selection-fill) !important; }

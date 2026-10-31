@@ -68,11 +68,21 @@ frame.addEventListener("load", async () => {
             const root = new view.DOMPoint(box.x+box.width/2,box.y+box.height/2).matrixTransform(svg.getCTM().inverse().multiply(hit.getCTM()));
             const angle = (Math.atan2(root.x-1800,1800-root.y)*180/Math.PI+360)%360;
             assert(Math.abs((angle-i*30+540)%360-180)<=1, `Slot ${i} ${kind} arrow angle ${angle} is off-center`);
+            assert(art.parentElement === hit.parentElement.parentElement, `Slot ${i} ${kind} arrow is not owned directly by its slice lift`);
             for (const path of art.querySelectorAll("path")) {
-                const length=path.getTotalLength(), matrix=hit.getCTM().inverse().multiply(path.getCTM());
-                for (let n=0;n<=32;n++)
-                    assert(hit.isPointInFill(path.getPointAtLength(length*n/32).matrixTransform(matrix)), `Slot ${i} ${kind} arrow leaves its slice`);
+                const length=path.getTotalLength(), matrix=hit.getCTM().inverse().multiply(path.getCTM()), toRoot=svg.getCTM().inverse().multiply(path.getCTM()), style=view.getComputedStyle(path);
+                const half=style.stroke==="none"?0:parseFloat(style.strokeWidth)*Math.hypot(toRoot.a,toRoot.b)/2;
+                for (let n=0;n<=32;n++) {
+                    const point=path.getPointAtLength(length*n/32), painted=point.matrixTransform(toRoot);
+                    assert(hit.isPointInFill(point.matrixTransform(matrix)), `Slot ${i} ${kind} arrow leaves its slice`);
+                    for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])
+                        assert(!hubPaintedAt(new view.DOMPoint(painted.x+dx*half,painted.y+dy*half)), `Slot ${i} ${kind} arrow is covered by the popped hub`);
+                }
             }
+            const range=doc.createRange(); range.selectNodeContents(doc.querySelector(`.sectorLabel[data-index="${i}"]`));
+            const ink=range.getBoundingClientRect(), toHit=hit.getScreenCTM().inverse();
+            const labelBottom=Math.max(...[[ink.left,ink.top],[ink.right,ink.top],[ink.right,ink.bottom],[ink.left,ink.bottom]].map(([x,y])=>new view.DOMPoint(x,y).matrixTransform(toHit).y));
+            assert(box.y-labelBottom>12, `Slot ${i} ${kind} arrow overlaps its label`);
         };
         arm("geometry", Array.from({length:12}, (_, i) => ({label:"Slot " + i, intent:"greet"})));
         doc.getElementById("center").focus();
@@ -203,22 +213,33 @@ frame.addEventListener("load", async () => {
             ["hotkey", {label:"Dashboard",hotkey:64}, null, null]
         ]) {
             arm("arrows-" + kind, Array(12).fill(slot));
-            center.blur();
+            center.focus(); center.blur();
             assert(Math.abs(hubScale()-1)<.001, `Merged ${kind} rest geometry did not use the unpopped hub`);
             for (let i = 0; i < 12; i++) {
                 const target = region(i), nearby = region(i, "nearby");
                 if (shown) {
-                    const art = target.querySelector("." + shown), other = target.querySelector("." + hidden);
+                    const art = target.parentElement.querySelector("." + shown), other = target.parentElement.querySelector("." + hidden);
                     assert(view.getComputedStyle(art).display !== "none" && view.getComputedStyle(other).display === "none", "Wrong navigation arrow shown");
                     assert(art.getBBox().width > 0 && art.getBBox().height > 0, "Navigation artwork is empty");
                     checkArrow(art, i, kind);
+                    const fixed=art.getAttribute("transform"), rest=svg.getCTM().inverse().multiply(art.getCTM());
                     target.focus(); checkArrow(art,i,kind);
+                    const lifted=svg.getCTM().inverse().multiply(art.getCTM());
+                    assert(Math.abs(Math.hypot(lifted.a,lifted.b)/Math.hypot(rest.a,rest.b)-1.06)<.001 && art.getAttribute("transform")===fixed, `Slot ${i} ${kind} arrow does not lift with its slice using a fixed transform`);
                     checkPointedEdge(target.querySelector(".hit-area"),i,kind+" lifted fill");
                     checkPointedEdge(target.querySelector(".edge-line"),i,kind+" lifted inset");
-                    center.focus(); checkArrow(art,i,kind); assertNativeOctagon(); center.blur();
+                    center.focus(); checkArrow(art,i,kind); assertNativeOctagon();
+                    const popped=svg.getCTM().inverse().multiply(art.getCTM());
+                    assert(["a","b","c","d","e","f"].every(key=>Math.abs(popped[key]-rest[key])<.001) && art.getAttribute("transform")===fixed, `Slot ${i} ${kind} arrow moves when only the hub pops`);
+                    const saved=hubPop.getAttribute("transform");
+                    hubPop.setAttribute("transform","translate(1800 1800) scale(1.09) translate(-1800 -1800)");
+                    checkArrow(art,i,kind);
+                    hubPop.setAttribute("transform",saved); center.blur();
                 }
                 assert(target.classList.contains(kind === "action" ? "action" : "navigation"), `Slot ${i} ${kind} lacks its merged-kind class`);
                 assert(nearby.getAttribute("aria-disabled") === "true" && nearby.getAttribute("tabindex") === "-1" && view.getComputedStyle(nearby).display === "none", `Slot ${i} ${kind} nearby region remains active`);
+                target.focus(); key("ArrowUp"); assert(doc.activeElement===target, `${kind} Up left its merged shape`);
+                key("ArrowDown"); assert(doc.activeElement===target, `${kind} Down left its merged shape`); center.focus(); center.blur();
                 const hit = target.querySelector(".hit-area"), edge = target.querySelector(".edge-line");
                 assert(hit.getAttribute("d") === hit.getAttribute("data-nav-d") && edge.getAttribute("d") === edge.getAttribute("data-nav-d"), `Slot ${i} ${kind} did not swap to merged hit and edge geometry`);
                 assert(target.querySelectorAll(".hit-area").length === 1 && target.querySelectorAll(".edge-line").length === 1, `Slot ${i} ${kind} has multiple hit regions or edges`);
@@ -303,7 +324,7 @@ frame.addEventListener("load", async () => {
                     view.psWheelArm(token);
                     if (kind === "submenu" || kind === "back") {
                         region(i).focus();
-                        const art = region(i).querySelector(kind === "submenu" ? ".submenu-art" : ".back-art");
+                        const art = region(i).parentElement.querySelector(kind === "submenu" ? ".submenu-art" : ".back-art");
                         checkArrow(art, i, kind);
                     }
                     route();
@@ -322,7 +343,9 @@ frame.addEventListener("load", async () => {
         assert(doc.getElementById("caption").textContent === sparse[1].label, "Label changed");
         key("ArrowLeft"); assert(doc.activeElement === region(11), "Reverse navigation failed to wrap over holes");
         key("ArrowRight"); assert(doc.activeElement === region(1), "Clockwise navigation failed to wrap over holes");
-        key("ArrowDown"); assert(doc.activeElement === region(1,"nearby") && doc.getElementById("destination").textContent === "Openly", "Openly keyboard destination missing");
+        key("ArrowUp"); assert(doc.activeElement === region(1,"nearby") && doc.getElementById("destination").textContent === "Openly", "Up did not choose the outward Openly tip");
+        key("ArrowDown"); assert(doc.activeElement === region(1) && doc.getElementById("destination").textContent === literal, "Down did not return to the captured-target core");
+        key("ArrowUp");
         key("Enter"); assert(replies.pop() === "literal|1|greet|nearby", "Openly choice was not preserved");
         for (const target of [undefined, ""]) {
             const token = target === undefined ? "absent-target" : "empty-target";
@@ -555,7 +578,7 @@ frame.addEventListener("load", async () => {
         const deadline = performance.now() + 230;
         while (performance.now() < deadline) {
             await nextFrame(); samples.push(liftScale()); assertLabel(0);
-            checkArrow(region(1).querySelector(".submenu-art"), 1, "submenu");
+            checkArrow(region(1).parentElement.querySelector(".submenu-art"), 1, "submenu");
             checkPointedEdge(region(0).querySelector(".edge-line"), 0, "core");
             checkPointedEdge(region(0).querySelector(".hit-area"),0,"core fill");
             checkHubTop(0);
@@ -578,7 +601,7 @@ frame.addEventListener("load", async () => {
         while (performance.now() < navDeadline) {
             await nextFrame(); navSamples.push(navScale());
             checkPointedEdge(region(1).querySelector(".edge-line"),1,"merged submenu");
-            checkArrow(region(1).querySelector(".submenu-art"),1,"submenu");
+            checkArrow(region(1).parentElement.querySelector(".submenu-art"),1,"submenu");
             checkPointedEdge(region(1).querySelector(".hit-area"),1,"merged submenu fill");
             checkHubTop(1);
         }
@@ -592,7 +615,7 @@ frame.addEventListener("load", async () => {
         const hubSamples = [hubScale()], hubDeadline = performance.now() + 230;
         while (performance.now() < hubDeadline) {
             await nextFrame(); hubSamples.push(hubScale());
-            checkArrow(region(1).querySelector(".submenu-art"),1,"submenu");
+            checkArrow(region(1).parentElement.querySelector(".submenu-art"),1,"submenu");
             checkPointedEdge(region(1).querySelector(".edge-line"),1,"hub-pop merged inset");
             checkHubTop(1);
             const text = doc.querySelector(".hubContent").closest("foreignObject").getScreenCTM();
@@ -657,6 +680,7 @@ frame.addEventListener("load", async () => {
         assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
         report.textContent = "PASS: 12-slot choices and Back placement; gesture core/tip routing; merged navigation/actions and disabled nearby regions; simple uniform arrows preserve aspect, center angle within 1 degree and stay inside their slices at rest, slice lift and hub pop; core/merged fills and insets converge beneath the opaque native octagon without exposed transverse inner segments; hub paints last and wins boundary hits inside its moving outline, while slices win just outside; ACTION badges, upright labels/ripples, both armed pointer-transparent vignettes with matching fade and title/help above them, Shift preview, palettes, empty slots, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
         report.textContent += " Hotkeys: neutral merged necktie, no target required, F6 hub and visible KEY badge, Shift ignored, typed hotkey choice after close, malformed/conflicting payloads fail closed.";
+        report.textContent += " Slice-owned arrows retain fixed local transforms, scale with their slice, remain stationary under hub-only pop, clear a 1.09 hub and their labels; Up chooses a gesture tip, Down its core, and non-gestures retain merged focus.";
         report.textContent += " Hub Cancel tracks shared SVG-attribute motion, overshoots then settles at 1.08, returns on leave/blur, snaps with reduced motion/0ms, has no idle rAF, and routes inside-octagon clicks to Cancel and outside-edge clicks to the slice in all 12 directions; two-line ~20px help shows the mapped open-key name, omits unmapped names and clears the lifted bottom tip at 1080p/1440p.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });

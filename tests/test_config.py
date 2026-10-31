@@ -149,7 +149,7 @@ class ConfigValidation(unittest.TestCase):
         layout = json.loads(CATALOG.with_name('layout.json').read_text(encoding='utf-8'))
         self.parse(layout)
         expected = {
-            'main': ['confirm', 'social', None, 'greet', 'signals', None,
+            'main': ['confirm', 'social', 'hotkey:64', 'greet', 'signals', None,
                      'deny', 'attitude', None, 'farewell', 'actions', None],
             'attitude': ['approve', None, 'understood', 'challenge', 'unsure', 'think',
                          'disapprove', None, 'not_understood', 'yield', 'back', None],
@@ -164,7 +164,9 @@ class ConfigValidation(unittest.TestCase):
         for name, identities in expected.items():
             slots = layout['wheels'][name]
             actual = [None if slot is None else slot.get('intent') or slot.get('submenu')
-                      or slot.get('control') or slot['action']['name'] for slot in slots]
+                      or slot.get('control')
+                      or ('hotkey:%d' % slot['hotkey'] if 'hotkey' in slot else slot['action']['name'])
+                      for slot in slots]
             self.assertEqual(actual, identities, name)
             homes.extend(identity for identity in actual if identity and identity != 'back')
         self.assertEqual(len(homes), len(set(homes)), 'Each entry has one home')

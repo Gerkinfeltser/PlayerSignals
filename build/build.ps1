@@ -211,11 +211,14 @@ function Tip-EdgePath {
 }
 $coreEdgeD = Core-EdgePath
 $tipEdgeD = Tip-EdgePath
-# ponytail: one circumradius fit leaves extra clearance over flat faces; per-face fitting only if requested.
-$hubRadius = 470; $arrowRadius = $hubRadius + 6
+# Fixed slice-local placement clears the hub's maximum pop; fit once at each glyph's outer extent.
+$arrowRadius = 525
 $sideSlope = [Math]::Abs(($outerLeft[0] - $innerLeft[0]) / ($outerLeft[1] - $innerLeft[1]))
-$arrowWidth = 0.8 * 2 * $sideSlope * ($arrowRadius + $apex[1])
-$submenuScale = $arrowWidth / 446.280029; $backScale = $arrowWidth / 316.469971
+$arrowFit = 0.85 * 2 * $sideSlope
+# Use the clear interior between the existing inset edges, not the surrounding border.
+# k = .85 * interiorWidth(525 + glyphHeight*k) / glyphWidth; solve directly.
+$submenuScale = $arrowFit * ($arrowRadius + $insetApex[1]) / (446.280029 - $arrowFit * 201.989624)
+$backScale = $arrowFit * ($arrowRadius + $insetApex[1]) / (316.469971 - $arrowFit * 174.432861)
 $submenuY = 1800 - $arrowRadius - 201.989624 / 2 * $submenuScale
 $backY = 1800 - $arrowRadius - 174.432861 / 2 * $backScale
 $submenuPlacement = [string]::Format([Globalization.CultureInfo]::InvariantCulture, 'translate(1800 {0:0.######}) scale({1:0.######}) translate(-1804.650024 -1227.895203) ', $submenuY, $submenuScale)
@@ -296,7 +299,6 @@ foreach ($node in $svg.SelectNodes('.//*[@id]')) {
 foreach ($region in $regions) {
     $piece = $region.Piece; $slot = $region.Slot; $parts = $region.Parts
     $piece.SetAttribute('id', "slot-$slot"); $piece.SetAttribute('class', 'sector'); $piece.SetAttribute('data-index', [string]$slot)
-    $piece.SetAttribute('data-hub-radius', $hubRadius.ToString('0.######', [Globalization.CultureInfo]::InvariantCulture))
     $piece.SetAttribute('data-label-radius', $labelRadius.ToString('0.######', [Globalization.CultureInfo]::InvariantCulture))
     $pop = $art.CreateElement('g', $svg.NamespaceURI); $pop.SetAttribute('class', 'pop')
     [void]$piece.AppendChild($pop)
@@ -304,7 +306,7 @@ foreach ($region in $regions) {
         $wrapper = $art.CreateElement('g', $svg.NamespaceURI)
         $wrapper.SetAttribute('id', "slot-$slot-$mode"); $wrapper.SetAttribute('class', "region $mode-region")
         [void]$pop.AppendChild($wrapper)
-        $names = if ($mode -eq 'target') { @('Submenu', 'Upmenu') } else { @('ChevronKnot') }
+        $names = if ($mode -eq 'target') { @() } else { @('ChevronKnot') }
         foreach ($name in $names) { [void]$wrapper.AppendChild($parts[$name]) }
         $hit = $art.CreateElement('path', $svg.NamespaceURI)
         $hit.SetAttribute('id', "slot-$slot-$mode-hit")
@@ -325,6 +327,8 @@ foreach ($region in $regions) {
         }
         [void]$wrapper.AppendChild($edge)
     }
+    [void]$pop.AppendChild($parts.Submenu)
+    [void]$pop.AppendChild($parts.Upmenu)
     $parts.ChevronKnot.SetAttribute('class', 'chevron-knot')
     $parts.Submenu.SetAttribute('class', 'navigation-art submenu-art')
     $parts.Upmenu.SetAttribute('class', 'navigation-art back-art')

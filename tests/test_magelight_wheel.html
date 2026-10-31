@@ -64,11 +64,17 @@ frame.addEventListener("load", async () => {
             const root = center.matrixTransform(svg.getCTM().inverse().multiply(hit.getCTM()));
             const angle = (Math.atan2(root.x-1800,1800-root.y)*180/Math.PI+360)%360;
             assert(Math.abs((angle-i*30+540)%360-180) <= 1, `Slot ${i} ${kind} arrow angle ${angle} is off-center`);
-            // Preserve 10 units beyond arrow stroke and the inset line's half stroke.
-            const pad = 10+8*scale+4.5;
-            for (const x of [box.x-pad,center.x,box.x+box.width+pad]) for (const y of [box.y-pad,center.y,box.y+box.height+pad]) {
-                assert(edge.isPointInFill(new view.DOMPoint(x,y)), `Slot ${i} ${kind} arrow lacks core-edge clearance`);
+            const edgeLength = edge.getTotalLength(), edgeToHit = hit.getCTM().inverse().multiply(edge.getCTM());
+            let innerRadius = Infinity;
+            for (let j = 0; j <= 1024; j++) {
+                const point = edge.getPointAtLength(edgeLength*j/1024).matrixTransform(edgeToHit), radius = Math.hypot(point.x-1800,point.y-1800);
+                innerRadius = Math.min(innerRadius, radius);
             }
+            const insetY = 1800 - innerRadius - 4.5, arrowEdge = box.y+box.height;
+            assert(arrowEdge <= insetY+.01 && insetY-arrowEdge <= 2, `Slot ${i} ${kind} arrow is not flush with hub inset (${insetY-arrowEdge} SVG units)`);
+            const sidePad = 10+8*scale+4.5;
+            for (const x of [box.x-sidePad, box.x+box.width+sidePad]) for (const y of [box.y,center.y,box.y+box.height])
+                assert(edge.isPointInFill(new view.DOMPoint(x,y)), `Slot ${i} ${kind} arrow lacks side clearance`);
             const label = doc.querySelector(`.sectorLabel[data-index="${i}"]`), range = doc.createRange();
             range.selectNodeContents(label);
             const l = range.getBoundingClientRect(), m = hit.getScreenCTM().inverse();
@@ -102,6 +108,21 @@ frame.addEventListener("load", async () => {
         assert(core.classList.contains("hot") && tip.classList.contains("hot"), "Gesture tip failed to highlight both regions");
         const pop = doc.getElementById("slot-0").querySelector(".pop");
         const liftScale = () => pop.parentElement.getCTM().inverse().multiply(pop.getCTM()).a;
+        // Fill-only pointer events preserve distinct routing immediately across the shared arc.
+        doc.getElementById("center").focus();
+        for (let i = 0; i < 12; i++) for (const offset of [-13, -8, 0, 8, 13]) for (const [mode, radius] of [["target",1295.9],["nearby",1296.1]]) {
+            const angle = (i*30+offset)*Math.PI/180, point = svg.createSVGPoint();
+            point.x = 1800+radius*Math.sin(angle); point.y = 1800-radius*Math.cos(angle);
+            const hit = doc.getElementById(`slot-${i}-${mode}-hit`), local = point.matrixTransform(hit.getCTM().inverse().multiply(svg.getCTM()));
+            assert(hit.isPointInFill(local), `Slot ${i} ${mode} does not own its side of the shared 1296-unit boundary`);
+            const other = doc.getElementById(`slot-${i}-${mode === "target" ? "nearby" : "target"}-hit`);
+            const otherLocal = point.matrixTransform(other.getCTM().inverse().multiply(svg.getCTM()));
+            assert(!other.isPointInFill(otherLocal), `Slot ${i} core/tip paths overlap inside the shared boundary`);
+            const screen = point.matrixTransform(svg.getScreenCTM());
+            assert(doc.elementFromPoint(screen.x,screen.y)?.closest(".region") === region(i,mode), `Slot ${i} ${mode} boundary routing overlaps or is stolen`);
+        }
+        assert(Math.abs(liftScale() - 1) < .001, "Boundary checks require an unlifted wheel");
+        core.focus();
         assert(Math.abs(liftScale() - 1.06) < .001, "Hover lift missing");
         region(1).focus();
         assert(Math.abs(liftScale() - 1) < .001, "Previous slice retained lift");
@@ -131,8 +152,14 @@ frame.addEventListener("load", async () => {
         key("Escape"); assert(replies.pop() === "arrows-hidden|-1||cancel", "Arrow clearing setup failed to cancel");
         arm("vignette", []);
         assert(Number(view.getComputedStyle(vignette).opacity) === 1 && view.getComputedStyle(vignette).pointerEvents === "none", "Armed vignette missing or intercepts input");
-        assert(Math.abs(vignette.getBoundingClientRect().height - view.innerHeight / 8) < 1 && Math.abs(vignette.getBoundingClientRect().bottom - view.innerHeight) < 1, "Vignette is not bottom eighth");
+        assert(Math.abs(vignette.getBoundingClientRect().height - view.innerHeight / 4) < 1 && Math.abs(vignette.getBoundingClientRect().bottom - view.innerHeight) < 1, "Vignette is not bottom quarter");
         assert([...doc.querySelectorAll(".sector")].every(slot => Number(view.getComputedStyle(slot).opacity) === .5), "Empty slots are not half opaque");
+        for (let i = 0; i < 12; i++) for (const mode of ["target","nearby"]) {
+            const slot = region(i,mode), coreStroke = view.getComputedStyle(slot.querySelector(".hit-area")).stroke;
+            const edge = slot.querySelector(".edge-line"), edgeStyle = view.getComputedStyle(edge);
+            assert(coreStroke === "none" && edge && (edgeStyle.display === "none" || edgeStyle.visibility === "hidden" || edgeStyle.stroke === "none"), `Empty slot ${i} ${mode} retains a border`);
+            assert(view.getComputedStyle(slot.querySelector(".hit-area")).fill !== "none", `Empty slot ${i} ${mode} lost its fill`);
+        }
         key("Escape"); assert(replies.pop() === "vignette|-1||cancel", "Vignette setup failed to cancel");
         assert(view.getComputedStyle(vignette).visibility === "hidden", "Vignette outlived armed state");
         // Exercise all shipped positions, destinations and navigation identities.
@@ -223,6 +250,15 @@ frame.addEventListener("load", async () => {
             const m = box.getScreenCTM();
             assert(Math.abs(m.b) < .001 && Math.abs(m.c) < .001, "Counter-rotated label is not upright");
         };
+        arm("ripples", Array.from({length:12}, (_,i) => ({label:"Ripple "+i,intent:"greet"})));
+        const assertUprightRipple = i => {
+            const symbol = region(i,"nearby").querySelector(".broadcast-symbol");
+            const m = svg.getCTM().inverse().multiply(symbol.getCTM());
+            assert(symbol && Math.abs(m.b) < .001 && Math.abs(m.c) < .001, `Ripple ${i} has effective rotation`);
+        };
+        doc.getElementById("center").focus();
+        for (let i = 0; i < 12; i++) { assertUprightRipple(i); region(i,"nearby").focus(); assertUprightRipple(i); }
+        key("Escape"); assert(replies.pop() === "ripples|-1||cancel", "Ripple setup failed to cancel");
         arm("motion", [{label:"Signal",intent:"greet"}, {label:"Menu",submenu:"social"}]);
         await settle(); doc.getElementById("center").focus(); await settle();
         const reduced = view.matchMedia("(prefers-reduced-motion: reduce)").matches, beforeFrames = raf.requested;
@@ -258,7 +294,7 @@ frame.addEventListener("load", async () => {
         arm("interrupted", [{label:"Signal",intent:"greet"}]);
         await nextFrame(); view.hostMode("0");
         assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
-        report.textContent = "PASS: 12-slot choices and Back placement; inset core/tip paths stay inside hits; every visible arrow centered within 1 degree, source aspect ratio within 1%, 10-unit stroke-aware core/label clearance, and type-specific visibility; hovered labels visible and upright without CSS transforms; Back/submenu fill parity in every theme; empty opacity .5; armed-only bottom vignette; target/Openly routing, keyboard, arming and cancellation; immediate navigation; SVG lift overshoots then settles at 1.06, reduced motion/0ms are instant, no idle or disarmed rAF. Browser-only, not Ultralight/native/game proof.";
+        report.textContent = "PASS: 12-slot choices and Back placement; inset core/tip paths stay inside hits; every visible arrow centered within 1 degree, source aspect ratio within 1%, flush to the sampled hub inset, with stroke-aware side and label clearance; shared 1296-unit core/tip boundary has distinct ownership and hit routing at multiple angles; every ripple stays upright at rest and hovered; hovered labels visible and upright without CSS transforms; Back/submenu fill parity in every theme; disabled core/tip borders hidden, fills preserved, sector opacity .5; armed-only bottom-quarter vignette; target/Openly routing, keyboard, arming and cancellation; immediate navigation; SVG lift overshoots then settles at 1.06, reduced motion/0ms are instant, no idle or disarmed rAF. Browser-only, not Ultralight/native/game proof.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

@@ -125,7 +125,7 @@ function Point($radius, $degrees) {
 }
 $half = 15
 $coreInner = 432; $coreOuter = 1296; $coreGap = 36
-$tipInner = 1339.2; $tipOuter = 1692; $tipGap = 50.4
+$tipInner = $coreOuter; $tipOuter = 1692; $tipGap = $coreGap
 $coreInnerGap = $coreGap / $coreInner * 90 / [Math]::PI
 $coreOuterGap = $coreGap / $coreOuter * 90 / [Math]::PI
 $tipAngleGap = $tipGap / $tipInner * 90 / [Math]::PI
@@ -280,9 +280,9 @@ foreach ($region in $regions) {
     $parts.Upmenu.SetAttribute('class', 'navigation-art back-art')
     $parts.Submenu.SetAttribute('aria-hidden', 'true'); $parts.Upmenu.SetAttribute('aria-hidden', 'true')
     # Browser-measured bounds in sector-local coordinates; preserve authored aspect ratios.
-    # Maximal fits use 10-unit clearance beyond arrow strokes and the inset edge.
-    $parts.Submenu.SetAttribute('transform', ('translate(1800 1001.6) scale(0.5974) translate(-1804.650024 -1227.895203) ' + $parts.Submenu.GetAttribute('transform')).Trim())
-    $parts.Upmenu.SetAttribute('transform', ('translate(1800 970.9) scale(0.8541) translate(-1805.724976 -1237.673584) ' + $parts.Upmenu.GetAttribute('transform')).Trim())
+    # Hub-facing fill bounds touch the inner inset stroke; sides retain 10-unit clearance.
+    $parts.Submenu.SetAttribute('transform', ('translate(1800 1313.878222) scale(0.2933) translate(-1804.650024 -1227.895203) ' + $parts.Submenu.GetAttribute('transform')).Trim())
+    $parts.Upmenu.SetAttribute('transform', ('translate(1800 1307.933140) scale(0.4078) translate(-1805.724976 -1237.673584) ' + $parts.Upmenu.GetAttribute('transform')).Trim())
 }
 $center.SetAttribute('id', 'center')
 $centerHit.SetAttribute('id', 'center-hit'); $centerHit.SetAttribute('class', 'hit-area')

@@ -6,33 +6,23 @@
   },
   "wheels": {
     "main": [
-      { "label": "Confirm / Yes", "intent": "confirm" },
-      { "label": "Deny / No", "intent": "deny" },
       { "label": "Greet", "intent": "greet" },
-      { "label": "Farewell", "intent": "farewell" },
-      { "label": "Social", "submenu": "social" },
-      { "label": "Signals", "submenu": "signals" },
+      { "label": "Attitude", "submenu": "attitude" },
       { "label": "Actions", "submenu": "actions" },
-      null
+      { "label": "Social", "submenu": "social" },
+      { "label": "Farewell", "intent": "farewell" },
+      { "label": "Signals", "submenu": "signals" },
+      { "label": "Yes", "intent": "confirm" },
+      { "label": "Calm down", "intent": "calm_down" }
     ],
     "social": [
       { "label": "Thank you", "intent": "thanks" },
-      { "label": "Sorry", "intent": "sorry" },
-      { "label": "Show respect", "intent": "respect" },
-      { "label": "Welcome", "intent": "welcome" },
-      { "label": "Well done", "intent": "congratulate" },
-      { "label": "More social", "submenu": "more_social" },
-      { "label": "Attitude", "submenu": "attitude" },
-      { "label": "Back", "control": "back" }
-    ],
-    "more_social": [
       { "label": "Offer", "intent": "offer" },
+      { "label": "Well done", "intent": "congratulate" },
+      { "label": "Welcome", "intent": "welcome" },
+      { "label": "Sorry", "intent": "sorry" },
       { "label": "Request", "intent": "ask" },
-      null,
-      null,
-      null,
-      null,
-      null,
+      { "label": "Show respect", "intent": "respect" },
       { "label": "Back", "control": "back" }
     ],
     "actions": [
@@ -46,22 +36,22 @@
       { "label": "Back", "control": "back" }
     ],
     "signals": [
-      { "label": "Come here", "intent": "come_here" },
       { "label": "Follow me", "intent": "follow_me" },
-      { "label": "Wait here", "intent": "wait_here" },
-      { "label": "Quiet", "intent": "quiet" },
-      { "label": "Ready", "intent": "ready" },
-      { "label": "Watch out", "intent": "warn" },
+      { "label": "Come here", "intent": "come_here" },
       { "label": "Get attention", "intent": "attention" },
+      { "label": "Watch out", "intent": "warn" },
+      { "label": "Wait here", "intent": "wait_here" },
+      { "label": "Ready", "intent": "ready" },
+      { "label": "Quiet", "intent": "quiet" },
       { "label": "Back", "control": "back" }
     ],
     "attitude": [
-      { "label": "Unsure", "intent": "unsure" },
-      { "label": "Let me think", "intent": "think" },
-      { "label": "Not understood", "intent": "not_understood" },
       { "label": "Approve", "intent": "approve" },
-      { "label": "Disapprove", "intent": "disapprove" },
+      { "label": "Unsure", "intent": "unsure" },
       { "label": "Challenge", "intent": "challenge" },
+      { "label": "Not understood", "intent": "not_understood" },
+      { "label": "Disapprove", "intent": "disapprove" },
+      { "label": "Let me think", "intent": "think" },
       { "label": "Surrender", "intent": "yield" },
       { "label": "Back", "control": "back" }
     ]

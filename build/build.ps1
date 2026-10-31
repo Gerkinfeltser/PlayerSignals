@@ -130,12 +130,58 @@ $regions = foreach ($slot in 0..7) {
        TargetHit = (Get-FillPath $parts.Pie "Slot $slot Pie")
        NearbyHit = (Get-FillPath $parts.Chevron "Slot $slot Chevron") }
 }
-# Only reference targets need their Affinity IDs; layer lookup above is already complete.
-$references = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
-foreach ($attribute in $svg.SelectNodes('.//@*')) {
-    foreach ($match in [regex]::Matches($attribute.Value, 'url\(\s*[''"]?#([^''")\s]+)')) { [void]$references.Add($match.Groups[1].Value) }
-    if ($attribute.LocalName -eq 'href' -and $attribute.Value.StartsWith('#')) { [void]$references.Add($attribute.Value.Substring(1)) }
+function Get-SvgReferences($node, $contentOnly = $false) {
+    $references = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    $attributes = if ($contentOnly) { ".//@*[not(ancestor::*[local-name()='defs'])]" } else { './/@*' }
+    foreach ($value in $node.SelectNodes("$attributes | .//*[local-name()='style']/text()")) {
+        foreach ($match in [regex]::Matches($value.Value, 'url\(\s*[''"]?#([^''")\s]+)')) { [void]$references.Add($match.Groups[1].Value) }
+        if ($value.LocalName -eq 'href' -and $value.Value.StartsWith('#')) { [void]$references.Add($value.Value.Substring(1)) }
+    }
+    return ,$references
 }
+# Layer lookup is complete; editor attributes no longer have a runtime purpose.
+foreach ($attribute in @($svg.SelectNodes(".//@*[namespace-uri()='http://www.serif.com/']"))) {
+    [void]$attribute.OwnerElement.RemoveAttributeNode($attribute)
+}
+$unusedSerif = $svg.SelectNodes("descendant-or-self::*[namespace-uri()='http://www.serif.com/']").Count -eq 0
+$unusedSpace = $svg.SelectNodes(".//*[local-name()='text' or local-name()='tspan' or local-name()='textPath']").Count -eq 0
+foreach ($node in $svg.SelectNodes('descendant-or-self::*')) {
+    if ($unusedSerif) { $node.RemoveAttribute('xmlns:serif') }
+    if ($unusedSpace) { $node.RemoveAttribute('space', 'http://www.w3.org/XML/1998/namespace') }
+}
+# Trace from retained artwork, not from defs: unreachable chains and cycles are dead.
+$definitionsById = [Collections.Generic.Dictionary[string,Xml.XmlElement]]::new([StringComparer]::Ordinal)
+foreach ($definition in $svg.SelectNodes(".//*[local-name()='defs']/*[local-name()!='defs']")) {
+    foreach ($node in $definition.SelectNodes('descendant-or-self::*[@id]')) {
+        $id = $node.GetAttribute('id')
+        if (-not $definitionsById.ContainsKey($id)) { $definitionsById.Add($id, $definition) }
+    }
+}
+$needed = Get-SvgReferences $svg $true
+$pending = [Collections.Generic.Queue[string]]::new()
+foreach ($id in $needed) { $pending.Enqueue($id) }
+while ($pending.Count) {
+    $id = $pending.Dequeue()
+    if ($definitionsById.ContainsKey($id)) {
+        foreach ($reference in (Get-SvgReferences $definitionsById[$id])) {
+            if ($needed.Add($reference)) { $pending.Enqueue($reference) }
+        }
+    }
+}
+do {
+    $removed = 0
+    foreach ($definition in @($svg.SelectNodes(".//*[local-name()='defs']/*[local-name()!='defs']"))) {
+        $keep = $definition.LocalName -eq 'style'
+        foreach ($node in $definition.SelectNodes('descendant-or-self::*[@id]')) {
+            if ($needed.Contains($node.GetAttribute('id'))) { $keep = $true; break }
+        }
+        if (-not $keep) { [void]$definition.ParentNode.RemoveChild($definition); $removed++ }
+    }
+    foreach ($empty in @($svg.SelectNodes(".//*[local-name()='defs' and not(*)]"))) {
+        [void]$empty.ParentNode.RemoveChild($empty); $removed++
+    }
+} while ($removed)
+$references = Get-SvgReferences $svg
 foreach ($node in $svg.SelectNodes('.//*[@id]')) {
     if (-not $references.Contains($node.GetAttribute('id'))) { $node.RemoveAttribute('id') }
 }
@@ -151,6 +197,7 @@ foreach ($region in $regions) {
         $hit = if ($mode -eq 'target') { $region.TargetHit } else { $region.NearbyHit }
         $hit.SetAttribute('id', "slot-$slot-$mode-hit"); $hit.SetAttribute('class', 'hit-area')
     }
+    $parts.ChevronKnot.SetAttribute('class', 'chevron-knot')
     $parts.Submenu.SetAttribute('class', 'navigation-art submenu-art')
     $parts.Upmenu.SetAttribute('class', 'navigation-art back-art')
     $parts.Submenu.SetAttribute('aria-hidden', 'true'); $parts.Upmenu.SetAttribute('aria-hidden', 'true')

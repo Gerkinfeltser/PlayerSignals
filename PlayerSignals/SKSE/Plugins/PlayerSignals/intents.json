@@ -21,6 +21,11 @@
       "notification": "waves goodbye",
       "targetedNotification": "waves goodbye to {target}"
     },
+    "calm_down": {
+      "narration": "slowly lowers both open hands, palms down, asking for calm",
+      "notification": "gestures for calm",
+      "targetedNotification": "gestures to {target} for calm"
+    },
     "thanks": {
       "narration": "bows their head in thanks",
       "notification": "gives thanks",

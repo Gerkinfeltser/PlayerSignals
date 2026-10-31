@@ -59,17 +59,50 @@ class ConfigValidation(unittest.TestCase):
         payload = self.module.wheelPayload(slots)
         self.assertEqual(json.loads(payload), expected)
 
-    def test_shipped_navigation_keeps_all_intents_and_custom_close(self):
+    def test_shipped_compass_layout_reaches_every_intent_except_deny(self):
         layout = json.loads(CATALOG.with_name('layout.json').read_text(encoding='utf-8'))
         self.parse(layout)
         wheels = layout['wheels']
-        self.assertIsNone(wheels[layout['root']][7])
-        for name, slots in wheels.items():
-            self.assertFalse(any(slot and slot.get('control') == 'close' for slot in slots), name)
-            if name != layout['root']:
-                self.assertEqual(slots[7].get('control'), 'back', name)
-        self.assertEqual({slot['intent'] for slots in wheels.values() for slot in slots
-                          if slot and 'intent' in slot}, set(self.catalog['intents']))
+        self.assertEqual(layout['root'], 'main')
+        self.assertEqual(set(wheels), {'main', 'social', 'signals', 'attitude', 'actions'})
+
+        expected = {
+            'main': [('intent', 'greet'), ('submenu', 'attitude'), ('submenu', 'actions'),
+                     ('submenu', 'social'), ('intent', 'farewell'), ('submenu', 'signals'),
+                     ('intent', 'confirm'), ('intent', 'calm_down')],
+            'social': [('intent', 'thanks'), ('intent', 'offer'), ('intent', 'congratulate'),
+                       ('intent', 'welcome'), ('intent', 'sorry'), ('intent', 'ask'),
+                       ('intent', 'respect'), ('control', 'back')],
+            'signals': [('intent', 'follow_me'), ('intent', 'come_here'), ('intent', 'attention'),
+                        ('intent', 'warn'), ('intent', 'wait_here'), ('intent', 'ready'),
+                        ('intent', 'quiet'), ('control', 'back')],
+            'attitude': [('intent', 'approve'), ('intent', 'unsure'), ('intent', 'challenge'),
+                         ('intent', 'not_understood'), ('intent', 'disapprove'), ('intent', 'think'),
+                         ('intent', 'yield'), ('control', 'back')],
+            'actions': [('action', 'drink_alcohol'), None, None, None, None, None, None,
+                        ('control', 'back')],
+        }
+        for name, entries in expected.items():
+            self.assertEqual(len(wheels[name]), 8, name)
+            actual = []
+            for slot in wheels[name]:
+                if slot is None:
+                    actual.append(None)
+                elif 'submenu' in slot:
+                    actual.append(('submenu', slot['submenu']))
+                elif 'control' in slot:
+                    actual.append(('control', slot['control']))
+                elif 'action' in slot:
+                    actual.append(('action', slot['action']['name']))
+                else:
+                    actual.append(('intent', slot['intent']))
+            self.assertEqual(actual, entries, name)
+            self.assertFalse(any(slot and slot.get('control') == 'close' for slot in wheels[name]), name)
+
+        reachable = {slot['intent'] for slots in wheels.values() for slot in slots
+                     if slot and 'intent' in slot}
+        self.assertIn('calm_down', self.catalog['intents'])
+        self.assertEqual(set(self.catalog['intents']) - reachable, {'deny'})
         custom = minimal()
         custom['wheels']['main'] = [{'label': 'Exit', 'control': 'close'}]
         self.parse(custom)

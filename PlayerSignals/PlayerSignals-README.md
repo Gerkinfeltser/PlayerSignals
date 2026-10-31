@@ -1,6 +1,6 @@
 # PlayerSignals: a little less talking, a little more nodding
 
-Want to agree, say thanks, or give someone a puzzled look without typing a sentence? PlayerSignals gives you a small communication wheel with 25 shipped gesture defaults, and its JSON catalog can add more intents. SkyrimNet receives an authored direct narration describing what your character means.
+Want to agree, say thanks, or give someone a puzzled look without typing a sentence? PlayerSignals gives you a small communication wheel with 25 reachable shipped gesture defaults; the JSON catalog contains 26 defaults, including Deny, which is not in a shipped wheel, and can add more intents. SkyrimNet receives an authored direct narration describing what your character means.
 
 Gesture entries submit narration and show a local receipt only when SkyrimNet's API accepts it. Group feedback omits a recipient; targeted feedback names the NPC captured before the wheel opened. Gestures do not visibly animate your character or force NPC compliance. The experimental Actions category is different: it directly requests a registered SkyrimNet action on that NPC, without guaranteeing completion.
 
@@ -31,15 +31,15 @@ Start the game and load a save, or begin a new game. PlayerSignals checks for Sk
 
 1. In normal gameplay, look toward the NPC you want to address, if there is one.
 2. Press **Right Alt** to open the wheel. PlayerSignals captures the crosshair NPC before showing it.
-3. Choose a communication entry, such as **Confirm / Yes** or **Greet**.
+3. Choose a communication entry, such as **Yes** or **Greet**.
 
 If the captured NPC is still alive, enabled, and loaded when you choose, SkyrimNet receives a targeted narration with your character as the originator (`From`) and the captured NPC as the explicit target. The text describes your character making the gesture and addresses that NPC by name. Moving the crosshair while the wheel is open does not change the submitted target. SkyrimNet still chooses who responds; the captured NPC is not guaranteed to be the responder, and Recent Events may show the selected responder under `To`.
 
 You'll see a small notification with your character's name only if SkyrimNet's API accepts the narration. For the **Greet** intent, group feedback looks like `Bill greets.`; targeted feedback to the captured NPC Ted looks like `Bill greets Ted.` Think of it as a receipt—not a promise that an NPC heard you or will answer.
 
-Open a submenu by choosing **Social** (**Social >** in UIExtensions), for example. Choose **Back** (**Back <** in UIExtensions) to return to the previous wheel; it occupies slot 7 (top-left in Magelight) in every shipped submenu. The root's final slot is empty, with no shipped Close entry. **Tab** cancels; Magelight also offers center-click and **Escape**. Opening submenus, going Back, or cancelling doesn't send a narration.
+Open a submenu by choosing **Social** (**Social >** in UIExtensions), for example. Choose **Back** (**Back <** in UIExtensions) to return to the previous wheel; it occupies slot 7 (top-left in Magelight) in every shipped submenu. The root ends with **Calm down** and has no shipped Close entry. **Tab** cancels; Magelight also offers center-click and **Escape**. Opening submenus, going Back, or cancelling doesn't send a narration.
 
-**Experimental Magelight branch:** the authored radial wheel has eight fixed positions clockwise from the top. Click a gray gesture body for the target NPC, or its white **ALL** chevron for everyone nearby without Shift. With no captured NPC, both gesture regions address nearby; Shift still overrides an inner gesture selection. Chevron and knot art stays visible on every slice, including dimmed, inert empty slots. Only gestures show **ALL** or offer nearby mode. For navigation and **ACTION** entries, the chevron selects the same choice as the inner piece; both highlight together. Actions ignore Shift and require a valid target. Hover changes the center label/destination. Left/Right changes entry, Up selects its inner body, Down selects a gesture's nearby chevron, and Enter/Space selects the focused region. Center, Tab or Escape cancels; use native Escape during blank loading/navigation. This revision is browser-checked and built, not yet game-verified.
+**Experimental Magelight branch:** the authored radial wheel has eight fixed positions clockwise from the top. Click a gray gesture body for the target NPC, or its white **ALL** chevron for everyone nearby without Shift. With no captured NPC, both gesture regions address nearby; Shift still overrides an inner gesture selection. Chevron remains visible on every slice. ChevronKnot is hidden only on submenu and Back slices; gesture, action, empty, and custom Close slices keep it. Only gestures show **ALL** or offer nearby mode. For navigation and **ACTION** entries, the chevron selects the same choice as the inner piece; both highlight together. Actions ignore Shift and require a valid target. Hover changes the center label/destination. Left/Right changes entry, Up selects its inner body, Down selects a gesture's nearby chevron, and Enter/Space selects the focused region. Center, Tab or Escape cancels; use native Escape during blank loading/navigation. This revision is browser-checked and built, not yet game-verified.
 
 The wheel won't open while you're in a blocking menu, another custom menu, or a gameplay state where the required controls are disabled.
 
@@ -66,11 +66,10 @@ The entries below use UIExtensions' navigation markers. Magelight shows the same
 
 | Wheel | Entries |
 |---|---|
-| Main | Confirm / Yes, Deny / No, Greet, Farewell, Social >, Signals >, Actions >, empty |
-| Social | Thank you, Sorry, Show respect, Welcome, Well done, More social >, Attitude >, Back < |
-| Signals | Come here, Follow me, Wait here, Quiet, Ready, Watch out, Get attention, Back < |
-| Attitude | Unsure, Let me think, Not understood, Approve, Disapprove, Challenge, Surrender, Back < |
-| More social | Offer, Request, empty × 5, Back < |
+| Main | Greet, Attitude >, Actions > (temporary, in place of Deny / No), Social >, Farewell, Signals >, Yes, Calm down |
+| Social | Thank you, Offer, Well done, Welcome, Sorry, Request, Show respect, Back < |
+| Signals | Follow me, Come here, Get attention, Watch out, Wait here, Ready, Quiet, Back < |
+| Attitude | Approve, Unsure, Challenge, Not understood, Disapprove, Let me think, Surrender, Back < |
 | Actions | Drink alcohol (requires iActions registration), empty × 6, Back < |
 
 A few distinctions are worth keeping:
@@ -125,7 +124,7 @@ This opens the wheel named `social`; the destination must exist under `wheels`. 
 
 This displays **Return** in Magelight and **Return <** in UIExtensions. Back returns to the wheel you came from; at the root, it closes the menu. Use `"control": "close"` for a Close entry.
 
-**Leave the navigation arrows out of your JSON labels.** Lua adds them for UIExtensions; Magelight strips exactly one generated terminal ` >` from submenu entries and ` <` from Back entries. Authored text and other entry kinds are unchanged. The shipped root's final slot is empty; custom layouts may still put Close anywhere, with no special darker Close fill. A `null` entry disables that position without shifting the later entries. Inline glyphs can be typed directly into labels.
+**Leave the navigation arrows out of your JSON labels.** Lua adds them for UIExtensions; Magelight strips exactly one generated terminal ` >` from submenu entries and ` <` from Back entries. Authored text and other entry kinds are unchanged. The shipped root ends with Calm down, with no shipped Close entry; custom layouts may still put Close anywhere, with no special darker Close fill. A `null` entry disables that position without shifting the later entries. Inline glyphs can be typed directly into labels.
 
 Each wheel supports **1–8 positions**, and each non-null entry needs a label plus one primary kind: `intent`, `action`, `submenu`, or `control`. An action may additionally carry the paired `event` and catalog `intent` fields described below. Don't link submenus into a loop. Reusing the same supported intent in more than one slot is fine.
 
@@ -217,12 +216,13 @@ Use these exact IDs in your entries:
 
 | Group | IDs |
 |---|---|
-| Main gestures | `confirm`, `deny`, `greet`, `farewell` |
+| Main gestures | `confirm`, `deny`, `greet`, `farewell`, `calm_down` |
 | Social | `thanks`, `sorry`, `respect`, `welcome`, `congratulate`, `offer`, `ask` |
 | Signals | `come_here`, `follow_me`, `wait_here`, `quiet`, `ready`, `warn`, `attention` |
 | Attitude | `unsure`, `think`, `not_understood`, `approve`, `disapprove`, `challenge`, `yield` |
 
-These 25 IDs are shipped defaults; the JSON registry is dynamic, so you can add a valid new ID in `intents.json` and reference it in `layout.json`.
+These 26 IDs are shipped catalog defaults. The shipped wheels reach 25 of them; `deny` remains valid for custom layouts but is intentionally not placed in a shipped wheel. The JSON registry is dynamic, so you can add a valid new ID in `intents.json` and reference it in `layout.json`.
+`calm_down` uses narration `slowly lowers both open hands, palms down, asking for calm`, notification `gestures for calm`, and targeted notification `gestures to {target} for calm`.
 
 ### Change phrases or add an intent
 
@@ -255,7 +255,7 @@ The `greet` narration describes your character waving. A successful group submis
 
 To change a phrase or add an intent, edit `intents.json`; for a new ID, also add a wheel entry referencing it in `layout.json`. Both files are read when a save loads, so your edits take effect on the next load. No Lua/Papyrus edits, script recompilation, YAML narration files, or external trigger bundle are needed.
 
-If you also have the source repository, its `docs/specs/player-signals.md` has all 25 shipped default narration/group-notification phrases and the exact schema rules.
+If you also have the source repository, its `docs/specs/player-signals.md` has the shipped default narration/group-notification phrases and the exact schema rules.
 
 ### A little help from the WebUI
 

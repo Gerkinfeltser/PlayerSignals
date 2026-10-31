@@ -67,9 +67,9 @@ class ConfigValidation(unittest.TestCase):
         self.assertEqual(set(wheels), {'main', 'social', 'signals', 'attitude', 'actions'})
 
         expected = {
-            'main': [('intent', 'greet'), ('submenu', 'attitude'), ('submenu', 'actions'),
+            'main': [('intent', 'greet'), ('submenu', 'attitude'), ('intent', 'calm_down'),
                      ('submenu', 'social'), ('intent', 'farewell'), ('submenu', 'signals'),
-                     ('intent', 'confirm'), ('intent', 'calm_down')],
+                     ('intent', 'confirm'), ('submenu', 'actions')],
             'social': [('intent', 'thanks'), ('intent', 'offer'), ('intent', 'congratulate'),
                        ('intent', 'welcome'), ('intent', 'sorry'), ('intent', 'ask'),
                        ('intent', 'respect'), ('control', 'back')],

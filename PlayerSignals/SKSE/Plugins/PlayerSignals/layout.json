@@ -8,12 +8,12 @@
     "main": [
       { "label": "Greet", "intent": "greet" },
       { "label": "Attitude", "submenu": "attitude" },
-      { "label": "Actions", "submenu": "actions" },
+      { "label": "Calm down", "intent": "calm_down" },
       { "label": "Social", "submenu": "social" },
       { "label": "Farewell", "intent": "farewell" },
       { "label": "Signals", "submenu": "signals" },
       { "label": "Yes", "intent": "confirm" },
-      { "label": "Calm down", "intent": "calm_down" }
+      { "label": "Actions", "submenu": "actions" }
     ],
     "social": [
       { "label": "Thank you", "intent": "thanks" },

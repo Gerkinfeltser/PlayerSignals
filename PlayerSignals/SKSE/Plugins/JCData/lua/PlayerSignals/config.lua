@@ -180,20 +180,30 @@ local function validate(root, intents)
         for i, slot in ipairs(wheel.data) do
             if slot ~= null then
                 local path = 'wheels.' .. name .. '[' .. i .. ']'
-                local e = object(slot, path, {label=true, intent=true, submenu=true, control=true, action=true, event=true})
+                local e = object(slot, path, {label=true, intent=true, submenu=true, control=true, action=true, event=true, hotkey=true, delayMs=true, holdMs=true})
                 nonempty(e.label, path .. '.label')
                 local kinds = 0
-                for _, kind in ipairs({'intent','submenu','control','action'}) do
+                for _, kind in ipairs({'intent','submenu','control','action','hotkey'}) do
                     if e[kind] ~= nil then kinds = kinds + 1 end
                 end
                 local eventIntent = e.action ~= nil and e.intent ~= nil and e.event ~= nil
-                assert(kinds == 1 or (kinds == 2 and eventIntent), path .. ': expected exactly one of intent, submenu, control or action (with paired event intent)')
+                assert(kinds == 1 or (kinds == 2 and eventIntent), path .. ': expected exactly one of intent, submenu, control, action or hotkey (with paired event intent)')
                 if e.intent ~= nil then nonempty(e.intent, path .. '.intent') end
                 if e.submenu ~= nil then nonempty(e.submenu, path .. '.submenu') end
                 if e.control ~= nil then nonempty(e.control, path .. '.control') end
                 if e.intent ~= nil and e.action == nil then assert(intents[e.intent], path .. '.intent: unknown ID ' .. tostring(e.intent)) end
                 if e.submenu ~= nil then assert(wheels[e.submenu], path .. '.submenu: unknown wheel ' .. tostring(e.submenu)) end
                 if e.control ~= nil then assert(e.control == 'back' or e.control == 'close', path .. '.control: expected back or close') end
+                if e.hotkey ~= nil then
+                    assert(type(e.hotkey) == 'number' and e.hotkey >= 1 and e.hotkey <= 255, path .. '.hotkey: expected integer 1..255')
+                    assert(e.hotkey ~= input.openKeyCode, path .. '.hotkey: must differ from input.openKeyCode')
+                    e.delayMs = e.delayMs == nil and 100 or e.delayMs
+                    e.holdMs = e.holdMs == nil and 50 or e.holdMs
+                    assert(type(e.delayMs) == 'number' and e.delayMs >= 0 and e.delayMs <= 2000, path .. '.delayMs: expected integer 0..2000')
+                    assert(type(e.holdMs) == 'number' and e.holdMs >= 1 and e.holdMs <= 2000, path .. '.holdMs: expected integer 1..2000')
+                else
+                    assert(e.delayMs == nil and e.holdMs == nil, path .. ': delayMs and holdMs are only valid for hotkey entries')
+                end
                 if e.action ~= nil then
                     local action = object(e.action, path .. '.action', {name=true,args=true})
                     nonempty(action.name, path .. '.action.name')
@@ -228,6 +238,7 @@ local function validate(root, intents)
     end
     return r
 end
+
 function M.validateCatalogText(text)
     return validateCatalog(decode(text))
 end
@@ -255,6 +266,9 @@ function M.wheelPayload(slots, theme, target, openKey)
             local slot = slots[i]
             if slot == nil then
                 entries[i] = 'null'
+            elseif slot.kind == 'hotkey' then
+                assert(type(slot.hotkey) == 'number' and slot.hotkey == math.floor(slot.hotkey), 'hotkey: expected integer')
+                entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(tostring(slot.hotkey)) .. ',"hotkey"]'
             else
                 local kind = 'navigation'
                 if slot.kind == 'action' or slot.actionName ~= nil then kind = 'action'
@@ -321,12 +335,20 @@ function M.load(args)
             local slots = JArray.objectWithSize(#wheel.data); wheels[names[name]] = slots
             for i, slot in ipairs(wheel.data) do
                 if slot ~= null then
-                    local entry = JMap.object(); slots[i] = entry
+                    local entry
+                    if slot.data.hotkey then
+                        entry = JValue.objectFromPrototype('{"kind":"hotkey","hotkey":' .. slot.data.hotkey .. ',"delayMs":' .. slot.data.delayMs .. ',"holdMs":' .. slot.data.holdMs .. '}')
+                    else
+                        entry = JMap.object()
+                    end
+                    slots[i] = entry
                     if slot.data.action then
                         entry.kind = 'action'
                         entry.actionName = slot.data.action.data.name
                         entry.argsJson = slot.data.action.data.args.raw
                         if slot.data.event then entry.event = slot.data.event; entry.intent = slot.data.intent end
+                    elseif slot.data.hotkey then
+                        -- Integer fields are supplied by the native JSON integer decoder above.
                     elseif slot.data.intent then
                         entry.kind = 'intent'
                     elseif slot.data.submenu then
@@ -336,7 +358,7 @@ function M.load(args)
                     end
                     for key, v in pairs(slot.data) do
                         if key == 'submenu' then v = names[v] end
-                        if key ~= 'action' then entry[key] = v end
+                        if key ~= 'action' and key ~= 'hotkey' and key ~= 'delayMs' and key ~= 'holdMs' then entry[key] = v end
                     end
                     if slot.data.submenu then entry.label = slot.data.label .. ' >'
                     elseif slot.data.control == 'back' then entry.label = slot.data.label .. ' <' end
@@ -346,7 +368,7 @@ function M.load(args)
         args.config = root
         return ''
     end)
-    if ok then return result end
-    return tostring(result)
+    if not ok then return tostring(result) end
+    return result
 end
 return M

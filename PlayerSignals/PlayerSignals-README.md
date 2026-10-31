@@ -106,6 +106,16 @@ In **MO2**, these are paths inside the installed mod folder—not a `Data` folde
 
 You can change labels, reorder entries, move supported intents between wheels, make submenus, disable slots, and change the opening key in `layout.json`. Edit or add IDs and phrase text in `intents.json`. A new ID must also be referenced by a layout entry. These JSON edits need no script recompilation.
 
+### Hotkey slots
+
+A hotkey slot presses its DirectX scan code after the wheel has fully closed; it needs no captured target, ignores Shift, and does not narrate or notify. For example, add this entry to a wheel to press **F6** (scan code `64`), SkyrimNet's dashboard key:
+
+```json
+{ "label": "Dashboard", "hotkey": 64, "delayMs": 100, "holdMs": 50 }
+```
+
+`hotkey` must be a strict integer from 1–255 and cannot equal the configured `input.openKeyCode`. `delayMs` is optional (default `100`, integer 0–2000); `holdMs` is optional (default `50`, integer 1–2000). These timing fields are hotkey-only. A hotkey is exclusive with `intent`, `submenu`, `control`, and `action`. Dispatch occurs only after the browsing session and Magelight view have fully released. Actual key injection opening the SkyrimNet dashboard in-game remains unverified.
+
 ### Wheel colour theme (Magelight)
 
 Add one optional top-level property in `layout.json`, alongside `schemaVersion`, `root`, `input` and `wheels`:

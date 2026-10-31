@@ -49,6 +49,80 @@ class ConfigValidation(unittest.TestCase):
             with self.subTest(open_key=open_key):
                 self.assertEqual(self.module.wheelPayload(slots, 'slate', '', open_key), '')
 
+    def test_hotkey_payload_uses_three_string_fields(self):
+        slots = self.lua.table()
+        slot = self.lua.table()
+        slot['label'], slot['kind'], slot['hotkey'] = 'Dashboard', 'hotkey', 64
+        slots[1] = slot
+        payload = self.module.wheelPayload(slots, 'slate', '', 184)
+        self.assertEqual(json.loads(payload)['slots'][0], ['Dashboard', '64', 'hotkey'])
+
+    def test_hotkey_defaults_and_bounds(self):
+        config = minimal()
+        config['wheels']['main'] = [{'label': 'Dashboard', 'hotkey': 64}]
+        hotkey = self.parse(config).wheels.data.main.data[1].data
+        self.assertEqual((hotkey.hotkey, hotkey.delayMs, hotkey.holdMs), (64, 100, 50))
+        for code, delay, hold in ((1, 0, 1), (255, 2000, 2000)):
+            config['wheels']['main'] = [
+                {'label': 'Dashboard', 'hotkey': code, 'delayMs': delay, 'holdMs': hold}
+            ]
+            hotkey = self.parse(config).wheels.data.main.data[1].data
+            self.assertEqual((hotkey.hotkey, hotkey.delayMs, hotkey.holdMs), (code, delay, hold))
+
+    def test_hotkey_rejects_invalid_values_fields_and_kind_combinations(self):
+        for field, invalid in (
+            ('hotkey', 0), ('hotkey', 256), ('hotkey', -1), ('hotkey', 1.5),
+            ('hotkey', True), ('hotkey', None), ('hotkey', '64'),
+            ('delayMs', -1), ('delayMs', 2001), ('delayMs', 1.5),
+            ('delayMs', True), ('delayMs', None), ('delayMs', '100'),
+            ('holdMs', 0), ('holdMs', 2001), ('holdMs', 1.5),
+            ('holdMs', False), ('holdMs', None), ('holdMs', '50'),
+        ):
+            config = minimal()
+            config['wheels']['main'] = [{'label': 'Dashboard', 'hotkey': 64, field: invalid}]
+            with self.subTest(field=field, invalid=invalid):
+                self.rejects(config)
+        for slot in (
+            {'label': 'Dashboard', 'hotkey': 64, 'intent': 'confirm'},
+            {'label': 'Dashboard', 'hotkey': 64, 'submenu': 'main'},
+            {'label': 'Dashboard', 'hotkey': 64, 'control': 'close'},
+            {'label': 'Dashboard', 'hotkey': 64, 'action': {'name': 'x', 'args': {}}},
+            {'label': 'Dashboard', 'hotkey': 64, 'action': {'name': 'x', 'args': {}},
+             'intent': 'confirm', 'event': 'both'},
+            {'label': 'Dashboard', 'hotkey': 64, 'event': 'both', 'intent': 'confirm'},
+            {'label': 'Dashboard', 'hotkey': 64, 'extra': True},
+        ):
+            config = minimal()
+            config['wheels']['main'] = [slot]
+            with self.subTest(slot=slot):
+                self.rejects(config)
+        for slot in (
+            {'label': 'Intent', 'intent': 'confirm', 'delayMs': 100},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'holdMs': 50},
+        ):
+            config = minimal()
+            config['wheels']['main'] = [slot]
+            with self.subTest(non_hotkey_timing=slot):
+                self.rejects(config)
+        config = minimal()
+        config['wheels']['main'] = [{'label': 'Conflict', 'hotkey': 184}]
+        self.rejects(config)
+
+    def test_hotkey_integer_tokens_are_lexically_strict(self):
+        for token in ('64.0', '64e0', '64E+0', '064'):
+            text = ('{"schemaVersion":1,"root":"main","input":{"openKeyCode":184},'
+                    '"wheels":{"main":[{"label":"Dashboard","hotkey":' + token + '}]}}')
+            with self.subTest(token=token), self.assertRaises(LuaError):
+                self.module.validateText(text, self.catalog_text)
+
+    def test_hotkey_timing_integer_tokens_are_lexically_strict(self):
+        for field, token in (('delayMs', '1.0'), ('delayMs', '1e0'),
+                             ('holdMs', '50.0'), ('holdMs', '5E1')):
+            text = ('{"schemaVersion":1,"root":"main","input":{"openKeyCode":184},'
+                    '"wheels":{"main":[{"label":"Dashboard","hotkey":64,"' + field + '":' + token + '}]}}')
+            with self.subTest(field=field, token=token), self.assertRaises(LuaError):
+                self.module.validateText(text, self.catalog_text)
+
     def test_wheel_slot_count_bounds(self):
         for count in (1, 12):
             config = minimal()

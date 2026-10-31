@@ -116,8 +116,15 @@ Event OnMagelightWheelChoice(string eventName, string strArg, float numArg, Form
                 identity = JMap.getStr(slot, "intent")
             ElseIf kind == "action"
                 identity = JMap.getStr(slot, "actionName")
+            ElseIf kind == "hotkey"
+                identity = JMap.getInt(slot, "hotkey") as String
             EndIf
-            If kind == "intent" || kind == "action"
+            If kind == "hotkey"
+                If token == _generation && request == _mlRequest && _mlResult == "" && strArg == request + "|" + i + "|" + identity + "|hotkey"
+                    _mlResult = strArg
+                    Return
+                EndIf
+            ElseIf kind == "intent" || kind == "action"
                 If token == _generation && request == _mlRequest && _mlResult == "" && (strArg == request + "|" + i + "|" + identity + "|target" || (kind == "intent" && strArg == request + "|" + i + "|" + identity + "|nearby"))
                     _mlResult = strArg
                     Return
@@ -368,6 +375,16 @@ Bool Function ValidateNative(Int config)
                     ElseIf JMap.hasKey(entry, "intent")
                         Return False
                     EndIf
+                ElseIf entryKind == "hotkey"
+                    If JMap.valueType(entry, "hotkey") != 2 || JMap.valueType(entry, "delayMs") != 2 || JMap.valueType(entry, "holdMs") != 2
+                        Return False
+                    EndIf
+                    Int hotkey = JMap.getInt(entry, "hotkey")
+                    Int delayMs = JMap.getInt(entry, "delayMs")
+                    Int holdMs = JMap.getInt(entry, "holdMs")
+                    If hotkey < 1 || hotkey > 255 || hotkey == code || delayMs < 0 || delayMs > 2000 || holdMs < 1 || holdMs > 2000
+                        Return False
+                    EndIf
                 ElseIf entryKind == "intent"
                     If JMap.valueType(entry, "intent") != 6
                         Return False
@@ -422,6 +439,8 @@ Event OnKeyDown(Int keyCode)
     If keyCode != _key || !_ready || _browsing
         Return
     EndIf
+    ; A newly accepted session invalidates an older delayed hotkey dispatch.
+    _generation += 1
     _browsing = True
     Int token = _generation
     ; Capture once before the first wheel; navigation never retargets this session.
@@ -464,8 +483,15 @@ Event OnKeyDown(Int keyCode)
     String argsJson = ""
     String eventMode = ""
     String eventIntent = ""
+    Int hotkey = 0
+    Int delayMs = 0
+    Int holdMs = 0
     If selection != 0 && token == _generation && _ready
-        If kind == "intent"
+        If kind == "hotkey"
+            hotkey = JMap.getInt(selection, "hotkey")
+            delayMs = JMap.getInt(selection, "delayMs")
+            holdMs = JMap.getInt(selection, "holdMs")
+        ElseIf kind == "intent"
             ; Capture text while the session lease is alive, before the final dispatch guard.
             String name = player.GetDisplayName()
             If targeted
@@ -513,7 +539,31 @@ Event OnKeyDown(Int keyCode)
     If token == _generation
         _browsing = False
     EndIf
+    If kind == "hotkey"
+        DispatchHotkey(hotkey, delayMs, holdMs, token)
+    EndIf
 EndEvent
+
+Function DispatchHotkey(Int code, Int delayMs, Int holdMs, Int token)
+    If token != _generation || !_ready
+        Return
+    EndIf
+    ; Browse/FinishMagelight and session cleanup have already released the view.
+    Utility.Wait(delayMs / 1000.0)
+    If token != _generation || !_ready
+        Return
+    EndIf
+    Input.HoldKey(code)
+    If token == _generation && _ready
+        Utility.Wait(holdMs / 1000.0)
+    EndIf
+    ; Never generation-guard cleanup: even a stale stack must release its key.
+    Input.ReleaseKey(code)
+    If token != _generation || !_ready
+        Return
+    EndIf
+    Debug.Trace("[PlayerSignals] Hotkey " + code + " dispatched.")
+EndFunction
 
 Function Submit(String narration, String feedbackPrefix, String feedbackSuffix, Actor player, Actor recipient, Bool targeted, Int token)
     Actor targetActor = None
@@ -729,7 +779,7 @@ Int Function BrowseWheels(Int config, Int history, Int token, Actor player)
         EndIf
         Int choice = JArray.getObj(slots, selected)
         String kind = JMap.getStr(choice, "kind")
-        If kind == "intent" || kind == "action"
+        If kind == "intent" || kind == "action" || kind == "hotkey"
             If nearby && kind != "intent"
                 Return 0
             EndIf
@@ -737,6 +787,10 @@ Int Function BrowseWheels(Int config, Int history, Int token, Actor player)
             JMap.setStr(selection, "kind", kind)
             If kind == "intent"
                 JMap.setStr(selection, "identity", JMap.getStr(choice, "intent"))
+            ElseIf kind == "hotkey"
+                JMap.setInt(selection, "hotkey", JMap.getInt(choice, "hotkey"))
+                JMap.setInt(selection, "delayMs", JMap.getInt(choice, "delayMs"))
+                JMap.setInt(selection, "holdMs", JMap.getInt(choice, "holdMs"))
             Else
                 JMap.setStr(selection, "identity", JMap.getStr(choice, "actionName"))
                 JMap.setStr(selection, "actionName", JMap.getStr(choice, "actionName"))
@@ -897,6 +951,12 @@ Int Function BrowseMagelight(Int slots, Int token)
                         i = 12
                     ElseIf kind == "intent" && result == _mlRequest + "|" + i + "|" + identity + "|nearby"
                         selected = i + 12
+                        i = 12
+                    EndIf
+                ElseIf kind == "hotkey"
+                    String hotkeyIdentity = JMap.getInt(slot, "hotkey") as String
+                    If result == _mlRequest + "|" + i + "|" + hotkeyIdentity + "|hotkey"
+                        selected = i
                         i = 12
                     EndIf
                 ElseIf kind == "submenu" || kind == "control"

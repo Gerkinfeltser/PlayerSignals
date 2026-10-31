@@ -30,7 +30,7 @@ frame.addEventListener("load", async () => {
         const key = key => keyEvent("keydown", key);
         const visible = () => view.getComputedStyle(doc.querySelector("main")).visibility === "visible";
         const layout = await (await fetch("../PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json")).json();
-        const entry = s => !s ? null : [s.label + (s.submenu ? " >" : s.control === "back" ? " <" : ""), s.action?.name || s.intent || "", s.action ? "action" : s.intent ? "intent" : s.submenu ? "submenu" : s.control === "back" ? "back" : "navigation"];
+        const entry = s => !s ? null : [s.label + (s.submenu ? " >" : s.control === "back" ? " <" : ""), s.hotkey !== undefined ? String(s.hotkey) : s.action?.name || s.intent || "", s.hotkey !== undefined ? "hotkey" : s.action ? "action" : s.intent ? "intent" : s.submenu ? "submenu" : s.control === "back" ? "back" : "navigation"];
         const payload = (slots, target = "Lydia", theme = "slate", openKey = 184) => ({theme, target, openKey, slots:Array.from({length:12}, (_, i) => entry(slots[i]))});
         const begin = (token, data) => view.psWheelBegin(token + "|" + JSON.stringify(data));
         const arm = (token, slots, target = "Lydia", theme = "slate", openKey = 184) => {
@@ -199,7 +199,8 @@ frame.addEventListener("load", async () => {
             ["submenu", {label:"Menu",submenu:"social"}, "submenu-art", "back-art"],
             ["back", {label:"Back",control:"back"}, "back-art", "submenu-art"],
             ["navigation", {label:"Close",control:"close"}, null, null],
-            ["action", {label:"Wait here",action:{name:"WaitHere"}}, null, null]
+            ["action", {label:"Wait here",action:{name:"WaitHere"}}, null, null],
+            ["hotkey", {label:"Dashboard",hotkey:64}, null, null]
         ]) {
             arm("arrows-" + kind, Array(12).fill(slot));
             center.blur();
@@ -240,11 +241,28 @@ frame.addEventListener("load", async () => {
                 click(nearbyHit);
                 assert(!replies.length, `Disabled ${kind} nearby region dispatched programmatically`);
             }
-            clickTip(11); assert(replies.pop() === `arrows-${kind}|11|${kind === "action" ? "WaitHere|target" : "|navigate"}`, `${kind} former tip failed to dispatch its target-only choice`);
+            clickTip(11); assert(replies.pop() === `arrows-${kind}|11|${kind === "hotkey" ? "64|hotkey" : kind === "action" ? "WaitHere|target" : "|navigate"}`, `${kind} former tip failed to dispatch its choice`);
         }
         arm("arrows-hidden", [{label:"Signal",intent:"greet"}, {label:"Action",action:{name:"WaitHere"}}]);
         assert([...doc.querySelectorAll(".navigation-art")].every(art => view.getComputedStyle(art).display === "none"), "Non-navigation entry acquired an arrow");
         key("Escape"); assert(replies.pop() === "arrows-hidden|-1||cancel", "Arrow clearing setup failed to cancel");
+        arm("hotkey", [{label:"Dashboard",hotkey:64},{label:"Close",control:"close"}], "");
+        center.focus();
+        assert(view.getComputedStyle(region(0).querySelector(".hit-area")).fill === view.getComputedStyle(region(1).querySelector(".hit-area")).fill, "Hotkey does not use the neutral navigation fill");
+        region(0).focus();
+        assert(region(0).getAttribute("aria-disabled") === "false" && view.getComputedStyle(region(0,"nearby")).display === "none", "No-target hotkey is disabled or retains an Openly tip");
+        assert(doc.getElementById("destination").textContent === "Hotkey · F6", "Hotkey hub does not show its mapped F6 name");
+        const keyBadge=doc.querySelector('#slot-0 .actionLabel');
+        assert(keyBadge.textContent === "KEY" && keyBadge.getBoundingClientRect().width>0, "Hotkey KEY badge is not visible");
+        keyEvent("keydown","Shift","ShiftLeft",1); key("ArrowDown");
+        assert(doc.getElementById("destination").textContent === "Hotkey · F6" && doc.activeElement === region(0), "Shift or Down changes hotkey targeting");
+        clickTip(0);
+        assert(replies.pop() === "hotkey|0|64|hotkey" && !visible() && !replies.length, "Hotkey did not close and dispatch exactly one typed choice");
+        for (const [i,invalid] of [0,"0","256","64.0","064","184","F6",null].entries()) {
+            const data=payload([{label:"Dashboard",hotkey:64}]);
+            data.slots[0][1]=invalid; begin("hotkey-invalid-"+i,data); view.psWheelArm("hotkey-invalid-"+i);
+            assert(!visible() && !replies.length, "Malformed or opening-key hotkey payload did not fail closed");
+        }
         arm("edge-alpha-reference", [{label:"Probe",intent:"greet"}]);
         const enabledEdgeAlpha = Number(view.getComputedStyle(region(0).querySelector(".edge-line")).stroke.match(/rgba?\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)/)?.[1] ?? 1);
         key("Escape"); assert(replies.pop() === "edge-alpha-reference|-1||cancel", "Edge-alpha reference failed to cancel");
@@ -542,6 +560,7 @@ frame.addEventListener("load", async () => {
             checkPointedEdge(region(0).querySelector(".hit-area"),0,"core fill");
             checkHubTop(0);
         }
+        await settle();
         assert(Math.abs(liftScale() - 1.06) < .001, "Lift did not settle at 1.06");
         for (let i = 0; i < 12; i++) checkHubTop(i);
         if (!reduced) {
@@ -563,6 +582,7 @@ frame.addEventListener("load", async () => {
             checkPointedEdge(region(1).querySelector(".hit-area"),1,"merged submenu fill");
             checkHubTop(1);
         }
+        await settle();
         assert(Math.abs(navScale()-1.06)<.001, "Merged slice did not reach peak lift");
         if (!reduced) {
             assert(navSamples.some(scale => scale>1 && scale<1.06) && Math.max(...navSamples)>1.061 && Math.max(...navSamples)<1.07, "Merged slice lacks bounded peak motion");
@@ -578,6 +598,7 @@ frame.addEventListener("load", async () => {
             const text = doc.querySelector(".hubContent").closest("foreignObject").getScreenCTM();
             assert(Math.abs(text.b) < .001 && Math.abs(text.c) < .001 && doc.getElementById("caption").getBoundingClientRect().height > 0, "Lifted hub text is rotated or unreadable");
         }
+        await settle();
         assert(Math.abs(hubScale()-1.08) < .001 && hubPop.hasAttribute("transform") && !hubPop.style.transform, "Hub does not settle at 1.08 using SVG attribute lift");
         if (!reduced) {
             assert(hubSamples.some(scale => scale > 1 && scale < 1.08), "Hub skipped intermediate scale");
@@ -635,6 +656,7 @@ frame.addEventListener("load", async () => {
         await nextFrame(); view.hostMode("0");
         assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
         report.textContent = "PASS: 12-slot choices and Back placement; gesture core/tip routing; merged navigation/actions and disabled nearby regions; simple uniform arrows preserve aspect, center angle within 1 degree and stay inside their slices at rest, slice lift and hub pop; core/merged fills and insets converge beneath the opaque native octagon without exposed transverse inner segments; hub paints last and wins boundary hits inside its moving outline, while slices win just outside; ACTION badges, upright labels/ripples, both armed pointer-transparent vignettes with matching fade and title/help above them, Shift preview, palettes, empty slots, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
+        report.textContent += " Hotkeys: neutral merged necktie, no target required, F6 hub and visible KEY badge, Shift ignored, typed hotkey choice after close, malformed/conflicting payloads fail closed.";
         report.textContent += " Hub Cancel tracks shared SVG-attribute motion, overshoots then settles at 1.08, returns on leave/blur, snaps with reduced motion/0ms, has no idle rAF, and routes inside-octagon clicks to Cancel and outside-edge clicks to the slice in all 12 directions; two-line ~20px help shows the mapped open-key name, omits unmapped names and clears the lifted bottom tip at 1080p/1440p.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });

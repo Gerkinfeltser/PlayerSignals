@@ -184,6 +184,9 @@
         0xe5:"BrowserSearch", 0xe6:"BrowserFavorites", 0xe7:"BrowserRefresh", 0xe8:"BrowserStop",
         0xe9:"BrowserForward", 0xea:"BrowserBack", 0xeb:"LaunchApp1", 0xec:"LaunchMail", 0xed:"MediaSelect"
     };
+    function keyName(code) {
+        return (DX_KEY_CODES[code] || "").replace(/^(Alt|Control|Shift|Meta)(Left|Right)$/, (_, key, side) => side + " " + (key === "Control" ? "Ctrl" : key === "Meta" ? "Win" : key)).replace(/^(Key|Digit)/, "").replace(/^Numpad/, "Num ");
+    }
     let openKeyBrowserCode = "";
     const warnedOpenKeys = new Set();
     function rootPoint(path) {
@@ -345,7 +348,7 @@
         if (preview) sector.nearby.classList.add("hot");
         liftTo(index);
         caption.textContent = label;
-        destination.textContent = ["navigation", "submenu", "back"].includes(kind) ? (targetName ? "Navigation" : "No target · Openly") : kind === "action" ? `${targetName || "Target NPC"} · Action` : targetName ? mode === "nearby" || preview ? "Openly" : targetName : "No target · Openly";
+        destination.textContent = kind === "hotkey" ? `Hotkey · ${keyName(Number(entries[index][1])) || "scan " + entries[index][1]}` : ["navigation", "submenu", "back"].includes(kind) ? (targetName ? "Navigation" : "No target · Openly") : kind === "action" ? `${targetName || "Target NPC"} · Action` : targetName ? mode === "nearby" || preview ? "Openly" : targetName : "No target · Openly";
         fit(hub, 100);
     }
     function focusRegion(index, mode) {
@@ -373,7 +376,7 @@
         if (window.magelight) window.magelight.send("__escapecapture", "0");
         completedRequest = request; disable();
         const [ , identity, kind] = index < 0 ? ["", "", "navigation"] : entries[index];
-        const choice = request + "|" + index + "|" + identity + "|" + (index < 0 ? "cancel" : ["navigation", "submenu", "back"].includes(kind) ? "navigate" : kind === "action" ? "target" : mode);
+        const choice = request + "|" + index + "|" + identity + "|" + (index < 0 ? "cancel" : kind === "hotkey" ? "hotkey" : ["navigation", "submenu", "back"].includes(kind) ? "navigate" : kind === "action" ? "target" : mode);
         window.psWheelChoice(choice);
     }
     function failClosed(token = "") {
@@ -397,10 +400,10 @@
         if (completedRequest === nextRequest) { failClosed(); return; }
         let data;
         try { data = JSON.parse(payload.slice(divider + 1)); } catch (_) { failClosed(nextRequest); return; }
-        if (!data || !Number.isInteger(data.openKey) || data.openKey < 1 || data.openKey > 255 || !["slate", "moss", "ember"].includes(data.theme) || !Array.isArray(data.slots) || data.slots.length !== 12 || (data.target !== undefined && typeof data.target !== "string") || data.slots.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back"].includes(item[2])))) { failClosed(nextRequest); return; }
+        if (!data || !Number.isInteger(data.openKey) || data.openKey < 1 || data.openKey > 255 || !["slate", "moss", "ember"].includes(data.theme) || !Array.isArray(data.slots) || data.slots.length !== 12 || (data.target !== undefined && typeof data.target !== "string") || data.slots.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back", "hotkey"].includes(item[2]) || (item[2] === "hotkey" && (!/^[1-9]\d*$/.test(item[1]) || Number(item[1]) > 255 || Number(item[1]) === data.openKey))))) { failClosed(nextRequest); return; }
         failClosed(nextRequest); finished = false; targetName = data.target || "";
         openKeyBrowserCode = DX_KEY_CODES[data.openKey] || "";
-        const openKeyName = openKeyBrowserCode.replace(/^(Alt|Control|Shift|Meta)(Left|Right)$/, (_, key, side) => side + " " + (key === "Control" ? "Ctrl" : key === "Meta" ? "Win" : key)).replace(/^(Key|Digit)/, "").replace(/^Numpad/, "Num ");
+        const openKeyName = keyName(data.openKey);
         document.getElementById("openKeyHelp").textContent = openKeyName ? openKeyName + " / " : "";
         if (!openKeyBrowserCode && !warnedOpenKeys.has(data.openKey)) {
             warnedOpenKeys.add(data.openKey);
@@ -420,7 +423,7 @@
             const navigation = ["navigation", "submenu", "back"].includes(kind);
             const merged = kind !== "intent";
             target.classList.toggle("empty", !item);
-            target.classList.toggle("navigation", navigation);
+            target.classList.toggle("navigation", navigation || kind === "hotkey");
             target.classList.toggle("gesture", kind === "intent");
             target.classList.toggle("action", kind === "action");
             nearby.style.display = merged ? "none" : "";
@@ -428,11 +431,13 @@
             (merged ? target : nearby).appendChild(knot);
             for (const path of [target.querySelector(".hit-area"), target.querySelector(".edge-line")])
                 path.setAttribute("d", path.getAttribute(merged ? "data-nav-d" : "data-core-d"));
-            target.setAttribute("aria-label", !item ? "Empty slot" : kind === "action" ? `${item[0]} — Action, ${targetName || "Target NPC"}${disabled ? ", disabled: no target" : ""}` : kind === "intent" ? `${item[0]} — ${targetName || "No target"}${targetName ? "" : " · Openly"}` : `${item[0]} — Navigation`);
+            target.setAttribute("aria-label", !item ? "Empty slot" : kind === "hotkey" ? `${item[0]} — Hotkey ${keyName(Number(item[1])) || item[1]}` : kind === "action" ? `${item[0]} — Action, ${targetName || "Target NPC"}${disabled ? ", disabled: no target" : ""}` : kind === "intent" ? `${item[0]} — ${targetName || "No target"}${targetName ? "" : " · Openly"}` : `${item[0]} — Navigation`);
             nearby.setAttribute("aria-label", kind === "intent" ? `${item[0]} — Openly` : target.getAttribute("aria-label"));
             nearby.classList.toggle("signal", kind === "intent");
-            actionBadge.style.display = item && kind === "action" ? "" : "none";
-            if (kind === "action") {
+            actionBadge.textContent = kind === "hotkey" ? "KEY" : "ACTION";
+            const badged = kind === "action" || kind === "hotkey";
+            actionBadge.style.display = item && badged ? "" : "none";
+            if (badged) {
                 // Position actual text ink in the label's upright SVG frame, including wrapped labels.
                 const range = document.createRange(); range.selectNodeContents(content);
                 const rect = range.getBoundingClientRect();

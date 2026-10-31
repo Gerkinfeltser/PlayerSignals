@@ -173,6 +173,20 @@ frame.addEventListener("load", async () => {
                 assert(hit.isPointInFill(p.matrixTransform(hit.getCTM().inverse().multiply(edge.getCTM()))), `Slot ${i} ${mode} inset leaves its shape`);
             }
             if (mode === "target") { checkPointedEdge(edge,i,mode); checkPointedEdge(hit,i,"core fill"); }
+            else {
+                const sector = region(i,"nearby").closest("g[data-bulb-x]"), x = Number(sector.dataset.bulbX), y = Number(sector.dataset.bulbY);
+                const point = new view.DOMPoint(x,y).matrixTransform(svg.getCTM().inverse().multiply(region(i,"nearby").getCTM()));
+                const local = point.matrixTransform(hit.getCTM().inverse().multiply(svg.getCTM()));
+                assert((hit.getAttribute("d").match(/[Aa]/g)||[]).length >= 1 && hit.isPointInFill(local), `Slot ${i} nearby hit is not the half-disc bulb`);
+                const r = Number(sector.dataset.bulbRadius), bounds = hit.getBBox();
+                assert(Math.abs(bounds.width-2*r)<1 && Math.abs(bounds.height-r)<1, `Slot ${i} bulb is not a half disc`);
+                for (let sample=0;sample<=16;sample++) {
+                    const p=hit.getPointAtLength(Math.PI*r*sample/16);
+                    assert(Math.abs(Math.hypot(p.x-x,p.y-y)-r)<1, `Slot ${i} bulb outer edge is not semicircular`);
+                }
+                const screen = point.matrixTransform(svg.getScreenCTM()), actual = doc.elementFromPoint(screen.x,screen.y);
+                assert(actual?.closest(".region") === region(i), `Slot ${i} core does not win the overlapping bulb chord hit`);
+            }
         }
         center.blur();
         assert(Math.abs(hubScale()-1)<.001, "Core rest geometry did not use the unpopped hub");
@@ -193,7 +207,7 @@ frame.addEventListener("load", async () => {
             assert(hit.isPointInFill(local), `Slot ${i} ${mode} does not own its side of the shared 1296-unit boundary`);
             const other = doc.getElementById(`slot-${i}-${mode === "target" ? "nearby" : "target"}-hit`);
             const otherLocal = point.matrixTransform(other.getCTM().inverse().multiply(svg.getCTM()));
-            assert(!other.isPointInFill(otherLocal), `Slot ${i} core/tip paths overlap inside the shared boundary`);
+            if (mode === "nearby") assert(!other.isPointInFill(otherLocal), `Slot ${i} core extends beyond its visible boundary into the bulb`);
             const screen = point.matrixTransform(svg.getScreenCTM());
             assert(doc.elementFromPoint(screen.x,screen.y)?.closest(".region") === region(i,mode), `Slot ${i} ${mode} boundary routing overlaps or is stolen`);
         }
@@ -218,7 +232,8 @@ frame.addEventListener("load", async () => {
             for (let i = 0; i < 12; i++) {
                 const target = region(i), nearby = region(i, "nearby");
                 if (shown) {
-                    const art = target.parentElement.querySelector("." + shown), other = target.parentElement.querySelector("." + hidden);
+                    const art = target.parentElement.querySelector("." + shown), other = target.parentElement.querySelector("." + hidden), wheel = doc.getElementById("wheelSvg");
+                    wheel.classList.remove("utility-art-off");
                     assert(view.getComputedStyle(art).display !== "none" && view.getComputedStyle(other).display === "none", "Wrong navigation arrow shown");
                     assert(art.getBBox().width > 0 && art.getBBox().height > 0, "Navigation artwork is empty");
                     checkArrow(art, i, kind);
@@ -235,6 +250,7 @@ frame.addEventListener("load", async () => {
                     hubPop.setAttribute("transform","translate(1800 1800) scale(1.09) translate(-1800 -1800)");
                     checkArrow(art,i,kind);
                     hubPop.setAttribute("transform",saved); center.blur();
+                    wheel.classList.add("utility-art-off");
                 }
                 assert(target.classList.contains(kind === "action" ? "action" : "navigation"), `Slot ${i} ${kind} lacks its merged-kind class`);
                 assert(nearby.getAttribute("aria-disabled") === "true" && nearby.getAttribute("tabindex") === "-1" && view.getComputedStyle(nearby).display === "none", `Slot ${i} ${kind} nearby region remains active`);
@@ -265,8 +281,40 @@ frame.addEventListener("load", async () => {
             clickTip(11); assert(replies.pop() === `arrows-${kind}|11|${kind === "hotkey" ? "64|hotkey" : kind === "action" ? "WaitHere|target" : "|navigate"}`, `${kind} former tip failed to dispatch its choice`);
         }
         arm("arrows-hidden", [{label:"Signal",intent:"greet"}, {label:"Action",action:{name:"WaitHere"}}]);
-        assert([...doc.querySelectorAll(".navigation-art")].every(art => view.getComputedStyle(art).display === "none"), "Non-navigation entry acquired an arrow");
+        assert(doc.getElementById("wheelSvg").classList.contains("utility-art-off") && [...doc.querySelectorAll(".navigation-art,.chevron-knot")].every(art => view.getComputedStyle(art).display === "none"), "Default utility arrow/knot art is not switched off");
         key("Escape"); assert(replies.pop() === "arrows-hidden|-1||cancel", "Arrow clearing setup failed to cancel");
+        const utilitySlots = [
+            {label:"Menu",submenu:"social"}, {label:"Back",control:"back"},
+            {label:"Close",control:"close"}, {label:"Dashboard",hotkey:64}
+        ];
+        arm("utility-arcs", Array.from({length:12},(_,i)=>utilitySlots[i%4]));
+        const wheelSvg = doc.getElementById("wheelSvg");
+        assert(wheelSvg.classList.contains("utility-art-off"), "Utility artwork switch is not on by default");
+        center.focus();
+        for (let i = 0; i < 12; i++) {
+            const pop = doc.getElementById(`slot-${i}`).querySelector(".pop"), arc = pop.querySelector(".utility-arc"), hit = region(i).querySelector(".hit-area");
+            assert(arc && arc.parentElement === pop && arc.getAttribute("aria-hidden") === "true" && view.getComputedStyle(arc).pointerEvents === "none", `Utility ${i} arc is missing, interactive, or outside its slice lift`);
+            const clip = doc.getElementById(arc.getAttribute("clip-path").slice(5,-1));
+            assert(clip?.tagName === "clipPath" && clip.firstElementChild.getAttribute("d") === hit.getAttribute("d"), `Utility ${i} arc is not clipped to its merged outline`);
+            const length = arc.getTotalLength(), matrix = svg.getCTM().inverse().multiply(arc.getCTM());
+            for (let n = 0; n <= 16; n++) {
+                const p = arc.getPointAtLength(length*n/16).matrixTransform(matrix);
+                assert(Math.abs(Math.hypot(p.x-1800,p.y-1800)-883)<1, `Utility ${i} arc is not centered on the wheel at radius 883`);
+            }
+            wheelSvg.classList.remove("utility-art-off");
+            const oldArt = [...pop.querySelectorAll(".submenu-art,.back-art")];
+            assert(i%4 < 2 ? oldArt.some(art => view.getComputedStyle(art).display !== "none") : oldArt.every(art => view.getComputedStyle(art).display === "none"), `Utility ${i} legacy arrows are not controlled by the off switch`);
+            wheelSvg.classList.add("utility-art-off");
+            const rest = svg.getCTM().inverse().multiply(arc.getCTM());
+            region(i).focus();
+            const lifted = svg.getCTM().inverse().multiply(arc.getCTM());
+            assert(Math.abs(Math.hypot(lifted.a,lifted.b)/Math.hypot(rest.a,rest.b)-1.06)<.001, `Utility ${i} arc does not lift with its slice`);
+            center.focus();
+        }
+        key("Escape"); assert(replies.pop() === "utility-arcs|-1||cancel", "Utility arc setup failed to cancel");
+        arm("utility-exclusions", [{label:"Gesture",intent:"greet"}, {label:"Action",action:{name:"WaitHere"}}, null]);
+        assert([...doc.querySelectorAll(".utility-arc")].every(arc => view.getComputedStyle(arc).display === "none"), "Intent, action or empty slot shows a utility arc");
+        key("Escape"); assert(replies.pop() === "utility-exclusions|-1||cancel", "Utility exclusion setup failed to cancel");
         arm("hotkey", [{label:"Dashboard",hotkey:64},{label:"Close",control:"close"}], "");
         center.focus();
         assert(view.getComputedStyle(region(0).querySelector(".hit-area")).fill === view.getComputedStyle(region(1).querySelector(".hit-area")).fill, "Hotkey does not use the neutral navigation fill");
@@ -328,7 +376,7 @@ frame.addEventListener("load", async () => {
                         checkArrow(art, i, kind);
                     }
                     route();
-                    const destination = ["submenu", "back", "navigation"].includes(kind) ? "navigate" : kind === "action" ? "target" : mode;
+                    const destination = kind === "hotkey" ? "hotkey" : ["submenu", "back", "navigation"].includes(kind) ? "navigate" : kind === "action" ? "target" : mode;
                     assert(replies.pop() === `${token}|${i}|${identity}|${destination}`, "Choice lost index, identity or destination");
                     route(); view.psWheelArm(token); route();
                     begin(token, payload(slots)); view.psWheelArm(token); route();
@@ -535,11 +583,155 @@ frame.addEventListener("load", async () => {
         assert(!visible() && !replies.length, "Stale request dispatched through the configured opening key");
         arm("center", []); click(doc.getElementById("center"));
         assert(replies.pop() === "center|-1||cancel", "Empty-wheel center cancel failed");
+        const flow = () => doc.querySelector(".signal-flow");
+        const flowMarks = () => [...(flow()?.querySelectorAll(".flow-mark") || [])];
+        const flowPaths = () => [...(flow()?.querySelectorAll(".flow-band") || [])];
+        const flowNodes = () => {
+            const paths = flowPaths(), gradients = paths.map(path => doc.getElementById(path.getAttribute("fill")?.slice(5,-1))).filter(Boolean);
+            return [...(flow()?.querySelectorAll("g.flow-mark, path.flow-band") || []), ...gradients.flatMap(gradient => [gradient, ...gradient.querySelectorAll("stop")])];
+        };
+        const flowSnapshot = () => flowNodes().map(node => [node.tagName, ...[...node.attributes].map(attr => `${attr.name}=${attr.value}`).sort()].join("|")).join("\n");
+        const flowSlots = [
+            {label:"Farewell",intent:"farewell"}, {label:"Wait here",action:{name:"WaitHere"}},
+            {label:"Social",submenu:"social"}, {label:"Back",control:"back"},
+            {label:"Close",control:"close"}, {label:"Dashboard",hotkey:64}, null
+        ];
+        const actualAt = point => {
+            const screen = point.matrixTransform(svg.getScreenCTM());
+            return doc.elementFromPoint(screen.x, screen.y);
+        };
+        const flowOutline = () => {
+            const url = flow()?.getAttribute("clip-path");
+            const id = url?.match(/^url\(#(.+)\)$/)?.[1], clip = id && doc.getElementById(id);
+            assert(clip?.tagName === "clipPath" && clip.getAttribute("clipPathUnits") === "userSpaceOnUse", "Flow is not clipped through its SVG hit outline");
+            return clip.firstElementChild;
+        };
+        const gradientAlpha = (gradient, position) => {
+            const stops = [...gradient.querySelectorAll("stop")];
+            let previous = stops[0], before = Number(view.getComputedStyle(previous).stopOpacity);
+            for (const stop of stops.slice(1)) {
+                const alpha = Number(view.getComputedStyle(stop).stopOpacity);
+                if (stop.offset.baseVal > position) {
+                    const t = (position-previous.offset.baseVal)/(stop.offset.baseVal-previous.offset.baseVal);
+                    return before+(alpha-before)*Math.max(0,t);
+                }
+                previous=stop; before=alpha;
+            }
+            return before;
+        };
+        const profile = depth => depth <= .25 ? 1 : Math.pow((1-depth)/.75,2.2);
+        const checkFlow = (index, type) => {
+            const effect = flow(), marks = flowMarks(), paths = flowPaths(), target = region(index), nearby = region(index,"nearby");
+            const signal = type === "signal", count = signal ? 2 : 4;
+            assert(effect && effect.parentElement === (signal ? nearby : target) && marks.length === count, `Slot ${index} lacks ${count} slice-owned ${type} bands`);
+            const clip = flowOutline(), clippedHit = (signal ? nearby : target).querySelector(".hit-area"), box = clippedHit.getBBox();
+            for (let x=0;x<=8;x++) for(let y=0;y<=8;y++) {
+                const p=new view.DOMPoint(box.x+box.width*x/8,box.y+box.height*y/8);
+                assert(clip.isPointInFill(p) === clippedHit.isPointInFill(p), `Slot ${index} flow clip does not follow its hit geometry`);
+            }
+            assert(paths.length === count * (signal ? 1 : 2), `Slot ${index} does not use one signal band or two filled chevron arms per mark`);
+            assert(paths.every(path => view.getComputedStyle(path).fill !== "none" && view.getComputedStyle(path).stroke === "none"), "Flow uses stroke stacks instead of filled bands");
+            assert(["plus-lighter","normal"].includes(view.getComputedStyle(effect).mixBlendMode), "Flow blend mode is not additive or its normal-blend fallback");
+            const tint = type === "signal" ? [127,230,212] : type === "action" ? [255,161,74] : [240,230,210];
+            const fill = view.getComputedStyle(clippedHit).fill.match(/[\d.]+/g).map(Number);
+            const color = view.getComputedStyle(effect).mixBlendMode === "plus-lighter" ? tint : tint.map((value,i)=>Math.min(255,value+fill[i]));
+            const expectedColor = "rgb("+color.join(", ")+")";
+            assert(paths.every(path => [...doc.getElementById(path.getAttribute("fill").slice(5,-1)).querySelectorAll("stop")].every(stop=>view.getComputedStyle(stop).stopColor===expectedColor)), "Flow tint/additive fallback is incorrect");
+            const label = doc.querySelector(`.sectorLabel[data-index="${index}"]`).closest("foreignObject");
+            assert(effect.compareDocumentPosition(label) & view.Node.DOCUMENT_POSITION_FOLLOWING, "Flow paints over the label");
+            if (type === "action") assert(effect.compareDocumentPosition(doc.querySelectorAll(".actionLabel")[index]) & view.Node.DOCUMENT_POSITION_FOLLOWING, "Flow paints over ACTION");
+            const toRoot = svg.getCTM().inverse();
+            if (signal) {
+                assert(!target.querySelector(".signal-flow") && effect.parentElement.compareDocumentPosition(target) & view.Node.DOCUMENT_POSITION_FOLLOWING, "Signal bulb flow is not painted underneath the core");
+                const sector = target.closest("g[data-bulb-x]"), x = Number(sector.dataset.bulbX), y = Number(sector.dataset.bulbY);
+                for (const mark of marks) {
+                    const path = mark.querySelector(".flow-band"), gradient = doc.getElementById(path.getAttribute("fill").slice(5,-1));
+                    assert(gradient?.tagName === "radialGradient" && gradient.getAttribute("gradientUnits") === "userSpaceOnUse" &&
+                        Number(gradient.getAttribute("cx")) === 0 && Number(gradient.getAttribute("cy")) === 0, "Signal band is not a user-space radial gradient");
+                    const m = mark.getCTM(), center = new view.DOMPoint(0,0).matrixTransform(toRoot.multiply(m));
+                    const expectedCenter = new view.DOMPoint(x,y).matrixTransform(toRoot.multiply(nearby.getCTM()));
+                    assert(Math.hypot(center.x-expectedCenter.x,center.y-expectedCenter.y) < 1, "Signal radial gradient center misses the bulb chord midpoint");
+                    const radius = Number(gradient.getAttribute("r")), bulbRadius = Number(sector.dataset.bulbRadius);
+                    assert(radius > 0 && radius <= bulbRadius + 24.1, "Signal band radius is out of bounds");
+                    const expectedOpacity = .12*Math.sin(Math.PI*radius/(bulbRadius+24));
+                    assert(Math.abs(Number(mark.getAttribute("opacity"))-expectedOpacity)<.003, "Signal peak/envelope opacity does not follow its travel fraction");
+                    assert(path.getAttribute("fill-rule") === "evenodd" && /A/.test(path.getAttribute("d")), "Signal band is not an annular filled arc");
+                    for (const depth of [0,.125,.25,.5,.75,1]) if (radius >= depth*24) {
+                        const alpha = gradientAlpha(gradient,(radius-depth*24)/radius);
+                        assert(Math.abs(alpha-profile(depth))<.025, "Signal gradient does not render the 24-unit HOLD/power-fade trail");
+                    }
+                }
+                const overlapPoint = new view.DOMPoint(x,y).matrixTransform(toRoot.multiply(nearby.getCTM()));
+                const overlap = actualAt(overlapPoint);
+                assert(overlap?.closest(".region") === target, `Core does not win bulb chord overlap hit at slot ${index}`);
+            } else {
+                for (const mark of marks) {
+                    const node = mark, transform = node.transform.baseVal.consolidate()?.matrix;
+                    assert(transform && Math.abs(transform.e - 1800) < 1, "Chevron mark is not translated from the shared wheel center");
+                    const radius = 1800 - transform.f, w = radius * Math.tan(Math.PI/12) + 14, h = .45*w;
+                    const arms = [...node.querySelectorAll(".flow-band")];
+                    assert(arms.length === 2 && Number(node.getAttribute("opacity")) <= .121, "Chevron mark does not contain two arms or exceeds peak opacity");
+                    for (const [i,path] of arms.entries()) {
+                        const bounds=path.getBBox();
+                        assert(Math.abs(bounds.width-w)<1 && Math.abs(bounds.height-(h+46))<1, "Chevron band does not span its radius-derived width/height");
+                        const gradient = doc.getElementById(path.getAttribute("fill").slice(5,-1));
+                        assert(gradient?.tagName === "linearGradient" && gradient.getAttribute("gradientUnits") === "userSpaceOnUse", "Chevron is not a user-space gradient band");
+                        const dx=gradient.x2.baseVal.value-gradient.x1.baseVal.value, dy=gradient.y2.baseVal.value-gradient.y1.baseVal.value;
+                        for (const fraction of [.2,.5,.8]) {
+                            const x=(i===0?-w:w)*fraction, y=h*fraction;
+                            assert(path.isPointInFill(new view.DOMPoint(x,y+23)) && !path.isPointInFill(new view.DOMPoint(x,y-1)) && !path.isPointInFill(new view.DOMPoint(x,y+47)), "Chevron does not have a 46-unit band behind its leading edge");
+                            for (const depth of [0,.125,.25,.5,.75,1]) {
+                                const position=((x-gradient.x1.baseVal.value)*dx+(y+depth*46-gradient.y1.baseVal.value)*dy)/(dx*dx+dy*dy);
+                                assert(Math.abs(gradientAlpha(gradient,position)-profile(depth))<.025, "Chevron gradient does not render the HOLD/power-fade profile along its arm");
+                            }
+                        }
+                    }
+                }
+            }
+        };
+        for (let i = 0; i < 12; i++) {
+            arm("flow-gesture-" + i, Array.from({length:12},()=>({label:"Gesture",intent:"greet"})));
+            region(i).focus(); checkFlow(i,"signal");
+            const nearby = region(i,"nearby"), sector = region(i).closest("g[data-bulb-x]");
+            assert(!region(i).querySelector(".signal-flow") && flow()?.parentElement === nearby, "Gesture flow entered the core");
+            const point = new view.DOMPoint(Number(sector.dataset.bulbX), Number(sector.dataset.bulbY)).matrixTransform(svg.getCTM().inverse().multiply(nearby.getCTM()));
+            assert(actualAt(point)?.closest(".region") === region(i), `Core does not have hit priority over bulb at slot ${i}`);
+            nearby.focus(); assert(!flow(), "Bulb hover shows flow bands");
+            region(i).focus(); keyEvent("keydown","Shift","ShiftLeft",1); assert(!flow(), "Shift preview shows signal flow"); keyEvent("keyup","Shift","ShiftLeft",1);
+        }
+        arm("flow-actions-static", Array.from({length:12},()=>flowSlots[1]));
+        for (let i = 0; i < 12; i++) { region(i).focus(); checkFlow(i,"action"); }
+        const stillAction = flowSnapshot();
+        await new Promise(resolve => setTimeout(resolve,100));
+        assert(flowSnapshot() === stillAction, "Zero-tween action flow moves");
+        arm("flow-utils-static", Array.from({length:12},()=>flowSlots[2]));
+        for (let i = 0; i < 12; i++) { region(i).focus(); checkFlow(i,"util"); }
+        const stillUtil = flowSnapshot();
+        await new Promise(resolve => setTimeout(resolve,100));
+        assert(flowSnapshot() === stillUtil, "Zero-tween utility flow moves");
+        arm("flow-disabled-actions", Array.from({length:12},()=>flowSlots[1]), "");
+        for (let i = 0; i < 12; i++) {
+            region(i).focus(); region(i).dispatchEvent(new view.MouseEvent("mouseenter"));
+            assert(!flow(), `Disabled action ${i} shows flow bands`);
+        }
+        arm("flow-exclusions", flowSlots);
+        tip.focus(); assert(!flow(), "Openly tip shows flow bands");
+        for (let i = 2; i < 6; i++) {
+            region(i).focus(); checkFlow(i,"util");
+            keyEvent("keydown","Shift","ShiftLeft",1); assert(flow(), `Shift incorrectly stops utility flow in slot ${i}`);
+            keyEvent("keyup","Shift","ShiftLeft",1);
+        }
+        region(1).focus(); checkFlow(1,"action");
+        keyEvent("keydown","Shift","ShiftLeft",1); assert(flow(), "Shift incorrectly stops action flow"); keyEvent("keyup","Shift","ShiftLeft",1);
+        region(6).focus(); assert(!flow(), "Empty slot shows flow bands");
+        key("Escape"); assert(replies.pop() === "flow-exclusions|-1||cancel" && !flow(), "Cancel retains static flow");
         assert(raf.requested === 0 && raf.pending.size === 0, "Zero-duration interactions scheduled animation frames");
-        // Observe real SVG-attribute motion, not CSS transform on foreignObject.
         doc.documentElement.style.removeProperty("--ps-tween");
         const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
-        const settle = async () => { await new Promise(resolve => setTimeout(resolve, 240)); };
+        const settle = async () => {
+            await new Promise(resolve => setTimeout(resolve,240));
+            await raf.nextFrame(); // Let the child view finish its last lift frame before checking its queue.
+        };
         const assertLabel = index => {
             const label = doc.querySelector(`.sectorLabel[data-index="${index}"]`), box = label.closest("foreignObject");
             const range = doc.createRange(); range.selectNodeContents(label);
@@ -549,6 +741,49 @@ frame.addEventListener("load", async () => {
             const m = box.getScreenCTM();
             assert(Math.abs(m.b) < .001 && Math.abs(m.c) < .001, "Counter-rotated label is not upright");
         };
+        const reducedFlow = view.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        arm("flow-live", flowSlots); await settle(); checkFlow(0,"signal");
+        assert(raf.pending.size === (reducedFlow ? 0 : 1), "Signal flow does not use exactly one shared frame loop");
+        const movingMarks = flowMarks(), beforeFlow = flowSnapshot(), signalGradient = doc.getElementById(movingMarks[0].querySelector("path").getAttribute("fill").slice(5,-1));
+        const beforeRadius = Number(signalGradient.getAttribute("r")), beforeOffsets = [...signalGradient.querySelectorAll("stop")].map(stop => stop.getAttribute("offset"));
+        const beforeTime = view.performance.now();
+        const frameMutations = [], permitted = new Set(flowNodes());
+        const observer = new view.MutationObserver(records => frameMutations.push(...records));
+        observer.observe(doc.documentElement, {subtree:true, attributes:true});
+        await new Promise(resolve => setTimeout(resolve,350)); observer.disconnect();
+        if (reducedFlow) assert(flowSnapshot() === beforeFlow && !frameMutations.length, "Reduced-motion signal flow moves");
+        else {
+            const radius = Number(signalGradient.getAttribute("r")), offsets = [...signalGradient.querySelectorAll("stop")].map(stop => Number(stop.getAttribute("offset")));
+            assert(radius > beforeRadius && flowSnapshot() !== beforeFlow, "Signal bands do not travel outward");
+            const elapsedTravel = (radius-beforeRadius) / (Number(region(0).closest("g[data-bulb-x]").dataset.bulbRadius)+24) * 2400;
+            assert(Math.abs(elapsedTravel-(view.performance.now()-beforeTime))<80, "Signal radius advance does not match the 2400ms travel period");
+            assert(frameMutations.length && frameMutations.every(record => permitted.has(record.target) && ["transform","d","opacity","r","offset"].includes(record.attributeName)), "Flow frame mutates unrelated DOM or a non-frame attribute");
+            assert(offsets.some((offset,i) => Math.abs(offset-Number(beforeOffsets[i]))>.001), "Signal gradient stops do not track the moving radius");
+        }
+        core.dispatchEvent(new view.MouseEvent("mouseleave"));
+        assert(!flow() && !raf.pending.size, "Core leave did not immediately stop flow");
+        const stoppedFrames = raf.executed; await new Promise(resolve => setTimeout(resolve,100));
+        assert(raf.executed === stoppedFrames, "Flow has an idle loop after leave");
+        core.dispatchEvent(new view.MouseEvent("mouseenter")); checkFlow(0,"signal");
+        core.blur(); assert(!flow() && !raf.pending.size, "Core blur retains flow");
+        core.dispatchEvent(new view.MouseEvent("mouseenter"));
+        view.dispatchEvent(new view.Event("blur")); assert(!flow() && !raf.pending.size, "Window blur retains flow");
+        core.dispatchEvent(new view.MouseEvent("mouseenter")); checkFlow(0,"signal");
+        keyEvent("keydown","Shift","ShiftLeft",1);
+        assert(!flow() && !raf.pending.size, "Shift preview did not immediately stop signal flow");
+        keyEvent("keyup","Shift","ShiftLeft",1); checkFlow(0,"signal");
+        tip.focus(); assert(!flow() && !raf.pending.size, "Tip focus retains the core loop");
+        core.focus(); click(core);
+        assert(replies.pop() === "flow-live|0|farewell|target" && !flow() && !raf.pending.size, "Selection retains flow work");
+        arm("flow-live-action", flowSlots); region(1).focus(); await settle(); checkFlow(1,"action");
+        const actionBefore = flowSnapshot();
+        assert(raf.pending.size === (reducedFlow ? 0 : 1), "Action flow does not reuse one shared frame loop");
+        keyEvent("keydown","Shift","ShiftLeft",1); checkFlow(1,"action");
+        keyEvent("keyup","Shift","ShiftLeft",1);
+        await new Promise(resolve => setTimeout(resolve,110));
+        assert(reducedFlow ? flowSnapshot() === actionBefore : flowSnapshot() !== actionBefore, "Action flow does not follow reduced-motion preference");
+        view.hostMode("0");
+        assert(!flow() && !raf.pending.size && !visible(), "Host disarm retains flow work");
         arm("ripples", Array.from({length:12}, (_,i) => ({label:"Ripple "+i,intent:"greet"})));
         const assertUprightRipple = i => {
             const symbol = region(i,"nearby").querySelector(".broadcast-symbol");
@@ -590,7 +825,8 @@ frame.addEventListener("load", async () => {
             assert(samples.some(scale => scale > 1 && scale < 1.06), "Lift skipped intermediate scale");
             assert(Math.max(...samples) > 1.061 && Math.max(...samples) < 1.07, "Lift lacks bounded overshoot");
         } else assert(raf.requested === beforeFrames, "Reduced motion scheduled animation frames");
-        assert(raf.pending.size === 0, "Lift animation frame remains pending at idle");
+        core.dispatchEvent(new view.MouseEvent("mouseleave"));
+        assert(!flow() && raf.pending.size === 0, "Settled core retains animation frames after leave");
         const idleFrames = raf.executed;
         await new Promise(resolve => setTimeout(resolve, 100));
         assert(raf.executed === idleFrames, "Animation frames still running at idle");
@@ -678,19 +914,24 @@ frame.addEventListener("load", async () => {
         arm("interrupted", [{label:"Signal",intent:"greet"}]);
         await nextFrame(); view.hostMode("0");
         assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
-        report.textContent = "PASS: 12-slot choices and Back placement; gesture core/tip routing; merged navigation/actions and disabled nearby regions; simple uniform arrows preserve aspect, center angle within 1 degree and stay inside their slices at rest, slice lift and hub pop; core/merged fills and insets converge beneath the opaque native octagon without exposed transverse inner segments; hub paints last and wins boundary hits inside its moving outline, while slices win just outside; ACTION badges, upright labels/ripples, both armed pointer-transparent vignettes with matching fade and title/help above them, Shift preview, palettes, empty slots, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
+        report.textContent = "PASS: 12-slot choices and Back placement; gesture core/tip routing; merged navigation/actions and disabled nearby regions; clipped half-disc bulbs painted beneath the core and core-priority chord hits across all 12 slots; simple uniform arrows preserve aspect, center angle within 1 degree and stay inside their slices at rest, slice lift and hub pop; core/merged fills and insets converge beneath the opaque native octagon without exposed transverse inner segments; hub paints last and wins boundary hits inside its moving outline, while slices win just outside; ACTION badges, upright labels/ripples, both armed pointer-transparent vignettes with matching fade and title/help above them, Shift preview, palettes, empty slots, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
         report.textContent += " Hotkeys: neutral merged necktie, no target required, F6 hub and visible KEY badge, Shift ignored, typed hotkey choice after close, malformed/conflicting payloads fail closed.";
-        report.textContent += " Slice-owned arrows retain fixed local transforms, scale with their slice, remain stationary under hub-only pop, clear a 1.09 hub and their labels; Up chooses a gesture tip, Down its core, and non-gestures retain merged focus.";
-        report.textContent += " Hub Cancel tracks shared SVG-attribute motion, overshoots then settles at 1.08, returns on leave/blur, snaps with reduced motion/0ms, has no idle rAF, and routes inside-octagon clicks to Cancel and outside-edge clicks to the slice in all 12 directions; two-line ~20px help shows the mapped open-key name, omits unmapped names and clears the lifted bottom tip at 1080p/1440p.";
+        report.textContent += " Legacy utility arrows/knot default off; utility arc remains slice-owned, clipped, noninteractive at radius 883. Hub Cancel tracks shared SVG-attribute motion, overshoots then settles at 1.08, returns on leave/blur, snaps with reduced motion/0ms, has no idle rAF, and routes inside-octagon clicks to Cancel and outside-edge clicks to the slice in all 12 directions; two-line ~20px help shows the mapped open-key name, omits unmapped names and clears the lifted bottom tip at 1080p/1440p.";
+        report.textContent += " Flow: two radial-gradient signal bands stay in the bulb beneath the core; four edge-spanning, two-arm gradient chevrons flow for actions and utilities with verified clipping, color/profile/count/geometry; labels and ACTION remain clear; empty/disabled exclusions, Shift behavior, leave/blur/selection/disarm stops, one shared rAF, approximate 2400ms travel, attribute-only frame updates and reduced-motion/0ms static behavior pass.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {
     const bridge = `<script>
+        if (${new URLSearchParams(location.search).get("blend") === "normal"}) {
+            const nativeSupports=CSS.supports.bind(CSS);
+            CSS.supports=(property,value)=>property==="mix-blend-mode" && value==="plus-lighter" ? false : nativeSupports(property,value);
+        }
         window.modeListeners=[];
         window.magelight={on:(channel,fn)=>{if(channel==="__uimode")modeListeners.push(fn);},send:()=>{}};
         window.hostMode=state=>modeListeners.forEach(fn=>fn(state));
         window.qaRAF={pending:new Set(),requested:0,executed:0};
         const nativeRAF=window.requestAnimationFrame.bind(window), nativeCancel=window.cancelAnimationFrame.bind(window);
+        qaRAF.nextFrame=()=>new Promise(resolve=>nativeRAF(resolve));
         window.requestAnimationFrame=fn=>{
             const id=nativeRAF(time=>{qaRAF.pending.delete(id);qaRAF.executed++;fn(time);});
             qaRAF.pending.add(id);qaRAF.requested++;return id;

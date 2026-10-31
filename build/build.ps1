@@ -125,11 +125,9 @@ function Point($radius, $degrees) {
 }
 $half = 15
 $coreInner = 432; $coreOuter = 1296; $coreGap = 36
-$tipInner = $coreOuter; $tipOuter = 1692; $tipGap = $coreGap
+$tipOuter = 1692
 $coreInnerGap = $coreGap / $coreInner * 90 / [Math]::PI
 $coreOuterGap = $coreGap / $coreOuter * 90 / [Math]::PI
-$tipAngleGap = $tipGap / $tipInner * 90 / [Math]::PI
-$tipInnerText = $tipInner.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
 $edgeInset = 20; $edgeChamfer = 12
 function Local-Point($radius, $degrees) {
     $angle = $degrees * [Math]::PI / 180
@@ -159,8 +157,12 @@ $innerRight = Local-Point $coreInner ($half - $coreInnerGap)
 $apex = Line-Crossing (Side-Line $innerLeft $outerLeft 0) (Side-Line $outerRight $innerRight 0)
 $coreD = 'M{0}L{1}A{2},{2} 0 0 1 {3}Z' -f `
     (Svg-Point $apex), (Svg-Point $outerLeft), $coreOuter, (Svg-Point $outerRight)
-$tipD = 'M{0}A{1},{1} 0 0 1 {2}L{3}Z' -f `
-    (Point $tipInner (-$half + $tipAngleGap)), $tipInnerText, (Point $tipInner ($half - $tipAngleGap)), (Point $tipOuter 0)
+$capCenter = @((($outerLeft[0] + $outerRight[0]) / 2), (($outerLeft[1] + $outerRight[1]) / 2))
+$capRadius = [Math]::Sqrt(($outerRight[0] - $outerLeft[0]) * ($outerRight[0] - $outerLeft[0]) +
+    ($outerRight[1] - $outerLeft[1]) * ($outerRight[1] - $outerLeft[1])) / 2
+$capRadiusText = $capRadius.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
+$tipD = 'M{0}A{1},{1} 0 0 1 {2}Z' -f `
+    (Svg-Point $outerLeft), $capRadiusText, (Svg-Point $outerRight)
 $unionD = 'M{0}L{1}L{2}L{3}Z' -f `
     (Svg-Point $apex), (Svg-Point $outerLeft), (Point $tipOuter 0), (Svg-Point $outerRight)
 $sidePoints = @($innerLeft, $outerLeft, (Local-Point $tipOuter 0), $outerRight, $innerRight)
@@ -186,28 +188,17 @@ function Core-EdgePath {
         (Point $outer (-$angle)), (Svg-Point @((-$side[0]), $side[1]))
 }
 function Tip-EdgePath {
-    # Offset the actual straight sides, then intersect them with the inset arc.
-    # Interpolating polar angles bows outside the triangular tip.
-    $inner = $tipInner + $edgeInset; $angle = ($half - $tipAngleGap) * [Math]::PI / 180
-    $x = -$tipInner * [Math]::Sin($angle); $y = -$tipInner * [Math]::Cos($angle)
-    $dx = -$x; $dy = -$tipOuter - $y; $length = [Math]::Sqrt($dx * $dx + $dy * $dy)
-    $vx = $dx / $length; $vy = $dy / $length
-    $px = $x - $edgeInset * $vy; $py = $y + $edgeInset * $vx
-    $dot = $px * $vx + $py * $vy
-    $t = -$dot + [Math]::Sqrt($dot * $dot - ($px * $px + $py * $py - $inner * $inner))
-    $ix = $px + $t * $vx; $iy = $py + $t * $vy
-    $apexY = $py - $px / $vx * $vy
-    $lo = [Math]::Atan2($ix, -$iy) * 180 / [Math]::PI
-    $chamfer = $edgeChamfer / $inner * 180 / [Math]::PI
-    function TipPoint($x, $y) {
-        [string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0:0.###},{1:0.###}', (1800 + $x), (1800 + $y))
-    }
-    $sideX = $ix + $edgeChamfer * $vx; $sideY = $iy + $edgeChamfer * $vy
-    $apexX = -$edgeChamfer * $vx; $apexY -= $edgeChamfer * $vy
-    'M{0}L{1}L{2}A{3},{3} 0 0 1 {4}L{5}L{6}Z' -f `
-        (TipPoint $apexX $apexY), (TipPoint $sideX $sideY), (Point $inner ($lo + $chamfer)),
-        ($inner.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)),
-        (Point $inner (-$lo - $chamfer)), (TipPoint (-$sideX) $sideY), (TipPoint (-$apexX) $apexY)
+    $radius = $capRadius - $edgeInset
+    $wheelRadius = $coreOuter + $edgeInset
+    $centerDistance = [Math]::Sqrt($capCenter[0] * $capCenter[0] + $capCenter[1] * $capCenter[1])
+    $along = ($wheelRadius * $wheelRadius - $radius * $radius + $centerDistance * $centerDistance) / (2 * $centerDistance)
+    $x = [Math]::Sqrt($wheelRadius * $wheelRadius - $along * $along)
+    $y = $capCenter[1] / $centerDistance * $along
+    $left = @(-$x, $y); $right = @($x, $y)
+    $radiusText = $radius.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
+    $wheelRadiusText = $wheelRadius.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
+    'M{0}A{1},{1} 0 0 1 {2}A{3},{3} 0 0 0 {0}Z' -f `
+        (Svg-Point $left), $radiusText, (Svg-Point $right), $wheelRadiusText
 }
 $coreEdgeD = Core-EdgePath
 $tipEdgeD = Tip-EdgePath
@@ -292,17 +283,23 @@ do {
         [void]$empty.ParentNode.RemoveChild($empty); $removed++
     }
 } while ($removed)
+# Final per-slot definitions are added after reference pruning so their clip IDs remain intact.
 $references = Get-SvgReferences $svg
 foreach ($node in $svg.SelectNodes('.//*[@id]')) {
     if (-not $references.Contains($node.GetAttribute('id'))) { $node.RemoveAttribute('id') }
 }
+$defs = $svg.SelectSingleNode("./*[local-name()='defs']")
+if (-not $defs) { $defs = $art.CreateElement('defs', $svg.NamespaceURI); [void]$svg.PrependChild($defs) }
 foreach ($region in $regions) {
     $piece = $region.Piece; $slot = $region.Slot; $parts = $region.Parts
     $piece.SetAttribute('id', "slot-$slot"); $piece.SetAttribute('class', 'sector'); $piece.SetAttribute('data-index', [string]$slot)
     $piece.SetAttribute('data-label-radius', $labelRadius.ToString('0.######', [Globalization.CultureInfo]::InvariantCulture))
+    $piece.SetAttribute('data-bulb-x', (1800 + $capCenter[0]).ToString('0.###', [Globalization.CultureInfo]::InvariantCulture))
+    $piece.SetAttribute('data-bulb-y', (1800 + $capCenter[1]).ToString('0.###', [Globalization.CultureInfo]::InvariantCulture))
+    $piece.SetAttribute('data-bulb-radius', $capRadiusText)
     $pop = $art.CreateElement('g', $svg.NamespaceURI); $pop.SetAttribute('class', 'pop')
     [void]$piece.AppendChild($pop)
-    foreach ($mode in @('target', 'nearby')) {
+    foreach ($mode in @('nearby', 'target')) {
         $wrapper = $art.CreateElement('g', $svg.NamespaceURI)
         $wrapper.SetAttribute('id', "slot-$slot-$mode"); $wrapper.SetAttribute('class', "region $mode-region")
         [void]$pop.AppendChild($wrapper)
@@ -327,6 +324,18 @@ foreach ($region in $regions) {
         }
         [void]$wrapper.AppendChild($edge)
     }
+    $clip = $art.CreateElement('clipPath', $svg.NamespaceURI)
+    $clip.SetAttribute('id', "slot-$slot-utility-clip")
+    $clip.SetAttribute('clipPathUnits', 'userSpaceOnUse')
+    $clipShape = $art.CreateElement('path', $svg.NamespaceURI); $clipShape.SetAttribute('d', $unionD)
+    [void]$clip.AppendChild($clipShape); [void]$defs.AppendChild($clip)
+    $utilityArc = $art.CreateElement('path', $svg.NamespaceURI)
+    $utilityArc.SetAttribute('class', 'edge-line utility-arc')
+    $utilityArc.SetAttribute('d', ('M{0}A883,883 0 0 1 {1}' -f (Point 883 (-$half)), (Point 883 $half)))
+    $utilityArc.SetAttribute('clip-path', "url(#slot-$slot-utility-clip)")
+    $utilityArc.SetAttribute('aria-hidden', 'true')
+    $utilityArc.SetAttribute('style', 'pointer-events:none;')
+    [void]$pop.AppendChild($utilityArc)
     [void]$pop.AppendChild($parts.Submenu)
     [void]$pop.AppendChild($parts.Upmenu)
     $parts.ChevronKnot.SetAttribute('class', 'chevron-knot')
@@ -348,7 +357,7 @@ $ids = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 foreach ($node in $svg.SelectNodes('descendant-or-self::*[@id]')) {
     if (-not $ids.Add($node.GetAttribute('id'))) { throw "Duplicate generated SVG ID: $($node.GetAttribute('id'))" }
 }
-foreach ($id in $references) {
+foreach ($id in (Get-SvgReferences $svg)) {
     if (-not $ids.Contains($id)) { throw "Unresolved SVG reference: $id" }
 }
 $svg.SetAttribute('id', 'wheelSvg')

@@ -32,6 +32,8 @@ frame.addEventListener("load", async () => {
         assert(!visible(), "Page appeared without a request");
         assert(doc.querySelectorAll('g[id^="slot-"][data-index]').length === 12, "Wheel does not have 12 sectors");
         assert(!doc.querySelector("image"), "Wheel retains raster images");
+        const vignette = doc.getElementById("vignette"), raf = view.qaRAF;
+        assert(vignette && view.getComputedStyle(vignette).visibility === "hidden", "Vignette visible while disarmed");
         arm("geometry", Array.from({length:12}, (_, i) => ({label:"Slot " + i, intent:"greet"})));
         doc.getElementById("center").focus();
         const svg = doc.getElementById("wheelSvg");
@@ -43,6 +45,12 @@ frame.addEventListener("load", async () => {
             assert(hit.isPointInFill(local), `Slot ${i} ${mode} missed its 30-degree sector`);
             const screen = point.matrixTransform(svg.getScreenCTM());
             assert(doc.elementFromPoint(screen.x, screen.y)?.closest(".region") === region(i, mode), `Slot ${i} ${mode} hit stolen by another region or label`);
+            const edge = region(i, mode).querySelector(".edge-line"), length = edge.getTotalLength();
+            assert(length > 0 && view.getComputedStyle(edge).pointerEvents === "none", "Inset edge missing or intercepts input");
+            for (let j = 0; j < 128; j++) {
+                const p = edge.getPointAtLength(length * j / 128);
+                assert(hit.isPointInFill(p.matrixTransform(hit.getCTM().inverse().multiply(edge.getCTM()))), `Slot ${i} ${mode} inset leaves its shape`);
+            }
         }
         const core = region(0), tip = region(0, "nearby");
         core.focus();
@@ -50,9 +58,10 @@ frame.addEventListener("load", async () => {
         tip.focus();
         assert(core.classList.contains("hot") && tip.classList.contains("hot"), "Gesture tip failed to highlight both regions");
         const pop = doc.getElementById("slot-0").querySelector(".pop");
-        assert(Math.abs(new view.DOMMatrix(view.getComputedStyle(pop).transform).a - 1.06) < .001, "Hover lift missing");
+        const liftScale = () => pop.parentElement.getCTM().inverse().multiply(pop.getCTM()).a;
+        assert(Math.abs(liftScale() - 1.06) < .001, "Hover lift missing");
         region(1).focus();
-        assert(view.getComputedStyle(pop).transform === "none", "Previous slice retained lift");
+        assert(Math.abs(liftScale() - 1) < .001, "Previous slice retained lift");
         click(doc.getElementById("center"));
         assert(replies.pop() === "geometry|-1||cancel", "Geometry setup failed to cancel");
         // Navigation art stays within every core and never intercepts pointer input.
@@ -82,6 +91,12 @@ frame.addEventListener("load", async () => {
         arm("arrows-hidden", [{label:"Signal",intent:"greet"}, {label:"Action",action:{name:"WaitHere"}}]);
         assert([...doc.querySelectorAll(".navigation-art")].every(art => view.getComputedStyle(art).display === "none"), "Non-navigation entry acquired an arrow");
         key("Escape"); assert(replies.pop() === "arrows-hidden|-1||cancel", "Arrow clearing setup failed to cancel");
+        arm("vignette", []);
+        assert(Number(view.getComputedStyle(vignette).opacity) === 1 && view.getComputedStyle(vignette).pointerEvents === "none", "Armed vignette missing or intercepts input");
+        assert(Math.abs(vignette.getBoundingClientRect().height - view.innerHeight / 8) < 1 && Math.abs(vignette.getBoundingClientRect().bottom - view.innerHeight) < 1, "Vignette is not bottom eighth");
+        assert([...doc.querySelectorAll(".sector")].every(slot => Number(view.getComputedStyle(slot).opacity) === .5), "Empty slots are not half opaque");
+        key("Escape"); assert(replies.pop() === "vignette|-1||cancel", "Vignette setup failed to cancel");
+        assert(view.getComputedStyle(vignette).visibility === "hidden", "Vignette outlived armed state");
         // Exercise all shipped positions, destinations and navigation identities.
         for (const [name, slots] of Object.entries(layout.wheels)) {
             if (name !== layout.root) assert(slots[7]?.control === "back", "Shipped submenu Back is not slot 7");
@@ -92,8 +107,16 @@ frame.addEventListener("load", async () => {
                     begin(token, payload(slots)); click(region(i, mode));
                     assert(!replies.length, "Unarmed choice escaped");
                     view.psWheelArm(token);
-                    click(region(i, mode));
                     const [, identity, kind] = entry(slots[i]);
+                    if (kind === "submenu" || kind === "back") {
+                        region(i).focus();
+                        const art = region(i).querySelector(kind === "submenu" ? ".submenu-art" : ".back-art");
+                        const label = doc.querySelector(`.sectorLabel[data-index="${i}"]`), range = doc.createRange();
+                        range.selectNodeContents(label);
+                        const a = art.getBoundingClientRect(), l = range.getBoundingClientRect();
+                        assert(a.right <= l.left || a.left >= l.right || a.bottom <= l.top || a.top >= l.bottom, `Shipped ${name}/${i} navigation arrow overlaps its label`);
+                    }
+                    click(region(i, mode));
                     const destination = ["submenu", "back", "navigation"].includes(kind) ? "navigate" : kind === "action" ? "target" : mode;
                     assert(replies.pop() === `${token}|${i}|${identity}|${destination}`, "Choice lost index, identity or destination");
                     click(region(i, mode)); view.psWheelArm(token); click(region(i, mode));
@@ -123,6 +146,14 @@ frame.addEventListener("load", async () => {
             key("Enter"); assert(replies.pop() === `${token}|1|greet|target`, "No-target gesture unavailable (native dispatcher supplies group fallback)");
         }
         for (const theme of ["slate", "moss", "ember"]) {
+            const navigation = [{label:"Menu",submenu:"social"}, {label:"Back",control:"back"}];
+            begin("back-tint-" + theme, payload(navigation, "Lydia", theme)); view.psWheelArm("back-tint-" + theme);
+            doc.getElementById("center").focus();
+            assert(view.getComputedStyle(region(0).querySelector(".hit-area")).fill === view.getComputedStyle(region(1).querySelector(".hit-area")).fill, "Back and submenu base fills differ in " + theme);
+            region(0).focus(); const selectedFill = view.getComputedStyle(region(0).querySelector(".hit-area")).fill;
+            region(1).focus();
+            assert(view.getComputedStyle(region(1).querySelector(".hit-area")).fill === selectedFill, "Back and submenu selection fills differ in " + theme);
+            key("Escape"); assert(replies.pop() === `back-tint-${theme}|-1||cancel`, "Back tint setup failed to cancel");
             arm("theme-" + theme, [{label:"Signal", intent:"greet"}], "Lydia", theme);
             region(0,"nearby").focus();
             assert(doc.documentElement.classList.contains(theme) && doc.getElementById("destination").textContent === "Openly", "Theme changed destination");
@@ -143,47 +174,71 @@ frame.addEventListener("load", async () => {
         }
         arm("center", []); click(doc.getElementById("center"));
         assert(replies.pop() === "center|-1||cancel", "Empty-wheel center cancel failed");
-        // Exercise real transitions separately from immediate protocol checks.
+        assert(raf.requested === 0 && raf.pending.size === 0, "Zero-duration interactions scheduled animation frames");
+        // Observe real SVG-attribute motion, not CSS transform on foreignObject.
         doc.documentElement.style.removeProperty("--ps-tween");
-        const nextFrame = () => new Promise(resolve => view.requestAnimationFrame(resolve));
-        const settle = async () => { await nextFrame(); await nextFrame(); doc.getAnimations().forEach(animation => animation.finish()); };
+        const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+        const settle = async () => { await new Promise(resolve => setTimeout(resolve, 240)); };
+        const assertLabel = index => {
+            const label = doc.querySelector(`.sectorLabel[data-index="${index}"]`), box = label.closest("foreignObject");
+            const range = doc.createRange(); range.selectNodeContents(label);
+            const ink = range.getBoundingClientRect();
+            assert(view.getComputedStyle(label).visibility === "visible" && Number(view.getComputedStyle(label).opacity) === 1 && ink.width > 0 && ink.height > 0, "Hovered label disappeared");
+            assert(view.getComputedStyle(box).transform === "none" && view.getComputedStyle(label).transform === "none", "Label uses CSS transform");
+            const m = box.getScreenCTM();
+            assert(Math.abs(m.b) < .001 && Math.abs(m.c) < .001, "Counter-rotated label is not upright");
+        };
         arm("motion", [{label:"Signal",intent:"greet"}, {label:"Menu",submenu:"social"}]);
         await settle(); doc.getElementById("center").focus(); await settle();
+        const reduced = view.matchMedia("(prefers-reduced-motion: reduce)").matches, beforeFrames = raf.requested;
         core.focus();
-        await nextFrame();
-        const reduced = view.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const samples = [liftScale()];
+        const deadline = performance.now() + 230;
+        while (performance.now() < deadline) {
+            await nextFrame(); samples.push(liftScale()); assertLabel(0);
+        }
+        assert(Math.abs(liftScale() - 1.06) < .001, "Lift did not settle at 1.06");
         if (!reduced) {
-            const animations = doc.getAnimations();
-            assert(animations.some(a => a.transitionProperty === "fill") && animations.some(a => a.transitionProperty.startsWith("stroke")), "Inner fill/outline did not tween");
-            const lift = animations.find(a => a.effect.target === pop && a.transitionProperty === "transform");
-            assert(lift, "Lift did not tween");
-            animations.forEach(a => { a.pause(); a.currentTime = a.effect.getTiming().duration / 2; });
-            const scale = new view.DOMMatrix(view.getComputedStyle(pop).transform).a;
-            assert(scale > 1 && scale < 1.06, "Lift skipped its eased intermediate state");
-            animations.forEach(a => a.finish());
-        } else assert(view.getComputedStyle(pop).transitionDuration === "0s", "Reduced motion retained lift animation");
+            assert(samples.some(scale => scale > 1 && scale < 1.06), "Lift skipped intermediate scale");
+            assert(Math.max(...samples) > 1.061 && Math.max(...samples) < 1.07, "Lift lacks bounded overshoot");
+        } else assert(raf.requested === beforeFrames, "Reduced motion scheduled animation frames");
+        assert(raf.pending.size === 0, "Lift animation frame remains pending at idle");
+        const idleFrames = raf.executed;
+        await new Promise(resolve => setTimeout(resolve, 100));
+        assert(raf.executed === idleFrames, "Animation frames still running at idle");
         tip.focus(); await settle();
         assert(Number(view.getComputedStyle(tip.querySelector(".broadcast-symbol")).opacity) === 1, "Tip did not reveal ripple cue");
         const rotating = doc.getElementById("slot-1").getAttribute("transform");
-        region(1).focus(); await settle();
+        region(1).focus(); await settle(); assertLabel(1);
         assert(doc.getElementById("slot-1").getAttribute("transform") === rotating, "Hover replaced slot rotation");
         click(region(1));
-        if (!reduced) {
-            assert(visible() && svg.classList.contains("swap") && !replies.length, "Navigation vanished before outgoing fade");
-            const deadline = performance.now() + 2000;
-            while (!replies.length && performance.now() < deadline) await nextFrame();
-        }
-        assert(replies.pop() === "motion|1||navigate" && !visible(), "Navigation fade did not complete exactly one choice");
+        assert(replies.pop() === "motion|1||navigate" && !visible(), "Navigation did not dispatch synchronously");
+        assert(raf.pending.size === 0 && view.getComputedStyle(vignette).visibility === "hidden", "Disarm left animation or vignette running");
         arm("incoming", [{label:"Back",control:"back"}]);
-        await nextFrame(); await nextFrame();
-        if (!reduced) assert(doc.getAnimations().some(a => a.effect.target === svg && a.transitionProperty === "opacity"), "Incoming wheel did not fade");
+        await nextFrame();
+        if (!reduced) assert(doc.getAnimations().some(a => a.effect.target === svg && a.animationName === "wheel-in"), "Incoming wheel did not fade");
         await settle();
         key("Escape"); assert(replies.pop() === "incoming|-1||cancel", "Cancel after incoming fade failed");
-        report.textContent = "PASS: 12-slot shipped choices and Back placement; both vector arrows fit all 12 cores including stroke clearance, remain type-specific and preserve pointer hits; target/Openly routing; request arming, duplicate/stale protection and host disarm; sparse keyboard wrap; literal name/label safety; missing-target action disabling; theme-independent destinations; malformed payloads; blur and cancellation; eased transitions and reduced motion. Browser-only, not native host/game proof.";
+        // Interrupt a bounce with host disarm: nothing may keep repainting a closed page.
+        arm("interrupted", [{label:"Signal",intent:"greet"}]);
+        await nextFrame(); view.hostMode("0");
+        assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
+        report.textContent = "PASS: 12-slot choices and Back placement; inset core/tip paths stay inside hits; vector arrows fit and remain type-specific; hovered labels visible and upright without CSS transforms; Back/submenu fill parity in every theme; empty opacity .5; armed-only bottom vignette; target/Openly routing, keyboard, arming and cancellation; immediate navigation; SVG lift overshoots then settles at 1.06, reduced motion/0ms are instant, no idle or disarmed rAF. Browser-only, not Ultralight/native/game proof.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {
-    const bridge = '<script>window.modeListeners=[];window.magelight={on:(channel,fn)=>{if(channel==="__uimode")modeListeners.push(fn);},send:()=>{}};window.hostMode=state=>modeListeners.forEach(fn=>fn(state));<\/script>';
+    const bridge = `<script>
+        window.modeListeners=[];
+        window.magelight={on:(channel,fn)=>{if(channel==="__uimode")modeListeners.push(fn);},send:()=>{}};
+        window.hostMode=state=>modeListeners.forEach(fn=>fn(state));
+        window.qaRAF={pending:new Set(),requested:0,executed:0};
+        const nativeRAF=window.requestAnimationFrame.bind(window), nativeCancel=window.cancelAnimationFrame.bind(window);
+        window.requestAnimationFrame=fn=>{
+            const id=nativeRAF(time=>{qaRAF.pending.delete(id);qaRAF.executed++;fn(time);});
+            qaRAF.pending.add(id);qaRAF.requested++;return id;
+        };
+        window.cancelAnimationFrame=id=>{qaRAF.pending.delete(id);nativeCancel(id);};
+    <\/script>`;
     frame.srcdoc = markup.replace(/<html[^>]*>/i, tag => tag + bridge);
 }).catch(error => { document.getElementById("result").textContent = "FAIL: " + error.stack; });
 </script>

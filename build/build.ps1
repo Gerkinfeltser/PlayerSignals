@@ -135,6 +135,52 @@ $coreD = 'M{0}L{1}A{2},{2} 0 0 1 {3}L{4}A{5},{5} 0 0 0 {0}Z' -f `
     (Point $coreOuter ($half - $coreOuterGap)), (Point $coreInner ($half - $coreInnerGap)), $coreInner
 $tipD = 'M{0}A{1},{1} 0 0 1 {2}L{3}Z' -f `
     (Point $tipInner (-$half + $tipAngleGap)), $tipInnerText, (Point $tipInner ($half - $tipAngleGap)), (Point $tipOuter 0)
+$edgeInset = 20; $edgeChamfer = 12
+function Core-EdgePath {
+    $inner = $coreInner + $edgeInset; $outer = $coreOuter - $edgeInset
+    $innerGap = ($coreGap + 2 * $edgeInset) / $inner * 90 / [Math]::PI
+    $outerGap = ($coreGap + 2 * $edgeInset) / $outer * 90 / [Math]::PI
+    $bevel = $edgeChamfer
+    $innerChamfer = $bevel / $inner * 90 / [Math]::PI
+    $outerChamfer = $bevel / $outer * 90 / [Math]::PI
+    $loInner = -$half + $innerGap; $loOuter = -$half + $outerGap
+    $hiInner = $half - $innerGap; $hiOuter = $half - $outerGap
+    $sideOuter = $outer - $bevel
+    $sideOuterAngle = $loInner + ($loOuter - $loInner) * (($sideOuter - $inner) / ($outer - $inner))
+    $sideInner = $inner + $bevel
+    $sideInnerAngle = $loInner + ($loOuter - $loInner) * (($sideInner - $inner) / ($outer - $inner))
+    'M{0}L{1}L{2}L{3}A{4},{4} 0 0 1 {5}L{6}L{7}L{8}A{9},{9} 0 0 0 {0}Z' -f `
+        (Point $inner ($loInner + $innerChamfer)), (Point $sideInner $sideInnerAngle),
+        (Point $sideOuter $sideOuterAngle), (Point $outer ($loOuter + $outerChamfer)), $outer,
+        (Point $outer ($hiOuter - $outerChamfer)), (Point $sideOuter (-$sideOuterAngle)),
+        (Point $sideInner (-$sideInnerAngle)), (Point $inner ($hiInner - $innerChamfer)), $inner
+}
+function Tip-EdgePath {
+    # Offset the actual straight sides, then intersect them with the inset arc.
+    # Interpolating polar angles bows outside the triangular tip.
+    $inner = $tipInner + $edgeInset; $angle = ($half - $tipAngleGap) * [Math]::PI / 180
+    $x = -$tipInner * [Math]::Sin($angle); $y = -$tipInner * [Math]::Cos($angle)
+    $dx = -$x; $dy = -$tipOuter - $y; $length = [Math]::Sqrt($dx * $dx + $dy * $dy)
+    $vx = $dx / $length; $vy = $dy / $length
+    $px = $x - $edgeInset * $vy; $py = $y + $edgeInset * $vx
+    $dot = $px * $vx + $py * $vy
+    $t = -$dot + [Math]::Sqrt($dot * $dot - ($px * $px + $py * $py - $inner * $inner))
+    $ix = $px + $t * $vx; $iy = $py + $t * $vy
+    $apexY = $py - $px / $vx * $vy
+    $lo = [Math]::Atan2($ix, -$iy) * 180 / [Math]::PI
+    $chamfer = $edgeChamfer / $inner * 180 / [Math]::PI
+    function TipPoint($x, $y) {
+        [string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0:0.###},{1:0.###}', (1800 + $x), (1800 + $y))
+    }
+    $sideX = $ix + $edgeChamfer * $vx; $sideY = $iy + $edgeChamfer * $vy
+    $apexX = -$edgeChamfer * $vx; $apexY -= $edgeChamfer * $vy
+    'M{0}L{1}L{2}A{3},{3} 0 0 1 {4}L{5}L{6}Z' -f `
+        (TipPoint $apexX $apexY), (TipPoint $sideX $sideY), (Point $inner ($lo + $chamfer)),
+        ($inner.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)),
+        (Point $inner (-$lo - $chamfer)), (TipPoint (-$sideX) $sideY), (TipPoint (-$apexX) $apexY)
+}
+$coreEdgeD = Core-EdgePath
+$tipEdgeD = Tip-EdgePath
 $regions = foreach ($slot in 0..11) {
     $piece = $template.CloneNode($true)
     $piece.SetAttribute('transform', "rotate($($slot * 30) 1800 1800)")
@@ -223,15 +269,20 @@ foreach ($region in $regions) {
         $hit.SetAttribute('class', 'hit-area')
         $hit.SetAttribute('d', $(if ($mode -eq 'target') { $coreD } else { $tipD }))
         [void]$wrapper.PrependChild($hit)
+        $edge = $art.CreateElement('path', $svg.NamespaceURI)
+        $edge.SetAttribute('class', 'edge-line')
+        $edge.SetAttribute('style', 'pointer-events:none;')
+        $edge.SetAttribute('d', $(if ($mode -eq 'target') { $coreEdgeD } else { $tipEdgeD }))
+        [void]$wrapper.AppendChild($edge)
     }
     $parts.ChevronKnot.SetAttribute('class', 'chevron-knot')
     $parts.Submenu.SetAttribute('class', 'navigation-art submenu-art')
     $parts.Upmenu.SetAttribute('class', 'navigation-art back-art')
     $parts.Submenu.SetAttribute('aria-hidden', 'true'); $parts.Upmenu.SetAttribute('aria-hidden', 'true')
-    # Fit the authored 45-degree navigation glyphs inside the narrow core near the hub.
-    foreach ($arrow in @($parts.Submenu, $parts.Upmenu)) {
-        $arrow.SetAttribute('transform', ('translate(1800 1230) scale(0.5) translate(-1800 -1230) ' + $arrow.GetAttribute('transform')).Trim())
-    }
+    # Center the visible glyph bounds at radius 650, between hub and label.
+    # Widths ~147/149 are ~47/48% of the core here; taller glyphs improve legibility.
+    $parts.Submenu.SetAttribute('transform', ('translate(1800 1150) scale(0.33 0.9) translate(-1804.65 -1227.895) ' + $parts.Submenu.GetAttribute('transform')).Trim())
+    $parts.Upmenu.SetAttribute('transform', ('translate(1800 1150) scale(0.47 0.9) translate(-1805.725 -1237.674) ' + $parts.Upmenu.GetAttribute('transform')).Trim())
 }
 $center.SetAttribute('id', 'center')
 $centerHit.SetAttribute('id', 'center-hit'); $centerHit.SetAttribute('class', 'hit-area')
@@ -253,6 +304,10 @@ $svg.SetAttribute('role', 'group')
 $svg.SetAttribute('aria-label', 'Choose a gesture or action')
 $svg.RemoveAttribute('width')
 $svg.RemoveAttribute('height')
+# Remove export indentation, not authored SVG text spacing, from the runtime payload.
+foreach ($space in @($svg.SelectNodes(".//text()[normalize-space(.)='' and not(ancestor::*[local-name()='text' or local-name()='tspan' or local-name()='textPath'])]"))) {
+    [void]$space.ParentNode.RemoveChild($space)
+}
 $viewPath = Join-Path $mod 'Magelight/PlayerSignals/index.html'
 $view = [IO.File]::ReadAllText($viewPath)
 $artBegin = '<!-- RADIAL_ART_BEGIN -->'

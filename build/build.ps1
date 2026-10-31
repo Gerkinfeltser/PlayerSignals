@@ -135,7 +135,74 @@ $coreD = 'M{0}L{1}A{2},{2} 0 0 1 {3}L{4}A{5},{5} 0 0 0 {0}Z' -f `
     (Point $coreOuter ($half - $coreOuterGap)), (Point $coreInner ($half - $coreInnerGap)), $coreInner
 $tipD = 'M{0}A{1},{1} 0 0 1 {2}L{3}Z' -f `
     (Point $tipInner (-$half + $tipAngleGap)), $tipInnerText, (Point $tipInner ($half - $tipAngleGap)), (Point $tipOuter 0)
+$unionD = 'M{0}L{1}L{2}L{3}L{4}A{5},{5} 0 0 0 {0}Z' -f `
+    (Point $coreInner (-$half + $coreInnerGap)), (Point $coreOuter (-$half + $coreOuterGap)),
+    (Point $tipOuter 0), (Point $coreOuter ($half - $coreOuterGap)),
+    (Point $coreInner ($half - $coreInnerGap)), $coreInner
 $edgeInset = 20; $edgeChamfer = 12
+function Union-EdgePath {
+    # Offset the four real side segments inward, intersecting adjacent offsets at each shoulder.
+    $angles = @((-$half + $coreInnerGap), (-$half + $coreOuterGap), 0, ($half - $coreOuterGap), ($half - $coreInnerGap))
+    $radii = @($coreInner, $coreOuter, $tipOuter, $coreOuter, $coreInner)
+    $points = for ($i = 0; $i -lt 5; $i++) {
+        $r = $radii[$i]; $a = $angles[$i] * [Math]::PI / 180
+        ,@(($r * [Math]::Sin($a)), (-$r * [Math]::Cos($a)))
+    }
+    $points = @($points)
+    $lines = for ($i = 0; $i -lt 4; $i++) {
+        $a = $points[$i]; $b = $points[$i + 1]
+        $dx = $b[0] - $a[0]; $dy = $b[1] - $a[1]; $length = [Math]::Sqrt($dx * $dx + $dy * $dy)
+        $nx = -$dy / $length; $ny = $dx / $length
+        $midX = ($a[0] + $b[0]) / 2; $midY = ($a[1] + $b[1]) / 2
+        if (($nx * -$midX + $ny * (-900 - $midY)) -lt 0) { $nx = -$nx; $ny = -$ny }
+        ,@(($a[0] + $edgeInset * $nx), ($a[1] + $edgeInset * $ny), ($dx / $length), ($dy / $length))
+    }
+    $lines = @($lines)
+    $corners = for ($i = 1; $i -lt 4; $i++) {
+        $a = $lines[$i - 1]; $b = $lines[$i]
+        $cross = $a[2] * $b[3] - $a[3] * $b[2]
+        $qx = $b[0] - $a[0]; $qy = $b[1] - $a[1]
+        $t = ($qx * $b[3] - $qy * $b[2]) / $cross
+        $ix = $a[0] + $t * $a[2]; $iy = $a[1] + $t * $a[3]
+        $insetA = @(($ix - $edgeChamfer * $a[2]), ($iy - $edgeChamfer * $a[3]))
+        $insetB = @(($ix + $edgeChamfer * $b[2]), ($iy + $edgeChamfer * $b[3]))
+        ,@($insetA, $insetB)
+    }
+    $corners = @($corners)
+    function Circle-Hit($line, $radius) {
+        $px = $line[0]; $py = $line[1]; $dx = $line[2]; $dy = $line[3]
+        $dot = $px * $dx + $py * $dy
+        $disc = $dot * $dot - ($px * $px + $py * $py - $radius * $radius)
+        if ($disc -lt 0) { throw 'Inset side does not intersect the hub arc' }
+        $root = [Math]::Sqrt($disc)
+        $t = @((-$dot - $root), (-$dot + $root)) | Sort-Object { [Math]::Abs($_) } | Select-Object -First 1
+        ,@(($px + $t * $dx), ($py + $t * $dy))
+    }
+    $inner = $coreInner + $edgeInset
+    $firstHit = Circle-Hit $lines[0] $inner; $lastHit = Circle-Hit $lines[3] $inner
+    $firstAngle = [Math]::Atan2($firstHit[0], -$firstHit[1]) * 180 / [Math]::PI
+    $lastAngle = [Math]::Atan2($lastHit[0], -$lastHit[1]) * 180 / [Math]::PI
+    $firstArc = $firstAngle + $edgeChamfer / $inner * 180 / [Math]::PI
+    $lastArc = $lastAngle - $edgeChamfer / $inner * 180 / [Math]::PI
+    $firstSide = @(($firstHit[0] + $edgeChamfer * $lines[0][2]), ($firstHit[1] + $edgeChamfer * $lines[0][3]))
+    $lastSide = @(($lastHit[0] - $edgeChamfer * $lines[3][2]), ($lastHit[1] - $edgeChamfer * $lines[3][3]))
+    function Svg-Point($x, $y) {
+        [string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0:0.###},{1:0.###}', $x, $y)
+    }
+    $out = [Collections.Generic.List[string]]::new()
+    $out.Add(('M' + (Svg-Point (1800 + $inner * [Math]::Sin($firstArc * [Math]::PI / 180)) (1800 - $inner * [Math]::Cos($firstArc * [Math]::PI / 180)))))
+    $out.Add(('L' + (Svg-Point (1800 + $firstSide[0]) (1800 + $firstSide[1]))))
+    foreach ($corner in $corners) {
+        $out.Add(('L' + (Svg-Point (1800 + $corner[0][0]) (1800 + $corner[0][1]))))
+        $out.Add(('L' + (Svg-Point (1800 + $corner[1][0]) (1800 + $corner[1][1]))))
+    }
+    $out.Add(('L' + (Svg-Point (1800 + $lastSide[0]) (1800 + $lastSide[1]))))
+    $out.Add(('L' + (Svg-Point (1800 + $inner * [Math]::Sin($lastArc * [Math]::PI / 180)) (1800 - $inner * [Math]::Cos($lastArc * [Math]::PI / 180)))))
+    $radius = $inner.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
+    $out.Add(('A{0},{0} 0 0 0 {1}Z' -f $radius, (Svg-Point (1800 + $inner * [Math]::Sin($firstArc * [Math]::PI / 180)) (1800 - $inner * [Math]::Cos($firstArc * [Math]::PI / 180)))))
+    return ($out -join '')
+}
+$unionEdgeD = Union-EdgePath
 function Core-EdgePath {
     $inner = $coreInner + $edgeInset; $outer = $coreOuter - $edgeInset
     $innerGap = ($coreGap + 2 * $edgeInset) / $inner * 90 / [Math]::PI
@@ -268,11 +335,19 @@ foreach ($region in $regions) {
         $hit.SetAttribute('id', "slot-$slot-$mode-hit")
         $hit.SetAttribute('class', 'hit-area')
         $hit.SetAttribute('d', $(if ($mode -eq 'target') { $coreD } else { $tipD }))
+        if ($mode -eq 'target') {
+            $hit.SetAttribute('data-core-d', $coreD)
+            $hit.SetAttribute('data-nav-d', $unionD)
+        }
         [void]$wrapper.PrependChild($hit)
         $edge = $art.CreateElement('path', $svg.NamespaceURI)
         $edge.SetAttribute('class', 'edge-line')
         $edge.SetAttribute('style', 'pointer-events:none;')
         $edge.SetAttribute('d', $(if ($mode -eq 'target') { $coreEdgeD } else { $tipEdgeD }))
+        if ($mode -eq 'target') {
+            $edge.SetAttribute('data-core-d', $coreEdgeD)
+            $edge.SetAttribute('data-nav-d', $unionEdgeD)
+        }
         [void]$wrapper.AppendChild($edge)
     }
     $parts.ChevronKnot.SetAttribute('class', 'chevron-knot')
@@ -280,9 +355,9 @@ foreach ($region in $regions) {
     $parts.Upmenu.SetAttribute('class', 'navigation-art back-art')
     $parts.Submenu.SetAttribute('aria-hidden', 'true'); $parts.Upmenu.SetAttribute('aria-hidden', 'true')
     # Browser-measured bounds in sector-local coordinates; preserve authored aspect ratios.
-    # Hub-facing fill bounds touch the inner inset stroke; sides retain 10-unit clearance.
-    $parts.Submenu.SetAttribute('transform', ('translate(1800 1313.878222) scale(0.2933) translate(-1804.650024 -1227.895203) ' + $parts.Submenu.GetAttribute('transform')).Trim())
-    $parts.Upmenu.SetAttribute('transform', ('translate(1800 1307.933140) scale(0.4078) translate(-1805.724976 -1237.673584) ' + $parts.Upmenu.GetAttribute('transform')).Trim())
+    # Hub-facing fill bounds touch the inset; source paths retain 4-unit side clearance.
+    $parts.Submenu.SetAttribute('transform', ('translate(1800 1293.255081) scale(0.4975) translate(-1804.650024 -1227.895203) ' + $parts.Submenu.GetAttribute('transform')).Trim())
+    $parts.Upmenu.SetAttribute('transform', ('translate(1800 1286.870372) scale(0.6493) translate(-1805.724976 -1237.673584) ' + $parts.Upmenu.GetAttribute('transform')).Trim())
 }
 $center.SetAttribute('id', 'center')
 $centerHit.SetAttribute('id', 'center-hit'); $centerHit.SetAttribute('class', 'hit-area')

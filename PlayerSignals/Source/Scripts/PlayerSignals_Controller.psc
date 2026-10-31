@@ -141,7 +141,8 @@ Function PrimeMagelight(Int token)
     Int payloadArgs = JValue.retain(JMap.object(), "PlayerSignals")
     JMap.setObj(payloadArgs, "slots", _mlSlots)
     JMap.setStr(payloadArgs, "target", JMap.getStr(_config, "target"))
-    String payload = JValue.evalLuaStr(payloadArgs, "return jrequire('PlayerSignals.config').wheelPayload(jobject.slots, '" + JMap.getStr(_config, "theme") + "', jobject.target)")
+    JMap.setInt(payloadArgs, "openKey", JMap.getInt(JMap.getObj(_config, "input"), "openKeyCode"))
+    String payload = JValue.evalLuaStr(payloadArgs, "return jrequire('PlayerSignals.config').wheelPayload(jobject.slots, '" + JMap.getStr(_config, "theme") + "', jobject.target, jobject.openKey)")
     payloadArgs = JValue.release(payloadArgs)
     If token != _generation || request != _mlRequest
         Return

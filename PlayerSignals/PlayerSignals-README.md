@@ -37,11 +37,13 @@ If the captured NPC is still alive, enabled, and loaded when you choose, SkyrimN
 
 You'll see a small notification with your character's name only if SkyrimNet's API accepts the narration. For the **Greet** intent, group feedback looks like `Bill greets.`; targeted feedback to the captured NPC Ted looks like `Bill greets Ted.` Think of it as a receipt—not a promise that an NPC heard you or will answer.
 
-Open a submenu by choosing **Social** (**Social >** in UIExtensions), for example. Choose **Back** (**Back <** in UIExtensions) to return to the previous wheel; it occupies zero-based slot 7 (south-west) in every shipped submenu. **Tab** cancels; Magelight also offers center-click and **Escape**. Opening submenus, going Back, or cancelling doesn't send a narration.
+Open a submenu by choosing **Social** (**Social >** in UIExtensions), for example. Choose **Back** (**Back <** in UIExtensions) to return to the previous wheel; it occupies zero-based slot 10 (300°, just above cardinal west) in every shipped submenu. **Tab** cancels; Magelight also offers center-click, **Escape**, or a fresh press of the configured opening key once the wheel is armed (default **Right Alt**). Holding/repeating the key or its initial pre-arm opening press does not close it. If its scan code has no standard browser mapping, one console warning explains the Tab/Escape fallback; center still works. Opening submenus, going Back, or cancelling doesn't send a narration.
 
-**Experimental Magelight branch:** the wheel has 12 slices of 30° clockwise from the top, with slot 0 at the top. Gesture slices offer the captured NPC or **Openly** as the destination. Openly uses sound-wave ripple arcs only, without a speaking-head symbol. Hover lifts the selected inner piece to 1.06 scale about the wheel center; fill and outline ease, and submenu/Back transitions cross-fade. Tweens use `--ps-tween` and honor reduced motion. Empty slots stay faded and inert. These browser-facing details are not evidence of in-game acceptance.
+**Experimental Magelight branch:** the wheel has 12 slices of 30° clockwise from the top, with slot 0 at the top. Gestures have separate captured-target cores and hollow Openly tips with upright ripple arcs. Holding either Shift previews Openly; release, blur or disarm clears it without changing page dispatch. Navigation and target-only actions use one merged necktie with no internal border; actions have no knot/ripple and their ACTION badge sits directly below the label. Gesture cores use the gesture palette, navigation the neutral palette and actions muted red; selection colours take precedence. Empty neckties stay half-opaque and inert with one faint outline and no inset/knot. Hover lifts the slice and upright label to 1.06 scale; only the incoming wheel fades, and choices dispatch immediately. Tweens honor reduced motion; help draws above the bottom-quarter vignette. These browser-facing details are not evidence of in-game acceptance.
 
-Click a gesture's inner piece for the captured target or its outer ripple tip for **Openly**. **Left/Right** moves among available entries, **Up** chooses the inner destination, **Down** chooses a gesture's Openly tip, and **Enter/Space** confirms. Action and navigation tips select the same entry as their inner piece. Controller navigation is not implemented because the inspected Magelight page contract exposes no flat-gamepad input delivery.
+Center Cancel also lifts on hover/focus (1.08 scale) and returns on leave/blur; its caption, destination and hint stay upright and scale together. The visual rim paints behind the slices and never enlarges Cancel's hit target. The larger two-line help reads `Slice: target · Tip or Shift: Openly` and `←/→ choose · Enter select · Esc / Right Alt / center: cancel`, replacing Right Alt with your configured key's short name or omitting an unmapped key. Tab, Up/Down and Space still work as described below; actions remain target-only. Both hub and slice lifts snap with reduced motion or a zero tween duration.
+
+Click a gesture's inner piece for the captured target or its outer ripple tip for **Openly**. **Left/Right** moves among available entries, **Up** chooses the inner destination, **Down** chooses a gesture's Openly tip, and **Enter/Space** confirms. Click anywhere on a merged action or navigation necktie, including its pointed end, to select that entry; actions remain target-only. Controller navigation is not implemented because the inspected Magelight page contract exposes no flat-gamepad input delivery.
 
 The wheel won't open while you're in a blocking menu, another custom menu, or a gameplay state where the required controls are disabled.
 
@@ -71,10 +73,10 @@ The entries below use UIExtensions' navigation markers. Magelight shows the same
 | Wheel | Entries |
 |---|---|
 | Main | 0 Yes, 1 Social >, 3 Greet, 4 Signals >, 6 No, 7 Attitude >, 9 Farewell, 10 Actions > |
-| Attitude | 0 Approve, 2 Understood, 3 Challenge, 4 Unsure, 5 Let me think, 6 Disapprove, 7 Back <, 8 Not understood, 9 Surrender |
-| Social | 0 Offer, 2 Well done, 3 Thank you, 4 Welcome, 6 Request, 7 Back <, 8 Comfort, 9 Sorry, 10 Show respect |
-| Signals | 0 Ready, 1 Come here, 3 Get attention, 4 Watch out, 6 Not ready, 7 Back <, 9 Quiet, 10 Calm down, 11 Give space |
-| Actions | 0 Follow / resume, 1 Drink alcohol (requires iActions registration), 3 Wait here, 6 Stop following, 7 Back < |
+| Attitude | 0 Approve, 2 Understood, 3 Challenge, 4 Unsure, 5 Let me think, 6 Disapprove, 8 Not understood, 9 Surrender, 10 Back < |
+| Social | 0 Offer, 2 Well done, 3 Thank you, 4 Welcome, 6 Request, 7 Show respect, 8 Comfort, 9 Sorry, 10 Back < |
+| Signals | 0 Ready, 1 Come here, 3 Get attention, 4 Watch out, 6 Not ready, 7 Calm down, 9 Quiet, 10 Back <, 11 Give space |
+| Actions | 0 Follow / resume, 1 Drink alcohol (requires iActions registration), 3 Wait here, 6 Stop following, 10 Back < |
 
 Positions are zero-based and unlisted positions are null.
 

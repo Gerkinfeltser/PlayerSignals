@@ -245,10 +245,11 @@ local function jsonString(value)
     end) .. '"'
 end
 
-function M.wheelPayload(slots, theme, target)
+function M.wheelPayload(slots, theme, target, openKey)
     local ok, result = pcall(function()
         assert(type(theme) == 'string' and themes[theme], 'theme: expected slate, moss or ember')
         assert(type(target) == 'string', 'target: expected string')
+        assert(type(openKey) == 'number' and openKey == math.floor(openKey) and openKey >= 1 and openKey <= 255, 'openKey: expected integer 1..255')
         local entries = {}
         for i = 1, 12 do
             local slot = slots[i]
@@ -264,7 +265,7 @@ function M.wheelPayload(slots, theme, target)
                 entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. ']'
             end
         end
-        return '{"theme":' .. jsonString(theme) .. ',"target":' .. jsonString(target) .. ',"slots":[' .. table.concat(entries, ',') .. ']}'
+        return '{"theme":' .. jsonString(theme) .. ',"target":' .. jsonString(target) .. ',"openKey":' .. openKey .. ',"slots":[' .. table.concat(entries, ',') .. ']}'
     end)
     if ok then return result end
     return ''

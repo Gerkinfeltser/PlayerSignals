@@ -38,13 +38,16 @@ class ConfigValidation(unittest.TestCase):
         slot['label'], slot['kind'], slot['intent'] = 'quote " slash \\ controls \x00\x01\b\f\n\r\t café 雪', 'intent', 'confirm'
         slots[1] = slot
         expected_slots = [['quote " slash \\ controls \x00\x01\b\f\n\r\t café 雪', 'confirm', 'intent']] + [None] * 11
-        for target in ('Lydia "the Brave" \\', '雪', ''):
-            payload = self.module.wheelPayload(slots, 'slate', target)
+        for target, open_key in (('Lydia "the Brave" \\', 1), ('雪', 184), ('', 255)):
+            payload = self.module.wheelPayload(slots, 'slate', target, open_key)
             self.assertEqual(json.loads(payload), {
-                'theme': 'slate', 'target': target, 'slots': expected_slots,
+                'theme': 'slate', 'target': target, 'openKey': open_key, 'slots': expected_slots,
             })
-        self.assertEqual(self.module.wheelPayload(slots, 'unknown', ''), '')
-        self.assertEqual(self.module.wheelPayload(slots, 'slate', None), '')
+        self.assertEqual(self.module.wheelPayload(slots, 'unknown', '', 184), '')
+        self.assertEqual(self.module.wheelPayload(slots, 'slate', None, 184), '')
+        for open_key in (None, 0, 256, 1.5, '184', True):
+            with self.subTest(open_key=open_key):
+                self.assertEqual(self.module.wheelPayload(slots, 'slate', '', open_key), '')
 
     def test_wheel_slot_count_bounds(self):
         for count in (1, 12):
@@ -75,13 +78,13 @@ class ConfigValidation(unittest.TestCase):
             'main': ['confirm', 'social', None, 'greet', 'signals', None,
                      'deny', 'attitude', None, 'farewell', 'actions', None],
             'attitude': ['approve', None, 'understood', 'challenge', 'unsure', 'think',
-                         'disapprove', 'back', 'not_understood', 'yield', None, None],
+                         'disapprove', None, 'not_understood', 'yield', 'back', None],
             'social': ['offer', None, 'congratulate', 'thanks', 'welcome', None,
-                       'ask', 'back', 'comfort', 'sorry', 'respect', None],
+                       'ask', 'respect', 'comfort', 'sorry', 'back', None],
             'signals': ['ready', 'come_here', None, 'attention', 'warn', None,
-                        'not_ready', 'back', None, 'quiet', 'calm_down', 'give_space'],
+                        'not_ready', 'calm_down', None, 'quiet', 'back', 'give_space'],
             'actions': ['AccompanyTarget', 'drink_alcohol', None, 'WaitHere', None, None,
-                        'StopAccompanying', 'back', None, None, None, None],
+                        'StopAccompanying', None, None, None, 'back', None],
         }
         homes = []
         for name, identities in expected.items():

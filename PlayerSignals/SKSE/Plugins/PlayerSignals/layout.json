@@ -27,10 +27,10 @@
       { "label": "Unsure", "intent": "unsure" },
       { "label": "Let me think", "intent": "think" },
       { "label": "Disapprove", "intent": "disapprove" },
-      { "label": "Back", "control": "back" },
+      null,
       { "label": "Not understood", "intent": "not_understood" },
       { "label": "Surrender", "intent": "yield" },
-      null,
+      { "label": "Back", "control": "back" },
       null
     ],
     "social": [
@@ -41,10 +41,10 @@
       { "label": "Welcome", "intent": "welcome" },
       null,
       { "label": "Request", "intent": "ask" },
-      { "label": "Back", "control": "back" },
+      { "label": "Show respect", "intent": "respect" },
       { "label": "Comfort", "intent": "comfort" },
       { "label": "Sorry", "intent": "sorry" },
-      { "label": "Show respect", "intent": "respect" },
+      { "label": "Back", "control": "back" },
       null
     ],
     "signals": [
@@ -55,10 +55,10 @@
       { "label": "Watch out", "intent": "warn" },
       null,
       { "label": "Not ready", "intent": "not_ready" },
-      { "label": "Back", "control": "back" },
+      { "label": "Calm down", "intent": "calm_down" },
       null,
       { "label": "Quiet", "intent": "quiet" },
-      { "label": "Calm down", "intent": "calm_down" },
+      { "label": "Back", "control": "back" },
       { "label": "Give space", "intent": "give_space" }
     ],
     "actions": [
@@ -69,10 +69,10 @@
       null,
       null,
       { "label": "Stop following", "action": { "name": "StopAccompanying", "args": {} } },
+      null,
+      null,
+      null,
       { "label": "Back", "control": "back" },
-      null,
-      null,
-      null,
       null
     ]
   }

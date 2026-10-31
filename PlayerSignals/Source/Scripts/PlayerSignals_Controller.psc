@@ -103,8 +103,8 @@ Event OnMagelightWheelChoice(string eventName, string strArg, float numArg, Form
         Return
     EndIf
     Int count = JArray.count(_mlSlots)
-    If count > 8
-        count = 8
+    If count > 12
+        count = 12
     EndIf
     Int i = 0
     While i < count && token == _generation && request == _mlRequest
@@ -138,7 +138,11 @@ Function PrimeMagelight(Int token)
         Return
     EndIf
     String request = _mlRequest
-    String payload = JValue.evalLuaStr(_mlSlots, "return jrequire('PlayerSignals.config').wheelPayload(jobject, '" + JMap.getStr(_config, "theme") + "')")
+    Int payloadArgs = JValue.retain(JMap.object(), "PlayerSignals")
+    JMap.setObj(payloadArgs, "slots", _mlSlots)
+    JMap.setStr(payloadArgs, "target", JMap.getStr(_config, "target"))
+    String payload = JValue.evalLuaStr(payloadArgs, "return jrequire('PlayerSignals.config').wheelPayload(jobject.slots, '" + JMap.getStr(_config, "theme") + "', jobject.target)")
+    payloadArgs = JValue.release(payloadArgs)
     If token != _generation || request != _mlRequest
         Return
     EndIf
@@ -330,7 +334,7 @@ Bool Function ValidateNative(Int config)
             Return False
         EndIf
         Int slots = JMap.getObj(wheels, name)
-        If !JValue.isArray(slots) || JArray.count(slots) < 1 || JArray.count(slots) > 8
+        If !JValue.isArray(slots) || JArray.count(slots) < 1 || JArray.count(slots) > 12
             Return False
         EndIf
         Int i = 0
@@ -424,6 +428,17 @@ Event OnKeyDown(Int keyCode)
     If recipient == player
         recipient = None
     EndIf
+    String targetName = ""
+    If recipient
+        targetName = recipient.GetDisplayName()
+        If targetName == ""
+            targetName = "Target NPC"
+        EndIf
+    EndIf
+    If token != _generation || !_ready
+        Return
+    EndIf
+    JMap.setStr(_config, "target", targetName)
     ; A local lease keeps the old graph alive across latent OpenMenu, even after reload.
     Int session = JValue.retain(_config, "PlayerSignals")
     Int history = JValue.retain(JArray.object(), "PlayerSignals")
@@ -659,6 +674,10 @@ Int Function BrowseWheels(Int config, Int history, Int token, Actor player)
     String current = JMap.getStr(config, "root")
     While token == _generation && _ready
         Int slots = JMap.getObj(wheels, current)
+        If !UseMagelight() && JArray.count(slots) > 8
+            Report("UIExtensions supports at most 8 slots; reduce this wheel to 8 or use Magelight.", token)
+            Return 0
+        EndIf
         Int selected = -1
         If UseMagelight()
             selected = BrowseMagelight(slots, token)
@@ -697,14 +716,14 @@ Int Function BrowseWheels(Int config, Int history, Int token, Actor player)
             Report("UIExtensions wheel opening/wait failed; no selection submitted.")
             Return 0
         EndIf
-        If selected < 0 || selected > 15
+        If selected < 0 || selected > 23
             Return 0
         EndIf
-        Bool nearby = UseMagelight() && selected >= 8
+        Bool nearby = UseMagelight() && selected >= 12
         If nearby
-            selected -= 8
+            selected -= 12
         EndIf
-        If selected > 7 || selected >= JArray.count(slots) || JArray.valueType(slots, selected) != 5
+        If selected > 11 || selected >= JArray.count(slots) || JArray.valueType(slots, selected) != 5
             Return 0
         EndIf
         Int choice = JArray.getObj(slots, selected)
@@ -863,7 +882,7 @@ Int Function BrowseMagelight(Int slots, Int token)
         selected = -1
     Else
         Int i = 0
-        While i < JArray.count(slots) && i < 8
+        While i < JArray.count(slots) && i < 12
             If JArray.valueType(slots, i) == 5
                 Int slot = JArray.getObj(slots, i)
                 String kind = JMap.getStr(slot, "kind")
@@ -874,15 +893,15 @@ Int Function BrowseMagelight(Int slots, Int token)
                     EndIf
                     If result == _mlRequest + "|" + i + "|" + identity + "|target"
                         selected = i
-                        i = 8
+                        i = 12
                     ElseIf kind == "intent" && result == _mlRequest + "|" + i + "|" + identity + "|nearby"
-                        selected = i + 8
-                        i = 8
+                        selected = i + 12
+                        i = 12
                     EndIf
                 ElseIf kind == "submenu" || kind == "control"
                     If result == _mlRequest + "|" + i + "||navigate"
                         selected = i
-                        i = 8
+                        i = 12
                     EndIf
                 EndIf
             EndIf

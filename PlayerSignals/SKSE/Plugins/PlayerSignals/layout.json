@@ -6,54 +6,74 @@
   },
   "wheels": {
     "main": [
-      { "label": "Greet", "intent": "greet" },
-      { "label": "Attitude", "submenu": "attitude" },
-      { "label": "Calm down", "intent": "calm_down" },
-      { "label": "Social", "submenu": "social" },
-      { "label": "Farewell", "intent": "farewell" },
-      { "label": "Signals", "submenu": "signals" },
       { "label": "Yes", "intent": "confirm" },
-      { "label": "Actions", "submenu": "actions" }
-    ],
-    "social": [
-      { "label": "Thank you", "intent": "thanks" },
-      { "label": "Offer", "intent": "offer" },
-      { "label": "Well done", "intent": "congratulate" },
-      { "label": "Welcome", "intent": "welcome" },
-      { "label": "Sorry", "intent": "sorry" },
-      { "label": "Request", "intent": "ask" },
-      { "label": "Show respect", "intent": "respect" },
-      { "label": "Back", "control": "back" }
-    ],
-    "actions": [
-      { "label": "Drink alcohol", "action": { "name": "drink_alcohol", "args": { "drinkName": "" } } },
+      { "label": "Social", "submenu": "social" },
       null,
+      { "label": "Greet", "intent": "greet" },
+      { "label": "Signals", "submenu": "signals" },
       null,
+      { "label": "No", "intent": "deny" },
+      { "label": "Attitude", "submenu": "attitude" },
       null,
-      null,
-      null,
-      null,
-      { "label": "Back", "control": "back" }
-    ],
-    "signals": [
-      { "label": "Follow me", "intent": "follow_me" },
-      { "label": "Come here", "intent": "come_here" },
-      { "label": "Get attention", "intent": "attention" },
-      { "label": "Watch out", "intent": "warn" },
-      { "label": "Wait here", "intent": "wait_here" },
-      { "label": "Ready", "intent": "ready" },
-      { "label": "Quiet", "intent": "quiet" },
-      { "label": "Back", "control": "back" }
+      { "label": "Farewell", "intent": "farewell" },
+      { "label": "Actions", "submenu": "actions" },
+      null
     ],
     "attitude": [
       { "label": "Approve", "intent": "approve" },
-      { "label": "Unsure", "intent": "unsure" },
+      null,
+      { "label": "Understood", "intent": "understood" },
       { "label": "Challenge", "intent": "challenge" },
-      { "label": "Not understood", "intent": "not_understood" },
-      { "label": "Disapprove", "intent": "disapprove" },
+      { "label": "Unsure", "intent": "unsure" },
       { "label": "Let me think", "intent": "think" },
+      { "label": "Disapprove", "intent": "disapprove" },
+      { "label": "Back", "control": "back" },
+      { "label": "Not understood", "intent": "not_understood" },
       { "label": "Surrender", "intent": "yield" },
-      { "label": "Back", "control": "back" }
+      null,
+      null
+    ],
+    "social": [
+      { "label": "Offer", "intent": "offer" },
+      null,
+      { "label": "Well done", "intent": "congratulate" },
+      { "label": "Thank you", "intent": "thanks" },
+      { "label": "Welcome", "intent": "welcome" },
+      null,
+      { "label": "Request", "intent": "ask" },
+      { "label": "Back", "control": "back" },
+      { "label": "Comfort", "intent": "comfort" },
+      { "label": "Sorry", "intent": "sorry" },
+      { "label": "Show respect", "intent": "respect" },
+      null
+    ],
+    "signals": [
+      { "label": "Ready", "intent": "ready" },
+      { "label": "Come here", "intent": "come_here" },
+      null,
+      { "label": "Get attention", "intent": "attention" },
+      { "label": "Watch out", "intent": "warn" },
+      null,
+      { "label": "Not ready", "intent": "not_ready" },
+      { "label": "Back", "control": "back" },
+      null,
+      { "label": "Quiet", "intent": "quiet" },
+      { "label": "Calm down", "intent": "calm_down" },
+      { "label": "Give space", "intent": "give_space" }
+    ],
+    "actions": [
+      { "label": "Follow / resume", "action": { "name": "AccompanyTarget", "args": {} } },
+      { "label": "Drink alcohol", "action": { "name": "drink_alcohol", "args": { "drinkName": "" } } },
+      null,
+      { "label": "Wait here", "action": { "name": "WaitHere", "args": {} } },
+      null,
+      null,
+      { "label": "Stop following", "action": { "name": "StopAccompanying", "args": {} } },
+      { "label": "Back", "control": "back" },
+      null,
+      null,
+      null,
+      null
     ]
   }
 }

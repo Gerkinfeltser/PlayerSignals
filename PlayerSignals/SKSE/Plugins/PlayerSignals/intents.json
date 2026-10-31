@@ -130,6 +130,26 @@
       "narration": "raises their hands in surrender",
       "notification": "signals surrender",
       "targetedNotification": "signals surrender to {target}"
+    },
+    "understood": {
+      "narration": "nods slowly, showing that they understand",
+      "notification": "signals understanding",
+      "targetedNotification": "nods to {target}, showing that they understand"
+    },
+    "comfort": {
+      "narration": "offers a gentle, reassuring gesture",
+      "notification": "offers comfort",
+      "targetedNotification": "offers {target} a gentle, reassuring gesture"
+    },
+    "not_ready": {
+      "narration": "holds up a hand, signaling that they are not ready yet",
+      "notification": "signals not ready",
+      "targetedNotification": "holds up a hand to {target}, signaling that they are not ready yet"
+    },
+    "give_space": {
+      "narration": "motions for others to step back and give them some space",
+      "notification": "asks for space",
+      "targetedNotification": "motions for {target} to step back and give them some space"
     }
   }
 }

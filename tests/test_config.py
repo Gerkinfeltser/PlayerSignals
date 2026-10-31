@@ -32,34 +32,32 @@ class ConfigValidation(unittest.TestCase):
             self.parse(value, catalog_text)
 
 
-    def test_wheel_payload_preserves_eight_slots_and_json_strings(self):
+    def test_wheel_payload_pads_twelve_slots_and_escapes_target(self):
         slots = self.lua.table()
-        expected = [None] * 8
-        values = [
-            ('quote " slash \\ pipe | controls \x00\x01\b\f\n\r\t end', 'intent_\\|"', 'intent'),
-            ('café 雪 >', '', 'submenu'),
-            ('{"intent":"metadata-like"}', 'drink_alcohol', 'action'),
-            ('Back <', '', 'back'),
-            ('Close', '', 'navigation'),
-            ('tail', 'last', 'intent'),
-        ]
-        for index, value in zip((1, 3, 4, 6, 7, 8), values):
-            slot = self.lua.table()
-            slot['label'] = value[0]
-            slot['kind'] = 'control' if value[2] in ('navigation', 'back') else value[2]
-            if value[2] in ('navigation', 'back'):
-                slot['control'] = 'back' if value[2] == 'back' else 'close'
-            if value[2] == 'action':
-                slot['actionName'], slot['intent'] = value[1], 'offer_drink'
-            else:
-                slot['intent'] = value[1]
-            slots[index] = slot
-            expected[index - 1] = list(value)
+        slot = self.lua.table()
+        slot['label'], slot['kind'], slot['intent'] = 'quote " slash \\ controls \x00\x01\b\f\n\r\t café 雪', 'intent', 'confirm'
+        slots[1] = slot
+        expected_slots = [['quote " slash \\ controls \x00\x01\b\f\n\r\t café 雪', 'confirm', 'intent']] + [None] * 11
+        for target in ('Lydia "the Brave" \\', '雪', ''):
+            payload = self.module.wheelPayload(slots, 'slate', target)
+            self.assertEqual(json.loads(payload), {
+                'theme': 'slate', 'target': target, 'slots': expected_slots,
+            })
+        self.assertEqual(self.module.wheelPayload(slots, 'unknown', ''), '')
+        self.assertEqual(self.module.wheelPayload(slots, 'slate', None), '')
 
-        for theme in ('slate', 'moss', 'ember'):
-            payload = self.module.wheelPayload(slots, theme)
-            self.assertEqual(json.loads(payload), {'theme': theme, 'slots': expected})
-        self.assertEqual(self.module.wheelPayload(slots, 'unknown'), '')
+    def test_wheel_slot_count_bounds(self):
+        for count in (1, 12):
+            config = minimal()
+            config['wheels']['main'] = [None] * count
+            config['wheels']['main'][0] = {'label': 'Exit', 'control': 'close'}
+            with self.subTest(count=count):
+                self.parse(config)
+        for count in (0, 13):
+            config = minimal()
+            config['wheels']['main'] = [None] * count
+            with self.subTest(count=count):
+                self.rejects(config)
 
     def test_theme_enum_and_absent_default(self):
         self.assertEqual(self.parse(minimal())['theme'], 'slate')
@@ -70,53 +68,38 @@ class ConfigValidation(unittest.TestCase):
             with self.subTest(theme=theme), self.assertRaisesRegex(LuaError, 'theme: expected slate, moss or ember'):
                 self.parse(dict(minimal(), theme=theme))
 
-    def test_shipped_compass_layout_reaches_every_intent_except_deny(self):
+    def test_shipped_layout_matches_owner_positions_and_preserves_unused_catalog(self):
         layout = json.loads(CATALOG.with_name('layout.json').read_text(encoding='utf-8'))
         self.parse(layout)
-        wheels = layout['wheels']
-        self.assertEqual(layout['root'], 'main')
-        self.assertEqual(set(wheels), {'main', 'social', 'signals', 'attitude', 'actions'})
-
         expected = {
-            'main': [('intent', 'greet'), ('submenu', 'attitude'), ('intent', 'calm_down'),
-                     ('submenu', 'social'), ('intent', 'farewell'), ('submenu', 'signals'),
-                     ('intent', 'confirm'), ('submenu', 'actions')],
-            'social': [('intent', 'thanks'), ('intent', 'offer'), ('intent', 'congratulate'),
-                       ('intent', 'welcome'), ('intent', 'sorry'), ('intent', 'ask'),
-                       ('intent', 'respect'), ('control', 'back')],
-            'signals': [('intent', 'follow_me'), ('intent', 'come_here'), ('intent', 'attention'),
-                        ('intent', 'warn'), ('intent', 'wait_here'), ('intent', 'ready'),
-                        ('intent', 'quiet'), ('control', 'back')],
-            'attitude': [('intent', 'approve'), ('intent', 'unsure'), ('intent', 'challenge'),
-                         ('intent', 'not_understood'), ('intent', 'disapprove'), ('intent', 'think'),
-                         ('intent', 'yield'), ('control', 'back')],
-            'actions': [('action', 'drink_alcohol'), None, None, None, None, None, None,
-                        ('control', 'back')],
+            'main': ['confirm', 'social', None, 'greet', 'signals', None,
+                     'deny', 'attitude', None, 'farewell', 'actions', None],
+            'attitude': ['approve', None, 'understood', 'challenge', 'unsure', 'think',
+                         'disapprove', 'back', 'not_understood', 'yield', None, None],
+            'social': ['offer', None, 'congratulate', 'thanks', 'welcome', None,
+                       'ask', 'back', 'comfort', 'sorry', 'respect', None],
+            'signals': ['ready', 'come_here', None, 'attention', 'warn', None,
+                        'not_ready', 'back', None, 'quiet', 'calm_down', 'give_space'],
+            'actions': ['AccompanyTarget', 'drink_alcohol', None, 'WaitHere', None, None,
+                        'StopAccompanying', 'back', None, None, None, None],
         }
-        for name, entries in expected.items():
-            self.assertEqual(len(wheels[name]), 8, name)
-            actual = []
-            for slot in wheels[name]:
-                if slot is None:
-                    actual.append(None)
-                elif 'submenu' in slot:
-                    actual.append(('submenu', slot['submenu']))
-                elif 'control' in slot:
-                    actual.append(('control', slot['control']))
-                elif 'action' in slot:
-                    actual.append(('action', slot['action']['name']))
-                else:
-                    actual.append(('intent', slot['intent']))
-            self.assertEqual(actual, entries, name)
-            self.assertFalse(any(slot and slot.get('control') == 'close' for slot in wheels[name]), name)
-
-        reachable = {slot['intent'] for slots in wheels.values() for slot in slots
-                     if slot and 'intent' in slot}
-        self.assertIn('calm_down', self.catalog['intents'])
-        self.assertEqual(set(self.catalog['intents']) - reachable, {'deny'})
-        custom = minimal()
-        custom['wheels']['main'] = [{'label': 'Exit', 'control': 'close'}]
-        self.parse(custom)
+        homes = []
+        for name, identities in expected.items():
+            slots = layout['wheels'][name]
+            actual = [None if slot is None else slot.get('intent') or slot.get('submenu')
+                      or slot.get('control') or slot['action']['name'] for slot in slots]
+            self.assertEqual(actual, identities, name)
+            homes.extend(identity for identity in actual if identity and identity != 'back')
+        self.assertEqual(len(homes), len(set(homes)), 'Each entry has one home')
+        for index, action in ((0, 'AccompanyTarget'), (3, 'WaitHere'), (6, 'StopAccompanying')):
+            slot = layout['wheels']['actions'][index]
+            self.assertEqual(slot['action'], {'name': action, 'args': {}})
+            self.assertNotIn('event', slot)
+            self.assertNotIn('intent', slot)
+        self.assertEqual(layout['wheels']['actions'][1]['action']['args'], {'drinkName': ''})
+        for intent in ('understood', 'comfort', 'not_ready', 'give_space'):
+            self.assertIn(intent, self.catalog['intents'])
+        self.assertTrue({'follow_me', 'wait_here'} <= self.catalog['intents'].keys())
 
     def test_action_slots_validate_metadata_and_event_pair(self):
         config = minimal()
@@ -236,7 +219,7 @@ class ConfigValidation(unittest.TestCase):
         self.rejects(config)
 
     def test_slot_and_action_boundaries(self):
-        for slots in ([], [None] * 9, [False], [{'label': '', 'intent': 'confirm'}],
+        for slots in ([False], [{'label': '', 'intent': 'confirm'}],
                       [{'label': 'Yes'}], [{'label': 'Yes', 'intent': 'confirm', 'control': 'close'}],
                       [{'label': 'Yes', 'intent': None}], [{'label': 'No', 'control': 'exit'}],
                       [{'label': 'Yes', 'intent': 'confirm', 'text': 'extra'}]):
@@ -245,7 +228,7 @@ class ConfigValidation(unittest.TestCase):
                 config['wheels']['main'] = slots
                 self.rejects(config)
         config = minimal()
-        config['wheels']['main'] = [None] * 8
+        config['wheels']['main'] = [None] * 12
         self.parse(config)
 
     def test_unknown_fields_and_wrong_containers(self):

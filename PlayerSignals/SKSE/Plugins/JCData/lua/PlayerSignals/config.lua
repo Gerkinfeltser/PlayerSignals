@@ -176,7 +176,7 @@ local function validate(root, intents)
     for name, wheel in pairs(wheels) do
         nonempty(name, 'wheels name')
         assert(type(wheel) == 'table' and wheel.kind == 'array', 'wheels.' .. name .. ': expected array')
-        assert(#wheel.data >= 1 and #wheel.data <= 8, 'wheels.' .. name .. ': expected 1..8 slots')
+        assert(#wheel.data >= 1 and #wheel.data <= 12, 'wheels.' .. name .. ': expected 1..12 slots')
         for i, slot in ipairs(wheel.data) do
             if slot ~= null then
                 local path = 'wheels.' .. name .. '[' .. i .. ']'
@@ -245,11 +245,12 @@ local function jsonString(value)
     end) .. '"'
 end
 
-function M.wheelPayload(slots, theme)
+function M.wheelPayload(slots, theme, target)
     local ok, result = pcall(function()
         assert(type(theme) == 'string' and themes[theme], 'theme: expected slate, moss or ember')
+        assert(type(target) == 'string', 'target: expected string')
         local entries = {}
-        for i = 1, 8 do
+        for i = 1, 12 do
             local slot = slots[i]
             if slot == nil then
                 entries[i] = 'null'
@@ -263,7 +264,7 @@ function M.wheelPayload(slots, theme)
                 entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. ']'
             end
         end
-        return '{"theme":' .. jsonString(theme) .. ',"slots":[' .. table.concat(entries, ',') .. ']}'
+        return '{"theme":' .. jsonString(theme) .. ',"target":' .. jsonString(target) .. ',"slots":[' .. table.concat(entries, ',') .. ']}'
     end)
     if ok then return result end
     return ''

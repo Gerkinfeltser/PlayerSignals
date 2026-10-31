@@ -27,6 +27,9 @@ $art.PreserveWhitespace = $true
 $art.XmlResolver = $null
 $art.Load((Join-Path $repo 'media/src/RadialUI.svg'))
 $svg = $art.DocumentElement
+if ($art.SelectNodes("//*[local-name()='image']").Count) {
+    throw 'Source SVG contains <image>; export vector-only artwork.'
+}
 $background = $svg.SelectSingleNode("*[local-name()='rect' and @id='Artboard1']")
 if ($background) { [void]$svg.RemoveChild($background) }
 function Find-Layers($parent, $name) {
@@ -115,9 +118,26 @@ foreach ($part in @('Top', 'Bottom')) {
     $centerSplits[$part] = $split
 }
 foreach ($piece in $pieces) { [void]$rings[0].RemoveChild($piece) }
-$regions = foreach ($slot in 0..7) {
+function Point($radius, $degrees) {
+    $radians = ($degrees - 90) * [Math]::PI / 180
+    $x = 1800 + $radius * [Math]::Cos($radians); $y = 1800 + $radius * [Math]::Sin($radians)
+    [string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0:0.###},{1:0.###}', $x, $y)
+}
+$half = 15
+$coreInner = 432; $coreOuter = 1296; $coreGap = 36
+$tipInner = 1339.2; $tipOuter = 1692; $tipGap = 50.4
+$coreInnerGap = $coreGap / $coreInner * 90 / [Math]::PI
+$coreOuterGap = $coreGap / $coreOuter * 90 / [Math]::PI
+$tipAngleGap = $tipGap / $tipInner * 90 / [Math]::PI
+$tipInnerText = $tipInner.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
+$coreD = 'M{0}L{1}A{2},{2} 0 0 1 {3}L{4}A{5},{5} 0 0 0 {0}Z' -f `
+    (Point $coreInner (-$half + $coreInnerGap)), (Point $coreOuter (-$half + $coreOuterGap)), $coreOuter,
+    (Point $coreOuter ($half - $coreOuterGap)), (Point $coreInner ($half - $coreInnerGap)), $coreInner
+$tipD = 'M{0}A{1},{1} 0 0 1 {2}L{3}Z' -f `
+    (Point $tipInner (-$half + $tipAngleGap)), $tipInnerText, (Point $tipInner ($half - $tipAngleGap)), (Point $tipOuter 0)
+$regions = foreach ($slot in 0..11) {
     $piece = $template.CloneNode($true)
-    $piece.SetAttribute('transform', "rotate($($slot * 45) 1800 1800)")
+    $piece.SetAttribute('transform', "rotate($($slot * 30) 1800 1800)")
     [void]$rings[0].AppendChild($piece)
     $parts = @{}
     foreach ($name in @('Pie', 'Chevron', 'ChevronKnot', 'Submenu', 'Upmenu')) {
@@ -126,9 +146,11 @@ $regions = foreach ($slot in 0..7) {
         $parts[$name] = $layers[0]
     }
     Set-CloneIds $piece "slot-$slot"
-    @{ Piece = $piece; Slot = $slot; Parts = $parts
-       TargetHit = (Get-FillPath $parts.Pie "Slot $slot Pie")
-       NearbyHit = (Get-FillPath $parts.Chevron "Slot $slot Chevron") }
+    [void](Get-FillPath $parts.Pie "Slot $slot Pie")
+    [void](Get-FillPath $parts.Chevron "Slot $slot Chevron")
+    [void]$parts.Pie.ParentNode.RemoveChild($parts.Pie)
+    [void]$parts.Chevron.ParentNode.RemoveChild($parts.Chevron)
+    @{ Piece = $piece; Slot = $slot; Parts = $parts }
 }
 function Get-SvgReferences($node, $contentOnly = $false) {
     $references = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -188,19 +210,28 @@ foreach ($node in $svg.SelectNodes('.//*[@id]')) {
 foreach ($region in $regions) {
     $piece = $region.Piece; $slot = $region.Slot; $parts = $region.Parts
     $piece.SetAttribute('id', "slot-$slot"); $piece.SetAttribute('class', 'sector'); $piece.SetAttribute('data-index', [string]$slot)
+    $pop = $art.CreateElement('g', $svg.NamespaceURI); $pop.SetAttribute('class', 'pop')
+    [void]$piece.AppendChild($pop)
     foreach ($mode in @('target', 'nearby')) {
         $wrapper = $art.CreateElement('g', $svg.NamespaceURI)
         $wrapper.SetAttribute('id', "slot-$slot-$mode"); $wrapper.SetAttribute('class', "region $mode-region")
-        [void]$piece.AppendChild($wrapper)
-        $names = if ($mode -eq 'target') { @('Pie', 'Submenu', 'Upmenu') } else { @('Chevron', 'ChevronKnot') }
+        [void]$pop.AppendChild($wrapper)
+        $names = if ($mode -eq 'target') { @('Submenu', 'Upmenu') } else { @('ChevronKnot') }
         foreach ($name in $names) { [void]$wrapper.AppendChild($parts[$name]) }
-        $hit = if ($mode -eq 'target') { $region.TargetHit } else { $region.NearbyHit }
-        $hit.SetAttribute('id', "slot-$slot-$mode-hit"); $hit.SetAttribute('class', 'hit-area')
+        $hit = $art.CreateElement('path', $svg.NamespaceURI)
+        $hit.SetAttribute('id', "slot-$slot-$mode-hit")
+        $hit.SetAttribute('class', 'hit-area')
+        $hit.SetAttribute('d', $(if ($mode -eq 'target') { $coreD } else { $tipD }))
+        [void]$wrapper.PrependChild($hit)
     }
     $parts.ChevronKnot.SetAttribute('class', 'chevron-knot')
     $parts.Submenu.SetAttribute('class', 'navigation-art submenu-art')
     $parts.Upmenu.SetAttribute('class', 'navigation-art back-art')
     $parts.Submenu.SetAttribute('aria-hidden', 'true'); $parts.Upmenu.SetAttribute('aria-hidden', 'true')
+    # Fit the authored 45-degree navigation glyphs inside the narrow core near the hub.
+    foreach ($arrow in @($parts.Submenu, $parts.Upmenu)) {
+        $arrow.SetAttribute('transform', ('translate(1800 1230) scale(0.5) translate(-1800 -1230) ' + $arrow.GetAttribute('transform')).Trim())
+    }
 }
 $center.SetAttribute('id', 'center')
 $centerHit.SetAttribute('id', 'center-hit'); $centerHit.SetAttribute('class', 'hit-area')

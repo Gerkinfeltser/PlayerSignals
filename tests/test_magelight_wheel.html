@@ -34,6 +34,49 @@ frame.addEventListener("load", async () => {
         assert(!doc.querySelector("image"), "Wheel retains raster images");
         const vignette = doc.getElementById("vignette"), raf = view.qaRAF;
         assert(vignette && view.getComputedStyle(vignette).visibility === "hidden", "Vignette visible while disarmed");
+        // Compare rendered geometry in a common SVG frame, including ancestor transforms.
+        const boundsIn = (art, frame) => {
+            const box = art.getBBox(), m = frame.getCTM().inverse().multiply(art.getCTM());
+            const points = [[box.x,box.y],[box.x+box.width,box.y],[box.x+box.width,box.y+box.height],[box.x,box.y+box.height]].map(([x,y]) => new view.DOMPoint(x,y).matrixTransform(m));
+            const x = Math.min(...points.map(p => p.x)), y = Math.min(...points.map(p => p.y));
+            return {x, y, width:Math.max(...points.map(p => p.x))-x, height:Math.max(...points.map(p => p.y))-y};
+        };
+        const separated = (a, b) => [a,b].some(poly => poly.some((p,i) => {
+            const q = poly[(i+1)%poly.length], nx = p.y-q.y, ny = q.x-p.x;
+            const pa = a.map(v => v.x*nx+v.y*ny), pb = b.map(v => v.x*nx+v.y*ny);
+            return Math.max(...pa) <= Math.min(...pb) || Math.max(...pb) <= Math.min(...pa);
+        }));
+        const source = new view.DOMParser().parseFromString(await (await fetch("../media/src/RadialUI.svg")).text(), "image/svg+xml");
+        const fixture = doc.importNode(source.documentElement, true);
+        fixture.style.cssText = "position:absolute;left:-10000px;top:0;width:3600px;height:3600px;pointer-events:none";
+        doc.body.appendChild(fixture);
+        const template = [...fixture.querySelectorAll("g")].find(g => /^Piece\d*$/.test(g.id) && !g.hasAttribute("transform"));
+        const sourceBoxes = {};
+        for (const [kind,prefix] of [["submenu","Submenu"],["back","Upmenu"]]) {
+            sourceBoxes[kind] = boundsIn([...template.children].find(g => g.id.startsWith(prefix)), template);
+        }
+        fixture.remove();
+        const checkArrow = (art, i, kind) => {
+            const hit = doc.getElementById(`slot-${i}-target-hit`), edge = region(i).querySelector(".edge-line");
+            const box = boundsIn(art, hit), original = sourceBoxes[kind], scale = box.width/original.width;
+            assert(Math.abs((box.width/box.height)/(original.width/original.height)-1) <= .01, `Slot ${i} ${kind} arrow aspect ratio distorted`);
+            const center = new view.DOMPoint(box.x+box.width/2, box.y+box.height/2);
+            const root = center.matrixTransform(svg.getCTM().inverse().multiply(hit.getCTM()));
+            const angle = (Math.atan2(root.x-1800,1800-root.y)*180/Math.PI+360)%360;
+            assert(Math.abs((angle-i*30+540)%360-180) <= 1, `Slot ${i} ${kind} arrow angle ${angle} is off-center`);
+            // Preserve 10 units beyond arrow stroke and the inset line's half stroke.
+            const pad = 10+8*scale+4.5;
+            for (const x of [box.x-pad,center.x,box.x+box.width+pad]) for (const y of [box.y-pad,center.y,box.y+box.height+pad]) {
+                assert(edge.isPointInFill(new view.DOMPoint(x,y)), `Slot ${i} ${kind} arrow lacks core-edge clearance`);
+            }
+            const label = doc.querySelector(`.sectorLabel[data-index="${i}"]`), range = doc.createRange();
+            range.selectNodeContents(label);
+            const l = range.getBoundingClientRect(), m = hit.getScreenCTM().inverse();
+            const ink = [[l.left,l.top],[l.right,l.top],[l.right,l.bottom],[l.left,l.bottom]].map(([x,y]) => new view.DOMPoint(x,y).matrixTransform(m));
+            const p = 10+8*scale, a = [{x:box.x-p,y:box.y-p},{x:box.x+box.width+p,y:box.y-p},{x:box.x+box.width+p,y:box.y+box.height+p},{x:box.x-p,y:box.y+box.height+p}];
+            assert(separated(a,ink), `Slot ${i} ${kind} arrow lacks label clearance`);
+            assert(center.y > ink.reduce((sum,p) => sum+p.y,0)/4, `Slot ${i} ${kind} arrow is outside its label`);
+        };
         arm("geometry", Array.from({length:12}, (_, i) => ({label:"Slot " + i, intent:"greet"})));
         doc.getElementById("center").focus();
         const svg = doc.getElementById("wheelSvg");
@@ -74,14 +117,9 @@ frame.addEventListener("load", async () => {
             for (let i = 0; i < 12; i++) {
                 const art = region(i).querySelector("." + shown), other = region(i).querySelector("." + hidden);
                 assert(view.getComputedStyle(art).display !== "none" && view.getComputedStyle(other).display === "none", "Wrong navigation arrow shown");
-                const box = art.getBBox(), hit = doc.getElementById(`slot-${i}-target-hit`);
+                const box = art.getBBox();
                 assert(box.width > 0 && box.height > 0, "Navigation artwork is empty");
-                const matrix = hit.getCTM().inverse().multiply(art.getCTM());
-                // Include half the largest authored stroke (15.9 source units).
-                for (const x of [box.x - 8, box.x + box.width + 8]) for (const y of [box.y - 8, box.y + box.height + 8]) {
-                    const p = svg.createSVGPoint(); p.x = x; p.y = y;
-                    assert(hit.isPointInFill(p.matrixTransform(matrix)), `Slot ${i} ${kind} arrow extends outside its core`);
-                }
+                checkArrow(art, i, kind);
                 const center = svg.createSVGPoint(); center.x = box.x + box.width / 2; center.y = box.y + box.height / 2;
                 const screen = center.matrixTransform(art.getScreenCTM());
                 assert(doc.elementFromPoint(screen.x, screen.y)?.closest(".region") === region(i), "Arrow intercepted its core hit");
@@ -111,10 +149,7 @@ frame.addEventListener("load", async () => {
                     if (kind === "submenu" || kind === "back") {
                         region(i).focus();
                         const art = region(i).querySelector(kind === "submenu" ? ".submenu-art" : ".back-art");
-                        const label = doc.querySelector(`.sectorLabel[data-index="${i}"]`), range = doc.createRange();
-                        range.selectNodeContents(label);
-                        const a = art.getBoundingClientRect(), l = range.getBoundingClientRect();
-                        assert(a.right <= l.left || a.left >= l.right || a.bottom <= l.top || a.top >= l.bottom, `Shipped ${name}/${i} navigation arrow overlaps its label`);
+                        checkArrow(art, i, kind);
                     }
                     click(region(i, mode));
                     const destination = ["submenu", "back", "navigation"].includes(kind) ? "navigate" : kind === "action" ? "target" : mode;
@@ -223,7 +258,7 @@ frame.addEventListener("load", async () => {
         arm("interrupted", [{label:"Signal",intent:"greet"}]);
         await nextFrame(); view.hostMode("0");
         assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
-        report.textContent = "PASS: 12-slot choices and Back placement; inset core/tip paths stay inside hits; vector arrows fit and remain type-specific; hovered labels visible and upright without CSS transforms; Back/submenu fill parity in every theme; empty opacity .5; armed-only bottom vignette; target/Openly routing, keyboard, arming and cancellation; immediate navigation; SVG lift overshoots then settles at 1.06, reduced motion/0ms are instant, no idle or disarmed rAF. Browser-only, not Ultralight/native/game proof.";
+        report.textContent = "PASS: 12-slot choices and Back placement; inset core/tip paths stay inside hits; every visible arrow centered within 1 degree, source aspect ratio within 1%, 10-unit stroke-aware core/label clearance, and type-specific visibility; hovered labels visible and upright without CSS transforms; Back/submenu fill parity in every theme; empty opacity .5; armed-only bottom vignette; target/Openly routing, keyboard, arming and cancellation; immediate navigation; SVG lift overshoots then settles at 1.06, reduced motion/0ms are instant, no idle or disarmed rAF. Browser-only, not Ultralight/native/game proof.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

@@ -279,10 +279,10 @@ foreach ($region in $regions) {
     $parts.Submenu.SetAttribute('class', 'navigation-art submenu-art')
     $parts.Upmenu.SetAttribute('class', 'navigation-art back-art')
     $parts.Submenu.SetAttribute('aria-hidden', 'true'); $parts.Upmenu.SetAttribute('aria-hidden', 'true')
-    # Center the visible glyph bounds at radius 650, between hub and label.
-    # Widths ~147/149 are ~47/48% of the core here; taller glyphs improve legibility.
-    $parts.Submenu.SetAttribute('transform', ('translate(1800 1150) scale(0.33 0.9) translate(-1804.65 -1227.895) ' + $parts.Submenu.GetAttribute('transform')).Trim())
-    $parts.Upmenu.SetAttribute('transform', ('translate(1800 1150) scale(0.47 0.9) translate(-1805.725 -1237.674) ' + $parts.Upmenu.GetAttribute('transform')).Trim())
+    # Browser-measured bounds in sector-local coordinates; preserve authored aspect ratios.
+    # Maximal fits use 10-unit clearance beyond arrow strokes and the inset edge.
+    $parts.Submenu.SetAttribute('transform', ('translate(1800 1001.6) scale(0.5974) translate(-1804.650024 -1227.895203) ' + $parts.Submenu.GetAttribute('transform')).Trim())
+    $parts.Upmenu.SetAttribute('transform', ('translate(1800 970.9) scale(0.8541) translate(-1805.724976 -1237.673584) ' + $parts.Upmenu.GetAttribute('transform')).Trim())
 }
 $center.SetAttribute('id', 'center')
 $centerHit.SetAttribute('id', 'center-hit'); $centerHit.SetAttribute('class', 'hit-area')

@@ -49,8 +49,12 @@ frame.addEventListener("load", async () => {
         const visible = () => getComputedStyle(surface).visibility === "visible";
         const region = (index, mode = "target") => doc.getElementById(`slot-${index}-${mode}`);
         const knotVisible = index => getComputedStyle(region(index, "nearby").querySelector(".chevron-knot")).display !== "none";
-        const assertKnots = () => {
-            for (let i = 0; i < 8; i++) assert(knotVisible(i), "ChevronKnot disappeared from slot " + i);
+        const symbolVisible = index => getComputedStyle(region(index, "nearby").querySelector(".broadcast-symbol")).display !== "none";
+        const assertKnots = slots => {
+            for (let i = 0; i < 8; i++) {
+                const signal = slots[i] && slotEntry(slots[i])[2] === "intent";
+                assert(knotVisible(i) === !signal && symbolVisible(i) === Boolean(signal), "Knot/symbol state incorrect for slot " + i);
+            }
         };
         const click = element => element.dispatchEvent(new view.MouseEvent("click", {bubbles:true}));
         const key = key => doc.dispatchEvent(new view.KeyboardEvent("keydown", {key, bubbles:true, cancelable:true}));
@@ -79,7 +83,11 @@ frame.addEventListener("load", async () => {
                 const screen = p.matrixTransform(svg.getScreenCTM());
                 assert(doc.elementFromPoint(screen.x, screen.y).closest(".region") === region(i, mode), `Slot ${i} ${mode} hit stolen by art/label/other region`);
             }
+            const symbol = region(i, "nearby").querySelector(".broadcast-symbol"), box = symbol.getBoundingClientRect();
+            assert(symbolVisible(i) && !knotVisible(i) && getComputedStyle(symbol).pointerEvents === "none" && doc.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest(".region") === region(i, "nearby"), "Rotated broadcast symbol left its chevron or stole its hit area");
         }
+        const symbolRatio = region(0, "nearby").querySelector(".broadcast-symbol").getBoundingClientRect().width / region(0, "nearby").firstElementChild.getBoundingClientRect().width;
+        assert(symbolRatio >= .06 && symbolRatio <= .08, "Broadcast symbol is not 6–8% of chevron width");
         // The chevron's bounding box includes its empty notch: that notch must select the body instead.
         const notch = rootPoint(0, 1290).matrixTransform(svg.getScreenCTM());
         assert(doc.elementFromPoint(notch.x, notch.y).closest(".region") === region(0), "Chevron used a box-shaped hit area");
@@ -96,7 +104,7 @@ frame.addEventListener("load", async () => {
                     assert(getComputedStyle(region(i, "nearby")).display !== "none" && !doc.querySelector(".nearbyLabel"), "Outer hit area disappeared or ALL label returned");
                     click(region(i, mode));
                     assert(replies.pop() === `${token}|${i}|${entry[1]}|${["navigation", "submenu", "back"].includes(entry[2]) ? "navigate" : entry[2] === "action" ? "target" : mode}`, "Slot identity/kind/destination lost");
-                    assert(knotVisible(i), `ChevronKnot visibility incorrect for ${entry[2]}`);
+                    assert(knotVisible(i) === (entry[2] !== "intent") && symbolVisible(i) === (entry[2] === "intent"), `Knot/symbol state incorrect for ${entry[2]}`);
                     assert(!visible(), "Selection left old choices visible");
                     click(region(i, mode)); view.psWheelArm(token); click(region(i, mode));
                     view.psWheelBegin(token + "|" + slotsPayload(slots)); view.psWheelArm(token); click(region(i, mode));
@@ -117,7 +125,7 @@ frame.addEventListener("load", async () => {
             const core = region(0), outer = region(0, "nearby"), knot = outer.querySelector(".chevron-knot");
             const idle = () => {
                 doc.getElementById("center").focus();
-                assert(brightness(core) === 1 && brightness(outer) === 1 && knotVisible(0), kind + " idle brightness/knot changed");
+                assert(brightness(core) === 1 && brightness(outer) === 1 && knotVisible(0) === (kind !== "intent") && symbolVisible(0) === (kind === "intent"), kind + " idle brightness/knot/symbol changed");
                 assert(Number(getComputedStyle(outline(0)).opacity) === (kind === "intent" ? 1 : 0), kind + " idle outline incorrect");
             };
             idle();
@@ -127,7 +135,7 @@ frame.addEventListener("load", async () => {
                 assert(brightness(core) > 1, kind + " " + mode + " " + input + " did not brighten core");
                 const outerHot = kind !== "intent" || mode === "nearby";
                 assert((brightness(outer) > 1) === outerHot && Number(getComputedStyle(outline(0)).opacity) === 1, kind + " " + mode + " " + input + " outer state incorrect");
-                assert(getComputedStyle(knot).display !== "none", kind + " hover hid knot");
+                assert((getComputedStyle(knot).display !== "none") === (kind !== "intent") && symbolVisible(0) === (kind === "intent"), kind + " hover changed knot/symbol visibility");
             }
             idle();
             hover(region(1)); hover(region(1, "nearby"));
@@ -166,11 +174,15 @@ frame.addEventListener("load", async () => {
             const core = region(0), outer = region(0, "nearby"), util = region(1);
             const hitFill = node => getComputedStyle(node.querySelector(".hit-area")).fill;
             const idleCore = hitFill(core), idleMenu = hitFill(util);
+            const signalIdle = hitFill(outer);
+            assert(signalIdle !== idleCore && !knotVisible(0) && symbolVisible(0) && !symbolVisible(1), theme + " signal lacks distinct solid fill/symbol or util gained it");
             hover(core);
             const selection = hitFill(core);
             assert(selection !== idleCore && brightness(core) > 1 && brightness(outer) === 1, theme + " signal core hover changed outer or lost selection");
+            assert(hitFill(outer) === signalIdle, theme + " core hover changed outer fill");
             hover(outer);
             const outerFill = hitFill(outer);
+            assert(outerFill === signalIdle, theme + " outer hover changed solid base fill instead of brightening");
             assert(brightness(core) > 1 && brightness(outer) > 1 && Number(getComputedStyle(outline(0)).opacity) === 1, theme + " signal outer hover failed");
             util.focus();
             assert(hitFill(util) === selection && hitFill(util) !== idleMenu && brightness(util) > 1 && brightness(region(1,"nearby")) > 1, theme + " submenu tint overrode selection/hover");
@@ -178,11 +190,11 @@ frame.addEventListener("load", async () => {
             assert(Number(getComputedStyle(outline(1)).opacity) === 0 && knotVisible(1), theme + " util idle outline/knot failed");
             region(1,"nearby").focus();
             assert(hitFill(util) === selection && Number(getComputedStyle(outline(1)).opacity) === 1 && brightness(region(1,"nearby")) > 1, theme + " util outer focus failed");
-            paletteFills.push([idleCore, idleMenu, selection, outerFill]);
+            paletteFills.push([idleCore, idleMenu, selection, outerFill, signalIdle]);
             click(core);
             assert(replies.pop() === `theme-${theme}|0|greet|target`, "Theme changed callback identity");
         }
-        for (let field = 0; field < 4; field++) assert(new Set(paletteFills.map(fills => fills[field])).size === 3, "Theme fills are not distinct");
+        for (let field = 0; field < 5; field++) assert(new Set(paletteFills.map(fills => fills[field])).size === 3, "Theme fills are not distinct");
         for (const theme of ["unknown", null, false]) {
             const token = "bad-theme-" + String(theme);
             view.psWheelBegin(token + "|" + slotsPayload([{label:"Gesture",intent:"greet"}], theme));
@@ -257,7 +269,7 @@ frame.addEventListener("load", async () => {
         assertKnots([null]);
         arm("root-calm-down", layout.wheels[layout.root]);
         const calmDownIndex = layout.wheels[layout.root].findIndex(slot => slot?.intent === "calm_down");
-        assert(calmDownIndex >= 0 && knotVisible(calmDownIndex), "Root Calm down gesture missing or lost ChevronKnot");
+        assert(calmDownIndex >= 0 && !knotVisible(calmDownIndex) && symbolVisible(calmDownIndex), "Root Calm down signal missing or wrong outer art");
         for (const mode of ["target", "nearby"]) {
             const token = "root-calm-down-" + mode;
             arm(token, layout.wheels[layout.root]); click(region(calmDownIndex, mode));
@@ -309,7 +321,7 @@ frame.addEventListener("load", async () => {
         for (const token of ["empty", "empty-again"]) {
             arm(token, []); assert(doc.activeElement === doc.getElementById("center") && doc.getElementById("caption").textContent === "Cancel", "Empty wheel lacks cancel focus/feedback");
             for (let i = 0; i < 8; i++) {
-                assert(getComputedStyle(region(i, "nearby")).display !== "none" && region(i, "nearby").getAttribute("aria-disabled") === "true" && knotVisible(i), "Empty chevron hidden, enabled or missing ChevronKnot");
+                assert(getComputedStyle(region(i, "nearby")).display !== "none" && region(i, "nearby").getAttribute("aria-disabled") === "true" && knotVisible(i) && !symbolVisible(i), "Empty chevron hidden, enabled, missing knot or gained symbol");
                 click(region(i, "nearby"));
             }
             assert(replies.length === 0, "Disabled chevron submitted a choice");
@@ -327,7 +339,7 @@ frame.addEventListener("load", async () => {
             const token = k + "-" + name; arm(token, layout.wheels[name]); key(k);
             assert(replies.pop() === token + "|-1||cancel", k + " failed to cancel " + name);
         }
-        report.textContent = "PASS: slate/moss/ember distinct idle, submenu, selection and hover fills; one root theme class; selection precedence and per-theme core/outer hover/focus; invalid-theme selection rejection with cancellation retained; per-kind idle/core/outer pointer and keyboard brightness, outline opacity and visible knots; inert faded empty slots; eased brighten/dim and outline fade, tween off switch and reduced-motion duration; no ALL label; authored navigation art/rotation and hit testing; retunable submenu tint; marker stripping; shipped callbacks including Calm down; target-only actions and navigation; pre-arm/stale/duplicate guards; Unicode labels; keyboard destinations; cancellation; native-mode disarm/reopening. Browser-only; no native Papyrus/game proof.";
+        report.textContent = "PASS: signal knots hidden and shared path-based broadcast symbols visible, small, rotated with slices and pointer-safe; no symbol on util/empty slots and reset on kind changes; slate/moss/ember distinct solid signal fills retained through core hover and brightened on outer hover; util knot/outline rules unchanged; one root theme class and selection precedence; invalid-theme selection rejection with cancellation retained; pointer/keyboard hover brightness and eased transitions; reduced motion/off switch; inert empty slots; authored navigation art/hit testing; shipped callbacks; stale/duplicate guards; labels; keyboard destinations; cancellation and native-mode disarm/reopening. Browser-only; no native Papyrus/game proof.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; throw error; }
 });
 // Model only the host boundary installed before page script execution; render the actual generated page unchanged otherwise.

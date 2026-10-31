@@ -26,6 +26,10 @@
     .nearby-region > g:first-child { opacity: 1; transition: opacity var(--ps-tween) ease; }
     .nearby-region.linked > g:first-child { opacity: 0; }
     .nearby-region.linked.hot > g:first-child { opacity: 1; }
+    .nearby-region.signal .chevron-knot { display: none; }
+    .nearby-region.signal .hit-area { fill: var(--hover-fill) !important; }
+    .broadcast-symbol { display: none; pointer-events: none; }
+    .signal .broadcast-symbol { display: initial; }
     .region.hot { filter: brightness(1.3); }
     @media (prefers-reduced-motion: reduce) { :root { --ps-tween: 0ms; } }
     .target-region.hot .hit-area { fill: var(--selection-fill) !important; }
@@ -1886,6 +1890,11 @@
             content.style.fontSize = size + "px";
         }
     }
+    const broadcast = document.createElementNS(NS, "symbol");
+    broadcast.id = "broadcast-symbol"; broadcast.setAttribute("viewBox", "0 0 64 64");
+    broadcast.innerHTML = '<path d="M24 56V45C13 44 6 35 6 24C6 12 13 5 24 5C34 5 39 13 39 23L45 30H38V39L29 41V56M27 18H29M30 31H38M46 23Q54 31 46 39M52 17Q65 31 52 45M58 11Q66 31 58 51" fill="none" stroke="#20251f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>';
+    wheel.querySelector("defs").appendChild(broadcast);
+    const broadcastPoint = rootPoint(document.getElementById("slot-0-nearby-hit"));
     const sectors = entries.map((_, index) => {
         const group = document.getElementById("slot-" + index);
         const target = document.getElementById("slot-" + index + "-target");
@@ -1896,6 +1905,12 @@
         const actionBadge = document.createElementNS(NS, "text"); actionBadge.classList.add("actionLabel");
         actionBadge.setAttribute("x", point.x); actionBadge.setAttribute("y", point.y + 245);
         actionBadge.setAttribute("aria-hidden", "true"); actionBadge.textContent = "ACTION"; wheel.appendChild(actionBadge);
+        const symbol = document.createElementNS(NS, "use");
+        symbol.classList.add("broadcast-symbol"); symbol.setAttribute("href", "#broadcast-symbol");
+        symbol.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", "#broadcast-symbol");
+        symbol.setAttribute("x", broadcastPoint.x - 36); symbol.setAttribute("y", broadcastPoint.y - 106);
+        symbol.setAttribute("width", "72"); symbol.setAttribute("height", "72"); symbol.setAttribute("aria-hidden", "true");
+        nearby.appendChild(symbol);
         for (const [region, mode] of [[target, "target"], [nearby, "nearby"]]) {
             region.setAttribute("role", "button"); region.setAttribute("tabindex", "-1"); region.setAttribute("aria-disabled", "true");
             region.addEventListener("click", () => choose(index, mode));
@@ -1958,7 +1973,7 @@
         document.documentElement.classList.remove("slate", "moss", "ember");
         document.documentElement.classList.add("slate");
         surface.dataset.armed = "false"; entries.fill(null); disable(); clearHighlight();
-        sectors.forEach(({ target, content, nearby, actionBadge }) => { target.classList.remove("submenu", "back"); content.textContent = ""; nearby.classList.remove("linked"); actionBadge.style.display = "none"; });
+        sectors.forEach(({ target, content, nearby, actionBadge }) => { target.classList.remove("submenu", "back"); content.textContent = ""; nearby.classList.remove("linked", "signal"); actionBadge.style.display = "none"; });
         if (window.magelight) window.magelight.send("__escapecapture", "0");
     }
     window.psWheelBegin = payload => {
@@ -1986,6 +2001,7 @@
             target.setAttribute("aria-label", item ? item[0] + (kind === "action" ? " — Action, Target NPC" : kind === "intent" ? " — Target NPC" : " — Navigation") : "Empty slot");
             nearby.setAttribute("aria-label", kind === "intent" ? item[0] + " — Everyone nearby" : target.getAttribute("aria-label"));
             nearby.classList.toggle("linked", Boolean(item) && kind !== "intent");
+            nearby.classList.toggle("signal", kind === "intent");
             actionBadge.style.display = item && kind === "action" ? "" : "none";
         });
     };

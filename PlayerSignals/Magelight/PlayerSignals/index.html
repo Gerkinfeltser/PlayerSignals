@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PlayerSignals</title>
 <style>
-    :root { --submenu-fill: #455766; color-scheme: dark; font: 18px Georgia, serif; color: #fff3d9; }
+    :root { --submenu-fill: #455766; --ps-tween: 160ms; color-scheme: dark; font: 18px Georgia, serif; color: #fff3d9; }
     body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: transparent; }
     main { width: min(96vw, 800px); text-align: center; visibility: hidden; }
     main[data-armed="true"] { visibility: visible; }
@@ -18,7 +18,13 @@
     .target-region.submenu .hit-area { fill: var(--submenu-fill) !important; }
     .navigation-art { display: none; pointer-events: none; }
     .submenu .submenu-art, .back .back-art { display: initial; }
-    .target-region.submenu ~ .nearby-region .chevron-knot, .target-region.back ~ .nearby-region .chevron-knot { display: none; }
+    /* Opacity preserves the outer hit area while util chevron outlines are hidden. */
+    .region { filter: brightness(1); transition: filter var(--ps-tween) ease; }
+    .nearby-region > g:first-child { opacity: 1; transition: opacity var(--ps-tween) ease; }
+    .nearby-region.linked > g:first-child { opacity: 0; }
+    .nearby-region.linked.hot > g:first-child { opacity: 1; }
+    .region.hot { filter: brightness(1.3); }
+    @media (prefers-reduced-motion: reduce) { :root { --ps-tween: 0ms; } }
     .target-region.hot .hit-area { fill: #72562c !important; }
     .nearby-region.hot .hit-area { fill: #e9bd6c !important; }
     .nearby-region.linked.hot .hit-area { fill: #72562c !important; }
@@ -27,10 +33,9 @@
     .sector[aria-disabled="true"] { opacity: .25; }
     #center-hit { fill: #292c29 !important; }
     #center:hover #center-hit, #center:focus #center-hit { fill: #53452e !important; }
-    #wheelSvg foreignObject, .nearbyLabel, .actionLabel { pointer-events: none; }
+    #wheelSvg foreignObject, .actionLabel { pointer-events: none; }
     .sectorLabel, .hubContent { width: 100%; height: 100%; display: grid; align-content: center; overflow-wrap: anywhere; text-align: center; }
     .sectorLabel { font: 600 110px/1.12 Georgia, serif; color: #fff3d9; }
-    .nearbyLabel { fill: #fff3d9; stroke: #111; stroke-width: 12px; paint-order: stroke; font: 700 72px Georgia, serif; text-anchor: middle; dominant-baseline: middle; }
     .actionLabel { fill: #f0ce89; font: 700 58px Georgia, serif; text-anchor: middle; dominant-baseline: middle; }
     .hubContent { font: 100px/1.15 Georgia, serif; }
     #caption, #destination { margin: 12px 0; }
@@ -1847,7 +1852,7 @@
                         </clipPath></defs>
 </svg>
 <!-- RADIAL_ART_END -->
-    <p id="help">Gesture inner piece: target NPC · Gesture ALL chevron: everyone nearby · Other chevrons: same choice as inner piece<br>← / →: entry · ↑: inner · ↓: gesture nearby · Enter / Space: select · Tab / Escape / center: cancel<br>Actions always target the captured NPC. Either Shift key still overrides an inner gesture selection to everyone nearby.</p>
+    <p id="help">Gesture inner piece: target NPC · Gesture outer chevron: everyone nearby · Other chevrons: same choice as inner piece<br>← / →: entry · ↑: inner · ↓: gesture nearby · Enter / Space: select · Tab / Escape / center: cancel<br>Actions always target the captured NPC. Either Shift key still overrides an inner gesture selection to everyone nearby.</p>
 </main>
 <script>
 (() => {
@@ -1885,12 +1890,6 @@
         const point = rootPoint(document.getElementById("slot-" + index + "-target-hit"));
         const content = textBox(point.x - 350, point.y - 170, 700, 340, "sectorLabel");
         content.dataset.index = index;
-        const outer = rootPoint(document.getElementById("slot-" + index + "-nearby-hit"));
-        const distance = Math.hypot(outer.x - 1800, outer.y - 1800);
-        const badge = document.createElementNS(NS, "text"); badge.classList.add("nearbyLabel");
-        badge.setAttribute("x", outer.x + (outer.x - 1800) / distance * 70);
-        badge.setAttribute("y", outer.y + (outer.y - 1800) / distance * 70);
-        badge.setAttribute("aria-hidden", "true"); badge.textContent = "ALL"; wheel.appendChild(badge);
         const actionBadge = document.createElementNS(NS, "text"); actionBadge.classList.add("actionLabel");
         actionBadge.setAttribute("x", point.x); actionBadge.setAttribute("y", point.y + 245);
         actionBadge.setAttribute("aria-hidden", "true"); actionBadge.textContent = "ACTION"; wheel.appendChild(actionBadge);
@@ -1900,7 +1899,7 @@
             region.addEventListener("mouseenter", () => { if (available(index, mode) && armed) region.focus(); });
             region.addEventListener("focus", () => highlight(index, mode));
         }
-        return { group, target, nearby, content, badge, actionBadge };
+        return { group, target, nearby, content, actionBadge };
     });
     const cancel = document.getElementById("center");
     cancel.classList.add("centerCancel"); cancel.setAttribute("role", "button"); cancel.setAttribute("aria-label", "Cancel"); cancel.setAttribute("tabindex", "-1");
@@ -1920,7 +1919,8 @@
         if (!armed || !available(index, mode)) return;
         focused = index; focusedMode = mode; clearHighlight(); sectors[index][mode].classList.add("hot");
         const [label, , kind] = entries[index];
-        if (kind !== "intent") { sectors[index].target.classList.add("hot"); sectors[index].nearby.classList.add("hot"); }
+        sectors[index].target.classList.add("hot");
+        if (kind !== "intent") sectors[index].nearby.classList.add("hot");
         caption.textContent = label;
         destination.textContent = ["navigation", "submenu", "back"].includes(kind) ? "Navigation" : kind === "action" ? "Target NPC · Action" : mode === "nearby" ? "Everyone nearby" : "Target NPC";
         fit(hub, 100);
@@ -1953,7 +1953,7 @@
     function failClosed(token = "") {
         request = token; armed = false; finished = !token; focused = -1; focusedMode = "target";
         surface.dataset.armed = "false"; entries.fill(null); disable(); clearHighlight();
-        sectors.forEach(({ target, content, nearby, badge, actionBadge }) => { target.classList.remove("submenu", "back"); content.textContent = ""; nearby.classList.remove("linked"); badge.style.display = actionBadge.style.display = "none"; });
+        sectors.forEach(({ target, content, nearby, actionBadge }) => { target.classList.remove("submenu", "back"); content.textContent = ""; nearby.classList.remove("linked"); actionBadge.style.display = "none"; });
         if (window.magelight) window.magelight.send("__escapecapture", "0");
     }
     window.psWheelBegin = payload => {
@@ -1972,15 +1972,14 @@
             if (item?.[2] === "submenu" && item[0].endsWith(" >")) item[0] = item[0].slice(0, -2);
             if (item?.[2] === "back" && item[0].endsWith(" <")) item[0] = item[0].slice(0, -2);
             entries[index] = item;
-            const { target, nearby, content, badge, actionBadge } = sectors[index];
+            const { target, nearby, content, actionBadge } = sectors[index];
             content.textContent = item ? item[0] : ""; fit(content, 110);
             const kind = item?.[2];
             target.classList.toggle("submenu", kind === "submenu");
             target.classList.toggle("back", kind === "back");
             target.setAttribute("aria-label", item ? item[0] + (kind === "action" ? " — Action, Target NPC" : kind === "intent" ? " — Target NPC" : " — Navigation") : "Empty slot");
             nearby.setAttribute("aria-label", kind === "intent" ? item[0] + " — Everyone nearby" : target.getAttribute("aria-label"));
-            nearby.classList.toggle("linked", kind !== "intent");
-            badge.style.display = item && kind === "intent" ? "" : "none";
+            nearby.classList.toggle("linked", Boolean(item) && kind !== "intent");
             actionBadge.style.display = item && kind === "action" ? "" : "none";
         });
     };

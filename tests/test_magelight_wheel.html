@@ -49,11 +49,8 @@ frame.addEventListener("load", async () => {
         const visible = () => getComputedStyle(surface).visibility === "visible";
         const region = (index, mode = "target") => doc.getElementById(`slot-${index}-${mode}`);
         const knotVisible = index => getComputedStyle(region(index, "nearby").querySelector(".chevron-knot")).display !== "none";
-        const assertKnots = slots => {
-            for (let i = 0; i < 8; i++) {
-                const entry = slots[i], kind = entry ? slotEntry(entry)[2] : "empty";
-                assert(knotVisible(i) === !["submenu", "back"].includes(kind), `ChevronKnot visibility incorrect for ${kind}`);
-            }
+        const assertKnots = () => {
+            for (let i = 0; i < 8; i++) assert(knotVisible(i), "ChevronKnot disappeared from slot " + i);
         };
         const click = element => element.dispatchEvent(new view.MouseEvent("click", {bubbles:true}));
         const key = key => doc.dispatchEvent(new view.KeyboardEvent("keydown", {key, bubbles:true, cancelable:true}));
@@ -67,6 +64,8 @@ frame.addEventListener("load", async () => {
         const slotsPayload = slots => JSON.stringify(Array.from({length:8}, (_, i) => slotEntry(slots[i])));
         const populate = (token, slots) => { view.psWheelBegin(token + "|" + slotsPayload(slots)); assert(!visible(), "Page appeared before arm"); };
         const arm = (token, slots) => { populate(token, slots); view.psWheelArm(token); assert(visible(), "Valid arm failed to reveal page"); };
+        // Settle styles synchronously for state assertions; exercise real tweens separately below.
+        doc.documentElement.style.setProperty("--ps-tween", "0ms");
         assert(!visible(), "Page appeared before first focus entry");
         arm("geometry", Array.from({length:8}, (_, i) => ({label:"Slot " + i, intent:"greet"})));
         const rootPoint = (angle, radius) => {
@@ -94,10 +93,10 @@ frame.addEventListener("load", async () => {
                     view.psWheelArm("stale"); assert(!visible(), "Stale request revealed page");
                     view.psWheelArm(token);
                     const entry = slotEntry(slots[i]);
-                    assert(getComputedStyle(region(i, "nearby")).display !== "none" && doc.querySelectorAll(".nearbyLabel")[i].style.display === (entry[2] === "intent" ? "" : "none"), "Chevron visibility or gesture-only ALL cue changed");
+                    assert(getComputedStyle(region(i, "nearby")).display !== "none" && !doc.querySelector(".nearbyLabel"), "Outer hit area disappeared or ALL label returned");
                     click(region(i, mode));
                     assert(replies.pop() === `${token}|${i}|${entry[1]}|${["navigation", "submenu", "back"].includes(entry[2]) ? "navigate" : entry[2] === "action" ? "target" : mode}`, "Slot identity/kind/destination lost");
-                    assert(knotVisible(i) === ["intent", "action"].includes(entry[2]), `ChevronKnot visibility incorrect for ${entry[2]}`);
+                    assert(knotVisible(i), `ChevronKnot visibility incorrect for ${entry[2]}`);
                     assert(!visible(), "Selection left old choices visible");
                     click(region(i, mode)); view.psWheelArm(token); click(region(i, mode));
                     view.psWheelBegin(token + "|" + slotsPayload(slots)); view.psWheelArm(token); click(region(i, mode));
@@ -105,6 +104,60 @@ frame.addEventListener("load", async () => {
                 }
             }
         }
+        const outline = i => region(i, "nearby").firstElementChild;
+        const brightness = node => Number(getComputedStyle(node).filter.match(/brightness\(([^)]+)\)/)[1]);
+        const hover = node => node.dispatchEvent(new view.MouseEvent("mouseenter", {bubbles:false}));
+        for (const [kind, entry] of [
+            ["submenu", {label:"Menu", submenu:"child"}],
+            ["back", {label:"Back", control:"back"}],
+            ["action", {label:"Act", action:{name:"WaitHere"}}],
+            ["intent", {label:"Signal", intent:"greet"}]
+        ]) {
+            arm("hover-" + kind, [entry, null]);
+            const core = region(0), outer = region(0, "nearby"), knot = outer.querySelector(".chevron-knot");
+            const idle = () => {
+                doc.getElementById("center").focus();
+                assert(brightness(core) === 1 && brightness(outer) === 1 && knotVisible(0), kind + " idle brightness/knot changed");
+                assert(Number(getComputedStyle(outline(0)).opacity) === (kind === "intent" ? 1 : 0), kind + " idle outline incorrect");
+            };
+            idle();
+            for (const mode of ["target", "nearby"]) for (const input of ["pointer", "focus"]) {
+                idle();
+                if (input === "pointer") hover(region(0, mode)); else region(0, mode).focus();
+                assert(brightness(core) > 1, kind + " " + mode + " " + input + " did not brighten core");
+                const outerHot = kind !== "intent" || mode === "nearby";
+                assert((brightness(outer) > 1) === outerHot && Number(getComputedStyle(outline(0)).opacity) === 1, kind + " " + mode + " " + input + " outer state incorrect");
+                assert(getComputedStyle(knot).display !== "none", kind + " hover hid knot");
+            }
+            idle();
+            hover(region(1)); hover(region(1, "nearby"));
+            assert(doc.activeElement === doc.getElementById("center") && getComputedStyle(doc.getElementById("slot-1")).opacity === "0.25" && getComputedStyle(doc.getElementById("slot-1-nearby-hit")).pointerEvents === "none", "Empty slot became active");
+        }
+        arm("tween", [{label:"Menu", submenu:"child"}]);
+        doc.getElementById("center").focus();
+        doc.documentElement.style.removeProperty("--ps-tween");
+        const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+        await nextFrame(); await nextFrame();
+        assert(getComputedStyle(region(0)).transitionDuration === (matchMedia("(prefers-reduced-motion: reduce)").matches ? "0s" : "0.16s"), "Tween duration/reduced motion incorrect");
+        if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            hover(region(0));
+            await new Promise(resolve => setTimeout(resolve, 60));
+            const fadingIn = Number(getComputedStyle(outline(0)).opacity);
+            assert(fadingIn > 0 && fadingIn < 1 && brightness(region(0)) > 1 && brightness(region(0)) < 1.3, "Hover did not ease brightness and outline in");
+            await new Promise(resolve => setTimeout(resolve, 180));
+            assert(Number(getComputedStyle(outline(0)).opacity) === 1 && brightness(region(0)) === 1.3, "Hover tween did not finish");
+            doc.getElementById("center").focus();
+            await new Promise(resolve => setTimeout(resolve, 60));
+            const fadingOut = Number(getComputedStyle(outline(0)).opacity);
+            assert(fadingOut > 0 && fadingOut < 1, "Outline did not fade out");
+            await new Promise(resolve => setTimeout(resolve, 180));
+            assert(Number(getComputedStyle(outline(0)).opacity) === 0 && brightness(region(0)) === 1, "Dim tween did not finish");
+        }
+        doc.documentElement.style.setProperty("--ps-tween", "0ms");
+        hover(region(0));
+        assert(getComputedStyle(region(0)).transitionDuration === "0s" && getComputedStyle(outline(0)).transitionDuration === "0s", "Tween off switch failed");
+        click(region(0));
+        assert(replies.pop() === "tween|0||navigate", "Input waited for tween completion");
         arm("submenu-shapes", Array.from({length:8}, (_, i) => ({label:"Menu " + i, submenu:"child"})));
         const fill = i => getComputedStyle(doc.getElementById(`slot-${i}-target-hit`)).fill;
         const idleTint = fill(1), selectedTint = fill(0);
@@ -158,7 +211,7 @@ frame.addEventListener("load", async () => {
         assert([...doc.querySelectorAll(".navigation-art")].every(art => getComputedStyle(art).display === "none"), "Cleared slots retained navigation artwork");
         assertKnots([null]);
         arm("submenu-before-bad", [{label:"Child",submenu:"child"}]);
-        assert(!knotVisible(0), "Submenu displayed ChevronKnot");
+        assert(knotVisible(0), "Submenu lost ChevronKnot");
         view.psWheelBegin("submenu-bad|[null]");
         assert(!visible() && [...doc.querySelectorAll(".navigation-art")].every(art => getComputedStyle(art).display === "none"), "Invalid payload retained an armed page or navigation artwork");
         arm("navigation-to-intent", [{label:"Child",submenu:"child"}]);
@@ -169,13 +222,12 @@ frame.addEventListener("load", async () => {
         arm("empty-after-navigation", [null]);
         assertKnots([null]);
         arm("root-calm-down", layout.wheels[layout.root]);
-        const calmDown = layout.wheels[layout.root][7];
-        assert(calmDown?.intent === "calm_down", "Root slot 7 is not Calm down");
-        assert(knotVisible(7), "Calm down gesture lost ChevronKnot");
+        const calmDownIndex = layout.wheels[layout.root].findIndex(slot => slot?.intent === "calm_down");
+        assert(calmDownIndex >= 0 && knotVisible(calmDownIndex), "Root Calm down gesture missing or lost ChevronKnot");
         for (const mode of ["target", "nearby"]) {
             const token = "root-calm-down-" + mode;
-            arm(token, layout.wheels[layout.root]); click(region(7, mode));
-            assert(replies.pop() === `${token}|7|calm_down|${mode}`, "Calm down root callback lost its intent or destination");
+            arm(token, layout.wheels[layout.root]); click(region(calmDownIndex, mode));
+            assert(replies.pop() === `${token}|${calmDownIndex}|calm_down|${mode}`, "Calm down root callback lost its intent or destination");
         }
         arm("root-calm-cancel", layout.wheels[layout.root]);
         for (let i = 0; i < 8; i++) assert(getComputedStyle(region(i, "nearby")).display !== "none", "Chevron disappeared");
@@ -202,7 +254,7 @@ frame.addEventListener("load", async () => {
         arm("target-key", sparse); key("Enter"); assert(replies.pop() === "target-key|1|greet|target", "Target keyboard selection lost mode");
         const navigation = [null, {label:"Open", submenu:"child"}];
         arm("navigate", navigation);
-        assert(getComputedStyle(region(1, "nearby")).display !== "none" && doc.querySelectorAll(".nearbyLabel")[1].style.display === "none" && !knotVisible(1), "Navigation chevron disappeared or gained a knot/ALL cue");
+        assert(getComputedStyle(region(1, "nearby")).display !== "none" && knotVisible(1), "Navigation outer hit area or knot disappeared");
         region(1, "nearby").dispatchEvent(new view.MouseEvent("mouseenter", {bubbles:false}));
         assert(region(1).classList.contains("hot") && region(1, "nearby").classList.contains("hot") && getComputedStyle(doc.getElementById("slot-1-target-hit")).fill === getComputedStyle(doc.getElementById("slot-1-nearby-hit")).fill && doc.getElementById("destination").textContent === "Navigation", "Navigation chevron did not share inner highlight/destination");
         key("Enter"); assert(replies.pop() === "navigate|1||navigate", "Navigation chevron keyboard selection acquired group mode");
@@ -210,7 +262,7 @@ frame.addEventListener("load", async () => {
         arm("action-hover", action);
         region(1).dispatchEvent(new view.MouseEvent("mouseenter", {bubbles:false}));
         assert(doc.activeElement === region(1) && doc.getElementById("destination").textContent.includes("Target NPC"), "Action hover did not focus target destination");
-        assert(doc.querySelectorAll(".actionLabel")[1].textContent === "ACTION" && getComputedStyle(region(1, "nearby")).display !== "none" && doc.querySelectorAll(".nearbyLabel")[1].style.display === "none", "Action chevron disappeared, gained ALL, or lacked ACTION badge");
+        assert(doc.querySelectorAll(".actionLabel")[1].textContent === "ACTION" && getComputedStyle(region(1, "nearby")).display !== "none" && !doc.querySelector(".nearbyLabel"), "Action chevron disappeared, gained ALL, or lacked ACTION badge");
         assert(knotVisible(1), "Action lost ChevronKnot");
         const actionPoint = rootPoint(Math.PI / 4, 980).matrixTransform(svg.getScreenCTM());
         assert(doc.elementFromPoint(actionPoint.x, actionPoint.y).closest(".region") === region(1), "Action target hit area no longer selects the target region");
@@ -241,7 +293,7 @@ frame.addEventListener("load", async () => {
             const token = k + "-" + name; arm(token, layout.wheels[name]); key(k);
             assert(replies.pop() === token + "|-1||cancel", k + " failed to cancel " + name);
         }
-        report.textContent = "PASS: authored submenu and Back artwork/rotation and pointer-safe hit testing; retunable idle tint distinct from selection; typed marker stripping; ChevronKnot visibility by entry kind and reset on repeated population; all eight chevrons visible including inert empty slots; coherent non-gesture inner/chevron highlight and destination; all shipped inner/chevron callbacks including root Calm down; gesture-only ALL/nearby, target-only actions and navigation-only controls including custom Close; pre-arm/stale/duplicate guards; Unicode labels; holes; keyboard destinations; center/Tab/Escape cancellation; native-mode disarm and reopening. Browser-only; no native Papyrus/game proof.";
+        report.textContent = "PASS: per-kind idle/core/outer pointer and keyboard brightness, outline opacity and visible knots; inert faded empty slots; eased brighten/dim and outline fade, tween off switch and reduced-motion duration; no ALL label; authored navigation art/rotation and hit testing; retunable submenu tint and gold selection; marker stripping; shipped callbacks including Calm down; target-only actions and navigation; pre-arm/stale/duplicate guards; Unicode labels; keyboard destinations; cancellation; native-mode disarm/reopening. Browser-only; no native Papyrus/game proof.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; throw error; }
 });
 // Model only the host boundary installed before page script execution; render the actual generated page unchanged otherwise.

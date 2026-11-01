@@ -136,6 +136,67 @@ function Local-Point($radius, $degrees) {
 function Svg-Point($point) {
     [string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0:0.###},{1:0.###}', (1800 + $point[0]), (1800 + $point[1]))
 }
+function Compose-Matrix($a, $b) {
+    ,@(
+        ($a[0] * $b[0] + $a[2] * $b[1]), ($a[1] * $b[0] + $a[3] * $b[1]),
+        ($a[0] * $b[2] + $a[2] * $b[3]), ($a[1] * $b[2] + $a[3] * $b[3]),
+        ($a[0] * $b[4] + $a[2] * $b[5] + $a[4]), ($a[1] * $b[4] + $a[3] * $b[5] + $a[5])
+    )
+}
+function Transform-PathData($path, $matrix) {
+    $tokens = @([regex]::Matches($path.GetAttribute('d'), '[A-Za-z]|[-+]?(?:\d*\.)?\d+(?:[eE][-+]?\d+)?') | ForEach-Object Value)
+    $out = [Text.StringBuilder]::new(); $command = ''; $x = 0.0; $y = 0.0; $startX = 0.0; $startY = 0.0
+    $i = 0
+    while ($i -lt $tokens.Count) {
+        if ($tokens[$i] -match '^[A-Za-z]$') {
+            $command = $tokens[$i++]
+            if ($command -match '^[Zz]$') { [void]$out.Append('Z'); $x = $startX; $y = $startY; continue }
+        }
+        $upper = $command.ToUpperInvariant(); $relative = $command -cmatch '^[a-z]$'
+        $count = if ($upper -eq 'C') { 6 } elseif ($upper -eq 'M' -or $upper -eq 'L') { 2 } else { throw "Unsupported ChevronKnot path command: $command" }
+        $values = for ($j = 0; $j -lt $count; $j++) {
+            [double]::Parse($tokens[$i++], [Globalization.CultureInfo]::InvariantCulture)
+        }
+        if ($upper -eq 'C') {
+            for ($j = 0; $j -lt 6; $j += 2) { if ($relative) { $values[$j] += $x; $values[$j + 1] += $y } }
+            $pairs = @(0, 2, 4)
+            $x = $values[4]; $y = $values[5]
+        } else {
+            if ($relative) { $values[0] += $x; $values[1] += $y }
+            $pairs = @(0); $x = $values[0]; $y = $values[1]
+            if ($upper -eq 'M') { $startX = $x; $startY = $y }
+            if ($upper -eq 'M') { $command = if ($relative) { 'l' } else { 'L' } }
+        }
+        [void]$out.Append($upper)
+        foreach ($j in $pairs) {
+            $tx = $matrix[0] * $values[$j] + $matrix[2] * $values[$j + 1] + $matrix[4]
+            $ty = $matrix[1] * $values[$j] + $matrix[3] * $values[$j + 1] + $matrix[5]
+            [void]$out.Append(([string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0:0.######},{1:0.######}', $tx, $ty)))
+            if ($j -ne $pairs[-1]) { [void]$out.Append(' ') }
+        }
+    }
+    $path.SetAttribute('d', $out.ToString())
+}
+function Bake-Knot($group, $scale, $targetX, $targetY, $pointX, $pointY) {
+    $destination = @(($scale), 0, 0, ($scale), ($targetX - $scale * $pointX), ($targetY - $scale * $pointY))
+    foreach ($path in $group.SelectNodes(".//*[local-name()='path']")) {
+        $chain = [Collections.Generic.List[Xml.XmlElement]]::new()
+        for ($node = $path; $node -and $node -ne $group.ParentNode; $node = $node.ParentNode) {
+            if ($node -is [Xml.XmlElement]) { $chain.Add($node) }
+            if ($node -eq $group) { break }
+        }
+        $matrix = @(1, 0, 0, 1, 0, 0)
+        for ($n = $chain.Count - 1; $n -ge 0; $n--) {
+            $transform = $chain[$n].GetAttribute('transform')
+            if ($transform -match '^matrix\(([^)]+)\)$') {
+                $part = @($Matches[1].Trim() -split '[,\s]+' | ForEach-Object { [double]::Parse($_, [Globalization.CultureInfo]::InvariantCulture) })
+                $matrix = Compose-Matrix $matrix $part
+            } elseif ($transform) { throw "Unsupported ChevronKnot transform: $transform" }
+        }
+        Transform-PathData $path (Compose-Matrix $destination $matrix)
+    }
+    foreach ($node in $group.SelectNodes('descendant-or-self::*[@transform]')) { $node.RemoveAttribute('transform') }
+}
 function Side-Line($a, $b, $inset) {
     $dx = $b[0] - $a[0]; $dy = $b[1] - $a[1]
     $length = [Math]::Sqrt($dx * $dx + $dy * $dy)
@@ -163,6 +224,15 @@ $capRadius = [Math]::Sqrt(($outerRight[0] - $outerLeft[0]) * ($outerRight[0] - $
 $capRadiusText = $capRadius.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
 $tipD = 'M{0}A{1},{1} 0 0 1 {2}Z' -f `
     (Svg-Point $outerLeft), $capRadiusText, (Svg-Point $outerRight)
+$hotkeyPieD = 'M{0}L{1}L{2}Z' -f (Svg-Point $apex), (Svg-Point $outerLeft), (Svg-Point $outerRight)
+$capHalfTop = 0.4 * $capRadius
+$capTopY = $outerLeft[1] + (($outerLeft[0] + $capHalfTop) / $outerLeft[0]) * ((Local-Point $tipOuter 0)[1] - $outerLeft[1])
+$hotkeyCapD = 'M{0}L{1}L{2}L{3}Z' -f `
+    (Svg-Point $outerLeft), (Svg-Point @(-$capHalfTop, $capTopY)),
+    (Svg-Point @($capHalfTop, $capTopY)), (Svg-Point $outerRight)
+$hotkeyUnionD = 'M{0}L{1}L{2}L{3}L{4}Z' -f `
+    (Svg-Point $apex), (Svg-Point $outerLeft), (Svg-Point @(-$capHalfTop, $capTopY)),
+    (Svg-Point @($capHalfTop, $capTopY)), (Svg-Point $outerRight)
 $unionD = 'M{0}L{1}L{2}L{3}Z' -f `
     (Svg-Point $apex), (Svg-Point $outerLeft), (Point $tipOuter 0), (Svg-Point $outerRight)
 $sidePoints = @($innerLeft, $outerLeft, (Local-Point $tipOuter 0), $outerRight, $innerRight)
@@ -176,6 +246,21 @@ for ($i = 1; $i -lt 4; $i++) {
     $unionEdge.Add(('L' + (Svg-Point @(($corner[0] + $edgeChamfer * $b[2]), ($corner[1] + $edgeChamfer * $b[3])))))
 }
 $unionEdgeD = ($unionEdge -join '') + 'Z'
+$hotkeyPieChord = Side-Line $outerLeft $outerRight $edgeInset
+$hotkeyCapChord = Side-Line $outerLeft $outerRight (-$edgeInset)
+$hotkeyPieLeft = Line-Crossing $lines[0] $hotkeyPieChord
+$hotkeyPieRight = Line-Crossing $hotkeyPieChord $lines[3]
+$hotkeyCapLeft = Line-Crossing $lines[1] $hotkeyCapChord
+$hotkeyCapRight = Line-Crossing $hotkeyCapChord $lines[2]
+$hotkeyPieEdgeD = 'M{0}L{1}L{2}Z' -f `
+    (Svg-Point $insetApex), (Svg-Point $hotkeyPieLeft), (Svg-Point $hotkeyPieRight)
+$hotkeyTopLine = @(-1, ($capTopY + $edgeInset), 1, 0)
+$hotkeyCapTopLeft = Line-Crossing $lines[1] $hotkeyTopLine
+$hotkeyCapTopRight = Line-Crossing $hotkeyTopLine $lines[2]
+$hotkeyCapEdgeD = 'M{0}L{1}L{2}L{3}Z' -f `
+    (Svg-Point $hotkeyCapLeft), (Svg-Point $hotkeyCapTopLeft),
+    (Svg-Point $hotkeyCapTopRight), (Svg-Point $hotkeyCapRight)
+$hotkeyInnerD = $hotkeyPieEdgeD + $hotkeyCapEdgeD
 function Core-EdgePath {
     $outer = $coreOuter - $edgeInset; $line = $lines[0]
     $dot = $line[0] * $line[2] + $line[1] * $line[3]
@@ -292,7 +377,12 @@ $defs = $svg.SelectSingleNode("./*[local-name()='defs']")
 if (-not $defs) { $defs = $art.CreateElement('defs', $svg.NamespaceURI); [void]$svg.PrependChild($defs) }
 foreach ($region in $regions) {
     $piece = $region.Piece; $slot = $region.Slot; $parts = $region.Parts
-    $piece.SetAttribute('id', "slot-$slot"); $piece.SetAttribute('class', 'sector'); $piece.SetAttribute('data-index', [string]$slot)
+    $piece.SetAttribute('id', "slot-$slot")
+    $piece.SetAttribute('class', 'sector')
+    $piece.SetAttribute('data-index', [string]$slot)
+    $piece.SetAttribute('data-core-radius', $coreOuter.ToString([Globalization.CultureInfo]::InvariantCulture))
+    $piece.SetAttribute('data-hotkey-union-d', $hotkeyUnionD)
+    $piece.SetAttribute('data-hotkey-inner-d', $hotkeyInnerD)
     $piece.SetAttribute('data-label-radius', $labelRadius.ToString('0.######', [Globalization.CultureInfo]::InvariantCulture))
     $piece.SetAttribute('data-bulb-x', (1800 + $capCenter[0]).ToString('0.###', [Globalization.CultureInfo]::InvariantCulture))
     $piece.SetAttribute('data-bulb-y', (1800 + $capCenter[1]).ToString('0.###', [Globalization.CultureInfo]::InvariantCulture))
@@ -303,13 +393,13 @@ foreach ($region in $regions) {
         $wrapper = $art.CreateElement('g', $svg.NamespaceURI)
         $wrapper.SetAttribute('id', "slot-$slot-$mode"); $wrapper.SetAttribute('class', "region $mode-region")
         [void]$pop.AppendChild($wrapper)
-        $names = if ($mode -eq 'target') { @() } else { @('ChevronKnot') }
-        foreach ($name in $names) { [void]$wrapper.AppendChild($parts[$name]) }
         $hit = $art.CreateElement('path', $svg.NamespaceURI)
         $hit.SetAttribute('id', "slot-$slot-$mode-hit")
         $hit.SetAttribute('class', 'hit-area')
         $hit.SetAttribute('d', $(if ($mode -eq 'target') { $coreD } else { $tipD }))
-        if ($mode -eq 'target') {
+        $hit.SetAttribute('data-hotkey-d', $(if ($mode -eq 'target') { $hotkeyPieD } else { $hotkeyCapD }))
+        if ($mode -eq 'nearby') { $hit.SetAttribute('data-core-d', $tipD) }
+        else {
             $hit.SetAttribute('data-core-d', $coreD)
             $hit.SetAttribute('data-nav-d', $unionD)
         }
@@ -318,10 +408,41 @@ foreach ($region in $regions) {
         $edge.SetAttribute('class', 'edge-line')
         $edge.SetAttribute('style', 'pointer-events:none;')
         $edge.SetAttribute('d', $(if ($mode -eq 'target') { $coreEdgeD } else { $tipEdgeD }))
-        if ($mode -eq 'target') {
+        $edge.SetAttribute('data-hotkey-d', $(if ($mode -eq 'target') { $hotkeyPieEdgeD } else { $hotkeyCapEdgeD }))
+        if ($mode -eq 'nearby') { $edge.SetAttribute('data-core-d', $tipEdgeD) }
+        else {
             $edge.SetAttribute('data-core-d', $coreEdgeD)
             $edge.SetAttribute('data-nav-d', $unionEdgeD)
         }
+        $clip = $art.CreateElement('clipPath', $svg.NamespaceURI)
+        $clip.SetAttribute('id', "slot-$slot-$mode-selected-band-clip")
+        $clip.SetAttribute('clipPathUnits', 'userSpaceOnUse')
+        $clipShape = $art.CreateElement('path', $svg.NamespaceURI)
+        $clipShape.SetAttribute('class', 'selected-band-clip')
+        $clipShape.SetAttribute('d', $(if ($mode -eq 'target') { $coreEdgeD } else { $tipEdgeD }))
+        $clipShape.SetAttribute('data-hotkey-d', $(if ($mode -eq 'target') { $hotkeyPieEdgeD } else { $hotkeyCapEdgeD }))
+        if ($mode -eq 'nearby') {
+            $clipShape.SetAttribute('data-core-d', $tipEdgeD)
+            $clipShape.SetAttribute('data-nav-d', $tipEdgeD)
+        } else {
+            $clipShape.SetAttribute('data-core-d', $coreEdgeD)
+            $clipShape.SetAttribute('data-nav-d', $unionEdgeD)
+        }
+        [void]$clip.AppendChild($clipShape)
+        [void]$wrapper.AppendChild($clip)
+        $band = $art.CreateElement('path', $svg.NamespaceURI)
+        $band.SetAttribute('class', 'selected-band')
+        $band.SetAttribute('d', $(if ($mode -eq 'target') { $coreEdgeD } else { $tipEdgeD }))
+        $band.SetAttribute('stroke-width', '90')
+        $band.SetAttribute('clip-path', "url(#slot-$slot-$mode-selected-band-clip)")
+        $band.SetAttribute('style', 'pointer-events:none;')
+        $band.SetAttribute('data-hotkey-d', $(if ($mode -eq 'target') { $hotkeyPieEdgeD } else { $hotkeyCapEdgeD }))
+        if ($mode -eq 'nearby') { $band.SetAttribute('data-core-d', $tipEdgeD) }
+        else {
+            $band.SetAttribute('data-core-d', $coreEdgeD)
+            $band.SetAttribute('data-nav-d', $unionEdgeD)
+        }
+        [void]$wrapper.AppendChild($band)
         [void]$wrapper.AppendChild($edge)
     }
     $clip = $art.CreateElement('clipPath', $svg.NamespaceURI)
@@ -329,16 +450,24 @@ foreach ($region in $regions) {
     $clip.SetAttribute('clipPathUnits', 'userSpaceOnUse')
     $clipShape = $art.CreateElement('path', $svg.NamespaceURI); $clipShape.SetAttribute('d', $unionD)
     [void]$clip.AppendChild($clipShape); [void]$defs.AppendChild($clip)
-    $utilityArc = $art.CreateElement('path', $svg.NamespaceURI)
-    $utilityArc.SetAttribute('class', 'edge-line utility-arc')
-    $utilityArc.SetAttribute('d', ('M{0}A883,883 0 0 1 {1}' -f (Point 883 (-$half)), (Point 883 $half)))
-    $utilityArc.SetAttribute('clip-path', "url(#slot-$slot-utility-clip)")
-    $utilityArc.SetAttribute('aria-hidden', 'true')
-    $utilityArc.SetAttribute('style', 'pointer-events:none;')
-    [void]$pop.AppendChild($utilityArc)
+    foreach ($radius in @(560, 610)) {
+        $utilityArc = $art.CreateElement('path', $svg.NamespaceURI)
+        $utilityArc.SetAttribute('class', 'edge-line utility-arc')
+        $utilityArc.SetAttribute('d', ('M{0}A{1},{1} 0 0 1 {2}' -f (Point $radius (-$half)), $radius, (Point $radius $half)))
+        $utilityArc.SetAttribute('clip-path', "url(#slot-$slot-utility-clip)")
+        $utilityArc.SetAttribute('aria-hidden', 'true')
+        $utilityArc.SetAttribute('style', 'pointer-events:none;')
+        [void]$pop.AppendChild($utilityArc)
+    }
     [void]$pop.AppendChild($parts.Submenu)
     [void]$pop.AppendChild($parts.Upmenu)
     $parts.ChevronKnot.SetAttribute('class', 'chevron-knot')
+    $knotWidth = (2116.04 - (3466.14 - 2116.04)) * 1.09023
+    $knotScale = 1.2 * (2 * $capRadius) / $knotWidth
+    $knotCenterX = (3466.14 / 2) * 1.09023 - 91.5177
+    $knotAnchorY = 960 * 1.05313 - 636.273
+    Bake-Knot $parts.ChevronKnot $knotScale 1800 (1800 - $tipOuter) $knotCenterX $knotAnchorY
+    [void]$pop.AppendChild($parts.ChevronKnot)
     $parts.Submenu.SetAttribute('class', 'navigation-art submenu-art')
     $parts.Upmenu.SetAttribute('class', 'navigation-art back-art')
     $parts.Submenu.SetAttribute('aria-hidden', 'true'); $parts.Upmenu.SetAttribute('aria-hidden', 'true')

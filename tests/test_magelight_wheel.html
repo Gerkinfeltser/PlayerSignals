@@ -394,11 +394,22 @@ frame.addEventListener("load", async () => {
             doc.getElementById("center").focus();
             const actualKinds = [0,1,2,3].map(index => view.getComputedStyle(region(index).querySelector(".hit-area")).fill);
             assert(actualKinds.every((fill,index) => fill === [fills[theme][1],fills[theme][2],fills[theme][0],fills[theme][0]][index]), `Idle gesture/action/navigation fills mismatch in ${theme}: ${actualKinds}`);
+            const brightness = color => {
+                const rgb=color.match(/[\d.]+/g).map(Number);
+                return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];
+            };
             const checkLit = (index, mode="target") => {
                 const r=region(index,mode), hit=r.querySelector(".hit-area"), edge=r.querySelector(".edge-line"), band=r.querySelector(".selected-band");
-                assert(view.getComputedStyle(hit).fill==="rgb(255, 220, 140)", `${theme} ${index}/${mode} selected fill is not selection-outline yellow`);
+                const fill=view.getComputedStyle(hit).fill,cap=mode==="nearby";
+                if(cap) {
+                    const pieFill=view.getComputedStyle(region(index).querySelector(".hit-area")).fill;
+                    assert(brightness(fill)>brightness(pieFill)+10,`${theme} ${index} lit cap is not visibly brighter than its lit pie`);
+                } else assert(fill==="rgb(255, 220, 140)", `${theme} ${index}/${mode} selected pie fill changed`);
                 assert(view.getComputedStyle(edge).stroke==="rgb(255, 220, 140)", `${theme} ${index}/${mode} selected edge is not bright yellow`);
-                assert(band && view.getComputedStyle(band).display!=="none" && view.getComputedStyle(band).stroke==="rgb(168, 135, 63)", `${theme} ${index}/${mode} selected dark band missing`);
+                assert(band && view.getComputedStyle(band).display!=="none", `${theme} ${index}/${mode} selected band missing`);
+                const bandFill=view.getComputedStyle(band).stroke;
+                if(cap) assert(brightness(bandFill)<brightness(fill)&&brightness(bandFill)>brightness(view.getComputedStyle(region(index).querySelector(".selected-band")).stroke),`${theme} ${index} cap band is not darker than its fill and lighter than the pie band`);
+                else assert(bandFill==="rgb(168, 135, 63)",`${theme} ${index} selected pie band changed`);
                 const label=doc.querySelector(`.sectorLabel[data-index="${index}"]`);
                 const kindVar=index===0?"--gesture-fill":index===1?"--action-fill":"--nav-fill",raw=view.getComputedStyle(doc.documentElement).getPropertyValue(kindVar).trim(),hex=raw.match(/^#([0-9a-f]{6})$/i);
                 const idle=hex?`rgb(${parseInt(hex[1].slice(0,2),16)}, ${parseInt(hex[1].slice(2,4),16)}, ${parseInt(hex[1].slice(4,6),16)})`:raw;
@@ -411,6 +422,7 @@ frame.addEventListener("load", async () => {
                 if(i===0) assert(!region(i,"nearby").classList.contains("hot") && view.getComputedStyle(region(i,"nearby").querySelector(".hit-area")).fill!=="rgb(255, 220, 140)", "Core-only gesture incorrectly lit bulb");
                 doc.getElementById("center").focus();
             }
+            region(0,"nearby").focus(); checkLit(0,"nearby"); checkLit(0);
             region(4,"nearby").focus(); checkLit(4,"nearby"); checkLit(4);
             key("Escape"); assert(replies.pop() === `kind-fills-${theme}|-1||cancel`, "Kind-fill setup failed to cancel");
         }

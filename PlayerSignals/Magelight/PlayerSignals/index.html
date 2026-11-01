@@ -4,7 +4,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PlayerSignals</title>
 <style>
-    :root { --ps-tween: 160ms; color-scheme: dark; font: 18px Georgia, serif; color: #fff3d9; --selection-band: #a8873f; --flow-opacity: .12; --flow-lit-opacity: .35; --flow-lit-signal-opacity: .12; --flow-signal-tint: #7fe6d4; --flow-lit-signal-tint: #fff1b8; --flow-lit-tint: #fff6e0; }
+    :root { --ps-tween: 160ms; color-scheme: dark; font: 18px Georgia, serif; color: #fff3d9; --selection-band: #a8873f; --cap-lit-fill: #fff4d0; --cap-lit-band: #d9bd79; --flow-opacity: .12; --flow-lit-opacity: .35; --flow-lit-signal-opacity: .12; --flow-signal-tint: #7fe6d4; --flow-lit-signal-tint: #fff1b8; --flow-lit-tint: #fff6e0; }
     :root, :root.slate { --nav-fill: #464740; --gesture-fill: #455766; --action-fill: #5e3d38; --selection-fill: var(--selection-outline); --selection-outline: #ffdc8c; --hover-fill: #e9bd6c; }
     :root.moss { --nav-fill: #38483b; --gesture-fill: #43594a; --action-fill: #5a4436; --selection-fill: var(--selection-outline); --selection-outline: #ffdc8c; --hover-fill: #b8c58a; }
     :root.ember { --nav-fill: #503a35; --gesture-fill: #64473d; --action-fill: #6e3a33; --selection-fill: var(--selection-outline); --selection-outline: #ffdc8c; --hover-fill: #dca27d; }
@@ -42,8 +42,10 @@
     #wheelSvg.utility-art-off .navigation-art { display: none !important; }
     @media (prefers-reduced-motion: reduce) { :root { --ps-tween: 0ms; } }
     #wheelSvg .region.hot .hit-area { fill: var(--selection-outline) !important; fill-opacity: 1 !important; }
+    #wheelSvg .nearby-region.hot .hit-area { fill: var(--cap-lit-fill) !important; }
     .selected-band { display: none; fill: none; stroke: var(--selection-band); stroke-width: 90; pointer-events: none; }
     .region.hot .selected-band { display: initial; }
+    .nearby-region.hot .selected-band { stroke: var(--cap-lit-band); }
     .sector { --lit-kind-fill: var(--nav-fill); }
     .sector[data-kind="intent"] { --lit-kind-fill: var(--gesture-fill); }
     .sector[data-kind="action"] { --lit-kind-fill: var(--action-fill); }
@@ -352,7 +354,7 @@
         flow.style.mixBlendMode = flowAdditive ? "plus-lighter" : "normal";
         if (!flowAdditive) {
             // Resolve terminal palette colors, never an intermediate hover-tween fill.
-            flow.style.color = flowLit ? "var(--selection-outline)" : "var(--gesture-fill)";
+            flow.style.color = flowLit ? flowBulb ? "var(--cap-lit-fill)" : "var(--selection-outline)" : "var(--gesture-fill)";
             const fill = getComputedStyle(flow).color.match(/[\d.]+/g).map(Number);
             flow.style.color = color;
             const tint = getComputedStyle(flow).color.match(/[\d.]+/g).map(Number);

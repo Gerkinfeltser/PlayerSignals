@@ -39,6 +39,7 @@ frame.addEventListener("load", async () => {
         assert(!doc.querySelector("image"), "Wheel retains raster images");
         const vignette = doc.getElementById("vignette"), topVignette = doc.getElementById("vignette-top"), raf = view.qaRAF;
         assert(vignette && topVignette && view.getComputedStyle(vignette).visibility === "hidden" && view.getComputedStyle(topVignette).visibility === "hidden", "A vignette is visible while disarmed");
+        const knotContainmentChecked = new WeakSet();
         const checkKnot=(art,i,kind)=>{
             assert(art&&art.parentElement===doc.getElementById(`slot-${i}`).querySelector(".pop")&&view.getComputedStyle(art).display!=="none",`Slot ${i} ${kind} knot is not visible in its lifted slice`);
             const matrix=svg.getCTM().inverse().multiply(art.getCTM()),xScale=Math.hypot(matrix.a,matrix.b),yScale=Math.hypot(matrix.c,matrix.d);
@@ -50,16 +51,36 @@ frame.addEventListener("load", async () => {
             const black=paths.find(path=>view.getComputedStyle(path).stroke==="rgb(0, 0, 0)"),white=paths.find(path=>view.getComputedStyle(path).stroke==="rgb(255, 255, 255)");
             const blackWidth=black&&strokeWidth(black),whiteWidth=white&&strokeWidth(white),ratio=blackWidth/31.1;
             assert(black&&white&&Math.abs(ratio-1)<.01&&Math.abs(whiteWidth/11.66-ratio)<.01,`Slot ${i} knot lost the original stroke widths/ratio retained after the true-size trial`);
-            const angle=i*Math.PI/6,radial=[Math.sin(angle),-Math.cos(angle)],tangent=[Math.cos(angle),Math.sin(angle)],project=node=>{
-                const points=[];
-                for(const path of node.querySelectorAll("path")){
+            const angle=i*Math.PI/6,radial=[Math.sin(angle),-Math.cos(angle)],tangent=[Math.cos(angle),Math.sin(angle)],sample=node=>{
+                const points=[],paths=node.tagName.toLowerCase()==="path"?[node]:[...node.querySelectorAll("path")];
+                for(const path of paths){
                     const length=path.getTotalLength(),m=svg.getCTM().inverse().multiply(path.getCTM());
-                    for(let n=0;n<=128;n++)points.push(path.getPointAtLength(length*n/128).matrixTransform(m));
+                    for(let n=0;n<=256;n++){
+                        const p=path.getPointAtLength(length*n/256).matrixTransform(m);
+                        points.push({x:1800+(p.x-1800)/xScale,y:1800+(p.y-1800)/xScale});
+                    }
                 }
-                return points.map(p=>({r:((p.x-1800)*radial[0]+(p.y-1800)*radial[1])/xScale,t:((p.x-1800)*tangent[0]+(p.y-1800)*tangent[1])/xScale}));
+                return points.map(p=>({x:p.x,y:p.y,r:(p.x-1800)*radial[0]+(p.y-1800)*radial[1],t:(p.x-1800)*tangent[0]+(p.y-1800)*tangent[1]}));
             };
-            const knot=project(art),width=Math.max(...knot.map(p=>p.t))-Math.min(...knot.map(p=>p.t)),chord=2*Number(doc.getElementById(`slot-${i}`).dataset.bulbRadius);
-            assert(width/chord>=1.15&&width/chord<=1.25&&Math.min(...knot.map(p=>Math.hypot(p.r-1692,p.t)))<blackWidth/2&&Math.min(...knot.map(p=>p.r))<1692&&Math.max(...knot.map(p=>p.r))>1692,`Slot ${i} ${kind} knot is not 1.5x natural size centered on and pointing out from the tip`);
+            const hit=region(i).querySelector(".hit-area"),hitMatrix=hit.getCTM().inverse().multiply(svg.getCTM()),polygon=[...hit.getAttribute("d").matchAll(/[ML]\s*(-?[\d.]+),(-?[\d.]+)/g)].map(([,x,y])=>new view.DOMPoint(Number(x),Number(y)).matrixTransform(svg.getCTM().inverse().multiply(hit.getCTM()))).map(p=>({x:1800+(p.x-1800)/xScale,y:1800+(p.y-1800)/xScale,r:(p.x-1800)*radial[0]+(p.y-1800)*radial[1],t:(p.x-1800)*tangent[0]+(p.y-1800)*tangent[1]})),tip=polygon.reduce((a,p)=>p.r>a.r?p:a),vPaths=paths.filter(path=>/^M[-\d.,]+L[-\d.,]+L[-\d.,]+$/.test(path.getAttribute("d")));
+            assert(polygon.length===4&&vPaths.length>0,`Slot ${i} ${kind} lacks its four-corner hit outline or authored V`);
+            const vertices=vPaths.flatMap(path=>[...path.getAttribute("d").matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map(([,x,y])=>new view.DOMPoint(Number(x),Number(y)).matrixTransform(svg.getCTM().inverse().multiply(path.getCTM())))).map(p=>({x:1800+(p.x-1800)/xScale,y:1800+(p.y-1800)/xScale,r:(p.x-1800)*radial[0]+(p.y-1800)*radial[1],t:(p.x-1800)*tangent[0]+(p.y-1800)*tangent[1]})),apex=vertices.reduce((a,p)=>p.r>a.r?p:a);
+            assert(Math.hypot(apex.x-tip.x,apex.y-tip.y)<=4,`Slot ${i} ${kind} knot apex misses its actual hit-outline tip by more than 4 units`);
+            if (!knotContainmentChecked.has(art)) {
+                for(const p of sample(art)){
+                    const local=new view.DOMPoint(1800+(p.x-1800)*xScale,1800+(p.y-1800)*xScale).matrixTransform(hitMatrix),clearance=Math.min(...polygon.map((a,n)=>{
+                        const b=polygon[(n+1)%polygon.length],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy)));
+                        return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);
+                    }));
+                    assert(hit.isPointInFill(local)||clearance<=3,`Slot ${i} ${kind} knot leaves the actual hit outline`);
+                }
+                knotContainmentChecked.add(art);
+            }
+            for(const side of [-1,1]){
+                const arm=vertices.filter(p=>p!==apex&&p.t*side>0).reduce((a,p)=>Math.hypot(p.x-apex.x,p.y-apex.y)>Math.hypot(a.x-apex.x,a.y-apex.y)?p:a),edge=polygon.filter(p=>p!==tip&&p.t*side>0).reduce((a,p)=>Math.hypot(p.x-tip.x,p.y-tip.y)<Math.hypot(a.x-tip.x,a.y-tip.y)?p:a);
+                const armAngle=Math.atan2(arm.y-apex.y,arm.x-apex.x),edgeAngle=Math.atan2(edge.y-tip.y,edge.x-tip.x),delta=Math.abs(Math.atan2(Math.sin(armAngle-edgeAngle),Math.cos(armAngle-edgeAngle)));
+                assert(delta<=3*Math.PI/180,`Slot ${i} ${kind} ${side<0?"left":"right"} arm differs from its adjacent measured tip edge by more than 3 degrees`);
+            }
         };
         arm("geometry", Array.from({length:12}, (_, i) => ({label:"Slot " + i, intent:"greet"})));
         doc.getElementById("center").focus();
@@ -946,7 +967,7 @@ frame.addEventListener("load", async () => {
         arm("interrupted", [{label:"Signal",intent:"greet"}]);
         await nextFrame(); view.hostMode("0");
         assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
-        report.textContent = "PASS: 12-slot choices; split gesture bulbs/core and hotkey cap/pie with unified selection and dispatch; yellow selected fill/band and kind-fill labels/badges; submenu/back knots only, uniform 1.5x natural size centered on the outer tip, original stroke widths retained; null slots and no-target actions share the pointed disabled outline; vignettes, Shift preview, palettes, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
+        report.textContent = "PASS: 12-slot choices; split gesture bulbs/core and hotkey cap/pie with unified selection and dispatch; yellow selected fill/band and kind-fill labels/badges; submenu/back knots only, apex aligned to the measured outline tip, arms aligned to measured outline edges, original stroke widths retained; null slots and no-target actions share the pointed disabled outline; vignettes, Shift preview, palettes, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
         report.textContent += " Hotkeys: no target required, F6 hub and KEY badge, Up/Down stays on one slice, either hit region dispatches the typed hotkey, malformed/conflicting payloads fail closed. Utility arcs remain slice-owned, clipped and noninteractive at radii 560/610; hub motion, boundary routing, reduced-motion/0ms behavior and open-key help remain covered.";
         report.textContent += " Flow: geometry-scaled signal/trail/padding; lit non-bulb chevrons use additive warm-white #fff6e0 at peak 0.35 (clamped-addition normal fallback); bulb ripples stay plus-lighter at 0.12 (warm yellow when lit, mint when unlit); HOLD/power-fade profile, exclusions, one shared rAF, 2400ms travel and reduced-motion/0ms behavior.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }

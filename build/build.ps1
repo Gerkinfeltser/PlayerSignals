@@ -177,8 +177,7 @@ function Transform-PathData($path, $matrix) {
     }
     $path.SetAttribute('d', $out.ToString())
 }
-function Bake-Knot($group, $scale, $targetX, $targetY, $pointX, $pointY) {
-    $destination = @(($scale), 0, 0, ($scale), ($targetX - $scale * $pointX), ($targetY - $scale * $pointY))
+function Bake-Knot($group, $fit) {
     foreach ($path in $group.SelectNodes(".//*[local-name()='path']")) {
         $chain = [Collections.Generic.List[Xml.XmlElement]]::new()
         for ($node = $path; $node -and $node -ne $group.ParentNode; $node = $node.ParentNode) {
@@ -193,7 +192,7 @@ function Bake-Knot($group, $scale, $targetX, $targetY, $pointX, $pointY) {
                 $matrix = Compose-Matrix $matrix $part
             } elseif ($transform) { throw "Unsupported ChevronKnot transform: $transform" }
         }
-        Transform-PathData $path (Compose-Matrix $destination $matrix)
+        Transform-PathData $path (Compose-Matrix $fit $matrix)
     }
     foreach ($node in $group.SelectNodes('descendant-or-self::*[@transform]')) { $node.RemoveAttribute('transform') }
 }
@@ -462,11 +461,43 @@ foreach ($region in $regions) {
     [void]$pop.AppendChild($parts.Submenu)
     [void]$pop.AppendChild($parts.Upmenu)
     $parts.ChevronKnot.SetAttribute('class', 'chevron-knot')
-    $knotWidth = (2116.04 - (3466.14 - 2116.04)) * 1.09023
-    $knotScale = 1.2 * (2 * $capRadius) / $knotWidth
-    $knotCenterX = (3466.14 / 2) * 1.09023 - 91.5177
-    $knotAnchorY = 960 * 1.05313 - 636.273
-    Bake-Knot $parts.ChevronKnot $knotScale 1800 (1800 - $tipOuter) $knotCenterX $knotAnchorY
+    # Affinely fit the authored V to the live hit-area tip and adjacent edge vertices.
+    $knotSourceApex = @((1738.95 * 1.09023 - 91.5177), (815.264 * 1.05313 - 636.273))
+    $knotSourceRight = @((1960.12 * 1.09023 - 91.5177), (1046.35 * 1.05313 - 636.273))
+    $knotSourceLeft = @((1507.65 * 1.09023 - 91.5177), (1046.56 * 1.05313 - 636.273))
+    $knotTargetApex = @(1800, (1800 - $tipOuter))
+    $knotTargetRight = @((1800 + $outerRight[0]), (1800 + $outerRight[1]))
+    $knotTargetLeft = @((1800 + $outerLeft[0]), (1800 + $outerLeft[1]))
+    $knotEdgeInset = 31.1 / 2
+    $knotRightDx = $knotTargetRight[0] - $knotTargetApex[0]
+    $knotRightDy = $knotTargetRight[1] - $knotTargetApex[1]
+    $knotRightLength = [Math]::Sqrt($knotRightDx * $knotRightDx + $knotRightDy * $knotRightDy)
+    $knotLeftDx = $knotTargetLeft[0] - $knotTargetApex[0]
+    $knotLeftDy = $knotTargetLeft[1] - $knotTargetApex[1]
+    $knotLeftLength = [Math]::Sqrt($knotLeftDx * $knotLeftDx + $knotLeftDy * $knotLeftDy)
+    $knotTargetRight[0] -= $knotEdgeInset * $knotRightDy / $knotRightLength
+    $knotTargetRight[1] += $knotEdgeInset * $knotRightDx / $knotRightLength
+    $knotTargetLeft[0] += $knotEdgeInset * $knotLeftDy / $knotLeftLength
+    $knotTargetLeft[1] -= $knotEdgeInset * $knotLeftDx / $knotLeftLength
+    $knotDet = ($knotSourceRight[0] - $knotSourceApex[0]) * ($knotSourceLeft[1] - $knotSourceApex[1]) -
+        ($knotSourceLeft[0] - $knotSourceApex[0]) * ($knotSourceRight[1] - $knotSourceApex[1])
+    $knotA = (($knotTargetRight[0] - $knotTargetApex[0]) * ($knotSourceLeft[1] - $knotSourceApex[1]) -
+        ($knotTargetLeft[0] - $knotTargetApex[0]) * ($knotSourceRight[1] - $knotSourceApex[1])) / $knotDet
+    $knotC = (($knotSourceRight[0] - $knotSourceApex[0]) * ($knotTargetLeft[0] - $knotTargetApex[0]) -
+        ($knotSourceLeft[0] - $knotSourceApex[0]) * ($knotTargetRight[0] - $knotTargetApex[0])) / $knotDet
+    $knotB = (($knotTargetRight[1] - $knotTargetApex[1]) * ($knotSourceLeft[1] - $knotSourceApex[1]) -
+        ($knotTargetLeft[1] - $knotTargetApex[1]) * ($knotSourceRight[1] - $knotSourceApex[1])) / $knotDet
+    $knotD = (($knotSourceRight[0] - $knotSourceApex[0]) * ($knotTargetLeft[1] - $knotTargetApex[1]) -
+        ($knotSourceLeft[0] - $knotSourceApex[0]) * ($knotTargetRight[1] - $knotTargetApex[1])) / $knotDet
+    $knotFit = @($knotA, $knotB, $knotC, $knotD,
+        ($knotTargetApex[0] - $knotA * $knotSourceApex[0] - $knotC * $knotSourceApex[1]),
+        ($knotTargetApex[1] - $knotB * $knotSourceApex[0] - $knotD * $knotSourceApex[1]))
+    # The interlaced tails extend beyond the V: shorten the complete ornament to fit
+    # the finite tip edges (746 units of fitted tail depth versus 436 of edge depth).
+    $knotLengthScale = 0.56
+    $knotFit = Compose-Matrix @($knotLengthScale, 0, 0, $knotLengthScale,
+        (1800 * (1 - $knotLengthScale)), ((1800 - $tipOuter) * (1 - $knotLengthScale))) $knotFit
+    Bake-Knot $parts.ChevronKnot $knotFit
     [void]$pop.AppendChild($parts.ChevronKnot)
     $parts.Submenu.SetAttribute('class', 'navigation-art submenu-art')
     $parts.Upmenu.SetAttribute('class', 'navigation-art back-art')

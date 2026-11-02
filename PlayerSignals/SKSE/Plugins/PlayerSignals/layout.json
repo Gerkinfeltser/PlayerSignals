@@ -8,7 +8,7 @@
     "main": [
       { "label": "Yes", "intent": "confirm" },
       { "label": "Social", "submenu": "social" },
-      { "label": "Dashboard", "hotkey": 64 },
+      { "label": "Dashboard", "hotkey": 11 },
       { "label": "Greet", "intent": "greet" },
       { "label": "Signals", "submenu": "signals" },
       null,

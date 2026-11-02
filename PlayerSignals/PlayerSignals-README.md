@@ -116,7 +116,7 @@ A hotkey slot presses its DirectX scan code after the wheel has fully closed; it
 { "label": "Dashboard", "hotkey": 64, "delayMs": 100, "holdMs": 50 }
 ```
 
-`hotkey` must be a strict integer from 1–255 and cannot equal the configured `input.openKeyCode`. `delayMs` is optional (default `100`, integer 0–2000); `holdMs` is optional (default `50`, integer 1–2000). These timing fields are hotkey-only. A hotkey is exclusive with `intent`, `submenu`, `control`, and `action`. Dispatch occurs only after the browsing session and Magelight view have fully released. Actual key injection opening the SkyrimNet dashboard in-game remains unverified.
+`hotkey` must be a strict integer from 1–263 (1–255 keyboard scan codes; 256–263 SKSE mouse buttons, e.g. 258 = middle mouse) and cannot equal the configured `input.openKeyCode`. `delayMs` is optional (default `100`, integer 0–2000); `holdMs` is optional (default `50`, integer 1–2000). These timing fields are hotkey-only. A hotkey is exclusive with `intent`, `submenu`, `control`, and `action`. Dispatch occurs only after the browsing session and Magelight view have fully released. Injected keys reach only mods that read Skyrim's input; mods polling Windows key state directly (e.g. the SkyrimNet and IntelEngine dashboard hotkeys) do not see them.
 
 ### Wheel colour theme (Magelight)
 

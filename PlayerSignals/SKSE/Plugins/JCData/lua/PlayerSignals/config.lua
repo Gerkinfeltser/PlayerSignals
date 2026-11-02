@@ -195,7 +195,7 @@ local function validate(root, intents)
                 if e.submenu ~= nil then assert(wheels[e.submenu], path .. '.submenu: unknown wheel ' .. tostring(e.submenu)) end
                 if e.control ~= nil then assert(e.control == 'back' or e.control == 'close', path .. '.control: expected back or close') end
                 if e.hotkey ~= nil then
-                    assert(type(e.hotkey) == 'number' and e.hotkey >= 1 and e.hotkey <= 255, path .. '.hotkey: expected integer 1..255')
+                    assert(type(e.hotkey) == 'number' and e.hotkey >= 1 and e.hotkey <= 263, path .. '.hotkey: expected integer 1..263 (1..255 keyboard, 256..263 SKSE mouse buttons)')
                     assert(e.hotkey ~= input.openKeyCode, path .. '.hotkey: must differ from input.openKeyCode')
                     e.delayMs = e.delayMs == nil and 100 or e.delayMs
                     e.holdMs = e.holdMs == nil and 50 or e.holdMs

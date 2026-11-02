@@ -195,7 +195,8 @@
         0xd0:"ArrowDown", 0xd1:"PageDown", 0xd2:"Insert", 0xd3:"Delete", 0xdb:"MetaLeft",
         0xdc:"MetaRight", 0xdd:"ContextMenu", 0xde:"Power", 0xdf:"Sleep", 0xe3:"WakeUp",
         0xe5:"BrowserSearch", 0xe6:"BrowserFavorites", 0xe7:"BrowserRefresh", 0xe8:"BrowserStop",
-        0xe9:"BrowserForward", 0xea:"BrowserBack", 0xeb:"LaunchApp1", 0xec:"LaunchMail", 0xed:"MediaSelect"
+        0xe9:"BrowserForward", 0xea:"BrowserBack", 0xeb:"LaunchApp1", 0xec:"LaunchMail", 0xed:"MediaSelect",
+        0x100:"Left mouse", 0x101:"Right mouse", 0x102:"Middle mouse", 0x103:"Mouse 4", 0x104:"Mouse 5", 0x105:"Mouse 6", 0x106:"Mouse 7", 0x107:"Mouse 8"
     };
     function keyName(code) {
         return (DX_KEY_CODES[code] || "").replace(/^(Alt|Control|Shift|Meta)(Left|Right)$/, (_, key, side) => side + " " + (key === "Control" ? "Ctrl" : key === "Meta" ? "Win" : key)).replace(/^(Key|Digit)/, "").replace(/^Numpad/, "Num ");

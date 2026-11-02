@@ -382,7 +382,7 @@ Bool Function ValidateNative(Int config)
                     Int hotkey = JMap.getInt(entry, "hotkey")
                     Int delayMs = JMap.getInt(entry, "delayMs")
                     Int holdMs = JMap.getInt(entry, "holdMs")
-                    If hotkey < 1 || hotkey > 255 || hotkey == code || delayMs < 0 || delayMs > 2000 || holdMs < 1 || holdMs > 2000
+                    If hotkey < 1 || hotkey > 263 || hotkey == code || delayMs < 0 || delayMs > 2000 || holdMs < 1 || holdMs > 2000
                         Return False
                     EndIf
                 ElseIf entryKind == "intent"

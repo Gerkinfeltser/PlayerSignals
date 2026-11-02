@@ -62,7 +62,7 @@ class ConfigValidation(unittest.TestCase):
         config['wheels']['main'] = [{'label': 'Dashboard', 'hotkey': 64}]
         hotkey = self.parse(config).wheels.data.main.data[1].data
         self.assertEqual((hotkey.hotkey, hotkey.delayMs, hotkey.holdMs), (64, 100, 50))
-        for code, delay, hold in ((1, 0, 1), (255, 2000, 2000)):
+        for code, delay, hold in ((1, 0, 1), (255, 2000, 2000), (258, 100, 50), (263, 0, 1)):
             config['wheels']['main'] = [
                 {'label': 'Dashboard', 'hotkey': code, 'delayMs': delay, 'holdMs': hold}
             ]
@@ -71,7 +71,7 @@ class ConfigValidation(unittest.TestCase):
 
     def test_hotkey_rejects_invalid_values_fields_and_kind_combinations(self):
         for field, invalid in (
-            ('hotkey', 0), ('hotkey', 256), ('hotkey', -1), ('hotkey', 1.5),
+            ('hotkey', 0), ('hotkey', 264), ('hotkey', -1), ('hotkey', 1.5),
             ('hotkey', True), ('hotkey', None), ('hotkey', '64'),
             ('delayMs', -1), ('delayMs', 2001), ('delayMs', 1.5),
             ('delayMs', True), ('delayMs', None), ('delayMs', '100'),
@@ -149,7 +149,7 @@ class ConfigValidation(unittest.TestCase):
         layout = json.loads(CATALOG.with_name('layout.json').read_text(encoding='utf-8'))
         self.parse(layout)
         expected = {
-            'main': ['confirm', 'social', 'hotkey:11', 'greet', 'signals', None,
+            'main': ['confirm', 'social', 'hotkey:258', 'greet', 'signals', None,
                      'deny', 'attitude', None, 'farewell', 'actions', None],
             'attitude': ['approve', None, 'understood', 'challenge', 'unsure', 'think',
                          'disapprove', None, 'not_understood', 'yield', 'back', None],

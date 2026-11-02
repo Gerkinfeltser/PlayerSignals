@@ -243,15 +243,15 @@
         const nearby = document.getElementById("slot-" + index + "-nearby");
         const labelRadius = Number(group.dataset.labelRadius), angle = index * Math.PI / 6;
         const point = { x: 1800 + labelRadius * Math.sin(angle) * 1.2, y: 1800 - labelRadius * Math.cos(angle) * 1.2 };
-        const labels = document.createElementNS(NS, "g"), pop = group.querySelector(".pop");
+        const labels = document.createElementNS(NS, "g"), frame = document.createElementNS(NS, "g"), pop = group.querySelector(".pop");
         labels.setAttribute("transform", `rotate(${-index * 30} 1800 1800)`);
         pop.appendChild(labels);
         const content = textBox(point.x - 250, point.y - 170, 500, 340, "sectorLabel");
         const labelBox = content.parentElement;
-        labels.appendChild(labelBox);
+        labels.appendChild(frame); frame.appendChild(labelBox);
         content.dataset.index = index;
         const actionBadge = document.createElementNS(NS, "text"); actionBadge.classList.add("actionLabel");
-        actionBadge.setAttribute("aria-hidden", "true"); actionBadge.textContent = "ACTION"; labels.appendChild(actionBadge);
+        actionBadge.setAttribute("aria-hidden", "true"); actionBadge.textContent = "ACTION"; frame.appendChild(actionBadge);
         // Centre the upright icon in the half-disc's own bounding box.
         const decorationX = Number(group.dataset.bulbX);
         const decorationY = Number(group.dataset.bulbY) - Number(group.dataset.bulbRadius) / 2;
@@ -269,7 +269,7 @@
             region.addEventListener("focus", () => highlight(index, mode));
             for (const event of ["mouseleave", "blur"]) region.addEventListener(event, () => { if (flowIndex === index) stopFlow(); });
         }
-        return { group, pop, target, nearby, content, labelBox, labelRadius, actionBadge, knot: group.querySelector(".chevron-knot"), scale: 1, from: 1, to: 1, peak: 1.06 };
+        return { group, pop, target, nearby, content, labelBox, labelRadius, actionBadge, frame, knot: group.querySelector(".chevron-knot"), scale: 1, from: 1, to: 1, peak: 1.06 };
     });
     let flowNavScale = 1;
     // One reusable effect: bulb bands paint behind the core; necktie bands paint beneath text.
@@ -404,14 +404,21 @@
         }
         // Text geometry is cached only when activating a necktie; bulb marks never enter the core.
         if (!flowBulb) {
+            const frameTransform = sector.frame.getAttribute("transform");
+            sector.frame.removeAttribute("transform");
             const range = document.createRange(); range.selectNodeContents(sector.content);
-            const boxes = [range.getBoundingClientRect()];
-            if (sector.actionBadge.style.display !== "none") boxes.push(sector.actionBadge.getBoundingClientRect());
-            const inverse = sector.target.getScreenCTM().inverse(), radii = [];
-            boxes.forEach(box => {
+            const inverse = sector.frame.getScreenCTM().inverse(), points = [];
+            for (const box of range.getClientRects())
                 for (const x of [box.left, box.right]) for (const y of [box.top, box.bottom])
-                    radii.push(1800 - new DOMPoint(x, y).matrixTransform(inverse).y);
-            });
+                    points.push(new DOMPoint(x, y).matrixTransform(inverse));
+            if (sector.actionBadge.style.display !== "none") {
+                const box = sector.actionBadge.getBBox();
+                for (const x of [box.x, box.x + box.width]) for (const y of [box.y, box.y + box.height])
+                    points.push(new DOMPoint(x, y));
+            }
+            sector.frame.setAttribute("transform", frameTransform);
+            const toSlice = sector.target.getScreenCTM().inverse().multiply(sector.frame.getScreenCTM());
+            const radii = points.map(point => 1800 - point.matrixTransform(toSlice).y);
             flowTextMin = Math.min(...radii) - 45 * flowNavScale; flowTextMax = Math.max(...radii) + 45 * flowNavScale;
         }
         const now = performance.now(); flowStart = now - 300; paintFlow(now);
@@ -581,7 +588,7 @@
                 if (item?.[2] === "submenu" && item[0].endsWith(" >")) item[0] = item[0].slice(0, -2);
                 if (item?.[2] === "back" && item[0].endsWith(" <")) item[0] = item[0].slice(0, -2);
                 entries[index] = item;
-                const { group, pop, target, nearby, content, labelBox, labelRadius, actionBadge, knot } = sectors[index];
+                const { group, pop, target, nearby, content, labelBox, labelRadius, actionBadge, frame, knot } = sectors[index];
                 const kind = item?.[2], disabled = !item || (kind === "action" && !targetName);
                 const subback = !disabled && (kind === "submenu" || kind === "back");
                 actionBadge.textContent = kind === "hotkey" ? "KEY" : kind === "intent" ? "SIGNAL" : "ACTION";
@@ -589,15 +596,25 @@
                 actionBadge.style.display = item && badged ? "" : "none";
                 content.textContent = item ? item[0] : "";
                 const angle = index * Math.PI / 6, labelScale = subback ? navScale : 1;
-                const labelX = 1800 + labelRadius * Math.sin(angle) * 1.2 * labelScale;
-                const labelY = 1800 - labelRadius * Math.cos(angle) * 1.2 * labelScale;
-                labelBox.setAttribute("x", labelX - 250 * labelScale); labelBox.setAttribute("y", labelY - 170 * labelScale);
-                // Fit long labels with room for the badge, then retain the existing label centre.
-                const labelHeight = 340 * labelScale;
-                labelBox.setAttribute("width", 500 * labelScale);
-                labelBox.setAttribute("height", labelHeight - (badged ? actionBadge.getBBox().height + 12 : 0));
+                const labelAngle = index % 6 === 0 ? 0 : (index % 6) * 30 - 90;
+                // Reserve the hub's maximum pop (<525), or the outer utility arc (610).
+                const core = [...target.querySelector(".hit-area").getAttribute("data-core-d").matchAll(/[ML](-?[\d.]+),(-?[\d.]+)/g)].map(([, x, y]) => ({ x: Number(x), y: Number(y) }));
+                const tip = 1800 - Math.max(...core.map(point => point.y));
+                const chord = 1800 - Number(group.dataset.bulbY);
+                const slope = (Math.max(...core.map(point => point.x)) - 1800) / (chord - tip);
+                const inner = (subback ? 610 : 525) + 24, knotBox = knot.getBBox();
+                // The knot keeps its size: reserve its translated bounds plus stroke/ink clearance.
+                const outer = subback ? Math.min(chord * labelScale, 1800 - knotBox.y - knotBox.height - 1692 * (1 - navScale)) - 40 : chord - 24;
+                const horizontal = index === 0 || index === 6;
+                const boxHeight = horizontal ? (badged ? 260 : 200 * labelScale) : 2 * (inner - tip * labelScale) * slope - 48;
+                const radius = horizontal ? Math.min(labelRadius * 1.2 * labelScale, outer - boxHeight / 2) : (inner + outer) / 2;
+                const boxWidth = horizontal ? 2 * (radius - boxHeight / 2 - tip * labelScale) * slope - 48 : outer - inner;
+                const labelX = 1800 + radius * Math.sin(angle), labelY = 1800 - radius * Math.cos(angle);
+                frame.removeAttribute("transform");
+                const badgeHeight = badged ? actionBadge.getBBox().height + 12 : 0;
+                labelBox.setAttribute("x", labelX - boxWidth / 2); labelBox.setAttribute("y", labelY - boxHeight / 2);
+                labelBox.setAttribute("width", boxWidth); labelBox.setAttribute("height", boxHeight - badgeHeight);
                 fit(content, 80);
-                labelBox.setAttribute("height", labelHeight);
                 if (subback) knot.setAttribute("transform", `translate(0 ${1692 * (1 - navScale)})`);
                 else knot.removeAttribute("transform");
                 group.dataset.kind = kind || "";
@@ -632,6 +649,7 @@
                     actionBadge.setAttribute("x", point.x - box.x - box.width / 2);
                     actionBadge.setAttribute("y", point.y + 12 - box.y);
                 }
+                frame.setAttribute("transform", `rotate(${labelAngle} ${labelX} ${labelY})`);
                 group.setAttribute("aria-disabled", String(disabled));
                 for (const [region, mode] of [[target, "target"], [nearby, "nearby"]]) {
                     const enabled = available(index, mode); region.setAttribute("aria-disabled", String(!enabled)); region.setAttribute("tabindex", "-1");

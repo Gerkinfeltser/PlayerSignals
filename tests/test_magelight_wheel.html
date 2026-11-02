@@ -74,6 +74,70 @@ frame.addEventListener("load", async () => {
             const local = point.matrixTransform(path.getCTM().inverse().multiply(svg.getCTM()));
             return fill && path.isPointInFill(local) || stroke && path.isPointInStroke(local);
         });
+        const labelAngles=[0,-60,-30,0,30,60,0,-60,-30,0,30,60];
+        const labelFrame=label=>label.closest("foreignObject").parentElement;
+        const labelLocalRects=label=>{
+            const frame=labelFrame(label),saved=frame.getAttribute("transform"),rects=[];
+            try {
+                frame.setAttribute("transform","rotate(0 1800 1800)");
+                const inverse=frame.getScreenCTM().inverse(),range=doc.createRange();
+                range.selectNodeContents(label);
+                for(const rect of range.getClientRects()) {
+                    const points=[[rect.left,rect.top],[rect.right,rect.top],[rect.right,rect.bottom],[rect.left,rect.bottom]]
+                        .map(([x,y])=>new view.DOMPoint(x,y).matrixTransform(inverse));
+                    rects.push(points);
+                }
+            } finally {
+                if(saved===null)frame.removeAttribute("transform"); else frame.setAttribute("transform",saved);
+            }
+            return rects;
+        };
+        const rectBounds=rects=>({left:Math.min(...rects.flatMap(points=>points.map(p=>p.x))),right:Math.max(...rects.flatMap(points=>points.map(p=>p.x))),top:Math.min(...rects.flatMap(points=>points.map(p=>p.y))),bottom:Math.max(...rects.flatMap(points=>points.map(p=>p.y)))});
+        const edgeSamples=points=>points.flatMap((a,n)=>{
+            const b=points[(n+1)%points.length];
+            return Array.from({length:9},(_,j)=>new view.DOMPoint(a.x+(b.x-a.x)*j/8,a.y+(b.y-a.y)*j/8));
+        });
+        const assertLabelFrame=i=>{
+            const label=doc.querySelector(`.sectorLabel[data-index="${i}"]`),frame=labelFrame(label),box=label.closest("foreignObject"),badge=doc.querySelector(`#slot-${i} .actionLabel`),pop=doc.getElementById(`slot-${i}`).querySelector(".pop"),labelMatrix=frame.getScreenCTM(),badgeMatrix=badge.getScreenCTM(),angle=matrix=>Math.atan2(matrix.b,matrix.a)*180/Math.PI;
+            const delta=value=>Math.abs(Math.atan2(Math.sin((value-labelAngles[i])*Math.PI/180),Math.cos((value-labelAngles[i])*Math.PI/180))*180/Math.PI);
+            assert(delta(angle(labelMatrix))<.5&&delta(angle(badgeMatrix))<.5,`Slot ${i} label/badge actual frame angle is not ${labelAngles[i]} degrees`);
+            assert(Math.abs(Math.atan2(labelMatrix.b,labelMatrix.a)-Math.atan2(badgeMatrix.b,badgeMatrix.a))<.001,`Slot ${i} label and badge do not share an SVG frame`);
+            const targetMatrix=region(i).getScreenCTM(),scale=matrix=>Math.hypot(matrix.a,matrix.b);
+            assert(Math.abs(scale(labelMatrix)/scale(targetMatrix)-1)<.001&&Math.abs(scale(badgeMatrix)/scale(targetMatrix)-1)<.001,`Slot ${i} label/badge does not inherit its slice lift`);
+            const nodes=[frame,box,label,badge,pop],saved=frame.getAttribute("transform");
+            let frameCss;
+            try { frame.removeAttribute("transform"); frameCss=view.getComputedStyle(frame).transform; }
+            finally { if(saved===null)frame.removeAttribute("transform"); else frame.setAttribute("transform",saved); }
+            assert(nodes.every(node=>node.style.transform==="")&&frameCss==="none"&&nodes.slice(1,4).every(node=>view.getComputedStyle(node).transform==="none"),`Slot ${i} label/badge uses a CSS transform`);
+            assert(frame.hasAttribute("transform"),`Slot ${i} label frame is not rotated by an SVG transform attribute`);
+        };
+        const assertInkGeometry=(i,label,badge,kind)=>{
+            const frame=labelFrame(label),hit=region(i).querySelector(".hit-area"),toWheel=svg.getCTM().inverse().multiply(frame.getCTM()),toHit=hit.getCTM().inverse().multiply(svg.getCTM()),labelRects=labelLocalRects(label),allRects=[...labelRects];
+            assert(labelRects.length>0,`Slot ${i} ${kind} label has no measurable ink`);
+            assert(labelRects.every((rect,n)=>n===0||rect[0].y>labelRects[n-1][0].y),`${kind} ${i} wrapped lines changed their reading order`);
+            const viewport=label.closest("foreignObject").getBBox();
+            assert(labelRects.flat().every(p=>p.x>=viewport.x-.1&&p.x<=viewport.x+viewport.width+.1&&p.y>=viewport.y-.1&&p.y<=viewport.y+viewport.height+.1),`${kind} ${i} label ink is clipped by its own viewport`);
+            if(badge&&view.getComputedStyle(badge).display!=="none") {
+                const box=badge.getBBox();
+                allRects.push([[box.x,box.y],[box.x+box.width,box.y],[box.x+box.width,box.y+box.height],[box.x,box.y+box.height]].map(([x,y])=>new view.DOMPoint(x,y)));
+                const ink=rectBounds(labelRects),badgeInk=allRects.at(-1),badgeBounds=rectBounds([badgeInk]);
+                assert(Math.abs((ink.left+ink.right)/2-(badgeBounds.left+badgeBounds.right)/2)<=2,`${kind} badge ${i} is not centered below label ink in its local frame`);
+                assert(badgeBounds.top>=ink.bottom-.1&&badgeBounds.top-ink.bottom<=12.1,`${kind} badge ${i} gap from label ink is not small and positive`);
+            }
+            const sector=doc.getElementById(`slot-${i}`),art=[sector.querySelector(".chevron-knot"),...sector.querySelectorAll(".utility-arc")].filter(node=>node&&view.getComputedStyle(node).display!=="none"),hitKind=sector.dataset.kind,chordY=Number(hit.closest("[data-bulb-y]").dataset.bulbY);
+            for(const rect of allRects)for(const local of [...rect,...edgeSamples(rect),new view.DOMPoint((rect[0].x+rect[2].x)/2,(rect[0].y+rect[2].y)/2)]) {
+                const wheel=local.matrixTransform(toWheel),hitPoint=wheel.matrixTransform(toHit);
+                assert(hit.isPointInFill(hitPoint),`${kind} ${i} label/badge ink leaves its actual target path`);
+                assert(!hubPaintedAt(wheel),`${kind} ${i} label/badge ink overlaps painted hub`);
+                if((hitKind==="intent"||hitKind==="hotkey")&&badge&&view.getComputedStyle(badge).display!=="none")
+                    assert(hitPoint.y>=chordY,`${kind} badge ${i} crosses the shared slice chord`);
+                for(const node of art)for(const path of [node.matches("path")?node:null,...node.querySelectorAll("path")].filter(Boolean)) {
+                    const point=wheel.matrixTransform(path.getCTM().inverse().multiply(svg.getCTM())),style=view.getComputedStyle(path);
+                    assert(!(style.fill!=="none"&&path.isPointInFill(point))&&!(style.stroke!=="none"&&path.isPointInStroke(point)),`${kind} ${i} label/badge ink overlaps painted navigation artwork`);
+                }
+            }
+        };
+        const assertAllLabelFrames=()=>{for(let i=0;i<12;i++)assertLabelFrame(i);};
         const hubRadiusCache = new Map(), hubRadiusAt = angle => {
             const key = ((angle%(Math.PI*2)+Math.PI*2)%(Math.PI*2)).toFixed(8);
             if (hubRadiusCache.has(key)) return hubRadiusCache.get(key)*hubScale();
@@ -166,6 +230,12 @@ frame.addEventListener("load", async () => {
             assert(innermost < hubRadiusAt(i*Math.PI/6)-8, `Slot ${i} ${mode} inner outline does not converge beneath the painted hub`);
         };
         assert(Math.abs(doc.getElementById("hub-pop").getCTM().a/svg.getCTM().a-1.08)<.001, "Zero-duration hub did not snap to 1.08");
+        assertAllLabelFrames();
+        for(let i=0;i<12;i++) {
+            region(i).focus();
+            assertLabelFrame(i);
+            doc.getElementById("center").focus();
+        }
         for (let i = 0; i < 12; i++) for (const [mode, radius] of [["target", 900], ["nearby", 1500]]) {
             const point = svg.createSVGPoint(), angle = i * Math.PI / 6;
             point.x = 1800 + radius * Math.sin(angle); point.y = 1800 - radius * Math.cos(angle);
@@ -562,10 +632,9 @@ frame.addEventListener("load", async () => {
         const longNav=Array.from({length:12},(_,i)=>({label:i%2?"Return to previous menu":"Open social interaction submenu",...(i%2?{control:"back"}:{submenu:"social"})}));
         arm("nav-label-fit",longNav);
         for(let i=0;i<12;i++) {
-            const label=doc.querySelector(`.sectorLabel[data-index="${i}"]`),box=label.closest("foreignObject"),range=doc.createRange(),badge=doc.querySelector(`#slot-${i} .actionLabel`);
-            range.selectNodeContents(label);
-            const ink=range.getBoundingClientRect(),bounds=box.getBoundingClientRect();
-            assert(ink.width>0&&ink.height>0&&ink.left>=bounds.left&&ink.right<=bounds.right&&ink.top>=bounds.top&&ink.bottom<=bounds.bottom,`Long navigation label ${i} overflows its .85 label box`);
+            const label=doc.querySelector(`.sectorLabel[data-index="${i}"]`),badge=doc.querySelector(`#slot-${i} .actionLabel`),expected=longNav[i].label;
+            assert(label.textContent===expected,`Long navigation label ${i} changed its full text`);
+            assertInkGeometry(i,label,badge,"Long navigation");
             assert(view.getComputedStyle(badge).display==="none",`Long navigation label ${i} reserved or displayed a badge`);
         }
         key("Escape"); assert(replies.pop()==="nav-label-fit|-1||cancel","Navigation label-fit setup failed to cancel");
@@ -627,34 +696,11 @@ frame.addEventListener("load", async () => {
             const hex=raw.trim().match(/^#([0-9a-f]{6})$/i);
             return hex?`rgb(${parseInt(hex[1].slice(0,2),16)}, ${parseInt(hex[1].slice(2,4),16)}, ${parseInt(hex[1].slice(4,6),16)})`:raw;
         };
-        const overlapsPainted = (node, box) => {
-            if(!node||view.getComputedStyle(node).display==="none")return false;
-            const paths=node.matches("path")?[node]:[...node.querySelectorAll("path")];
-            for(const path of paths) {
-                const style=view.getComputedStyle(path),rect=path.getBoundingClientRect();
-                if(style.display==="none"||style.visibility!=="visible"||style.fill==="none"&&style.stroke==="none"||box.left>=rect.right||box.right<=rect.left||box.top>=rect.bottom||box.bottom<=rect.top)continue;
-                const inverse=path.getScreenCTM().inverse(),step=2;
-                for(let x=Math.max(box.left,rect.left);x<=Math.min(box.right,rect.right);x+=step)for(let y=Math.max(box.top,rect.top);y<=Math.min(box.bottom,rect.bottom);y+=step) {
-                    const point=new view.DOMPoint(x,y).matrixTransform(inverse);
-                    if(style.fill!=="none"&&path.isPointInFill(point)||style.stroke!=="none"&&path.isPointInStroke(point))return true;
-                }
-            }
-            return false;
-        };
         const assertBadgeLayout = (i, badge, label, kind, text) => {
             const range=doc.createRange(); range.selectNodeContents(label);
+            assert(label.textContent===text,`${kind} badge ${i} changed its exact label text`);
             assert(text==="Yes"?range.getClientRects().length===1:range.getClientRects().length>1,`${kind} ${text} did not exercise the expected label wrapping`);
-            const ink=range.getBoundingClientRect(), box=badge.getBoundingClientRect(), matrix=badge.getScreenCTM();
-            assert(Math.abs(ink.left+ink.width/2-(box.left+box.width/2))<=2,`${kind} badge ${i}/${text} is not centered below its label ink`);
-            assert(box.top>=ink.bottom&&box.top-ink.bottom<=12,`${kind} badge ${i}/${text} gap from actual label ink is not small and positive`);
-            assert(Math.abs(matrix.b)<.001&&Math.abs(matrix.c)<.001,`${kind} badge ${i}/${text} is not upright in screen space`);
-            const hit=region(i).querySelector(".hit-area"),inverse=hit.getScreenCTM().inverse(),chordY=Number(hit.closest("[data-bulb-y]").dataset.bulbY);
-            for(const [x,y] of [[box.left,box.top],[box.right,box.top],[box.left,box.bottom],[box.right,box.bottom]]) {
-                const point=new view.DOMPoint(x,y).matrixTransform(inverse);
-                assert((kind!=="intent"&&kind!=="hotkey")||point.y>=chordY,`${kind} badge ${i}/${text} crosses a slice chord`);
-            }
-            const sector=doc.getElementById(`slot-${i}`);
-            assert(!overlapsPainted(sector.querySelector(".chevron-knot"),box)&&[...sector.querySelectorAll(".utility-arc")].every(arc=>!overlapsPainted(arc,box)),`${kind} badge ${i}/${text} overlaps painted navigation artwork`);
+            assertInkGeometry(i,label,badge,kind);
         };
         for(const [kind,slot,badgeText,fillVar] of badgeKinds) for(const text of badgeLabels) {
             const slots=Array.from({length:12},()=>({...slot,label:text}));
@@ -667,9 +713,8 @@ frame.addEventListener("load", async () => {
                 assertBadgeLayout(i,badge,label,kind,text);
                 region(i).focus();
                 assert(view.getComputedStyle(badge).fill===badgeRgb(view.getComputedStyle(doc.documentElement).getPropertyValue(fillVar)),`${kind} badge ${i} lit fill does not match its kind`);
-                const range=doc.createRange(); range.selectNodeContents(label);
-                const ink=range.getBoundingClientRect(),lit=badge.getBoundingClientRect();
-                assert(Math.abs(ink.left+ink.width/2-(lit.left+lit.width/2))<=2&&lit.top>=ink.bottom&&lit.top-ink.bottom<=12,`Lit ${kind} badge ${i} stopped tracking its label`);
+                assertLabelFrame(i);
+                assertInkGeometry(i,label,badge,`Lit ${kind}`);
                 doc.getElementById("center").focus();
             }
             key("Escape"); assert(replies.pop()===`badges-${kind}-${text.replaceAll(" ","-")}|-1||cancel`,`${kind} badge setup failed to cancel`);
@@ -705,19 +750,16 @@ frame.addEventListener("load", async () => {
         }
         key("Escape"); assert(replies.pop()==="badge-visibility-null-11|-1||cancel","Badge visibility setup failed to cancel");
         for(const [wheelName,shippedSlots] of Object.entries(layout.wheels)) {
-            arm(`badge-shipped-${wheelName}`,shippedSlots);
+            arm(`badge-shipped-${wheelName}`,shippedSlots); center.focus();
             for(let i=0;i<12;i++) {
-                const badge=doc.querySelector(`#slot-${i} .actionLabel`),label=doc.querySelector(`.sectorLabel[data-index="${i}"]`);
-                if(view.getComputedStyle(badge).display!=="none") {
-                    const inkRange=doc.createRange(); inkRange.selectNodeContents(label);
-                    const ink=inkRange.getBoundingClientRect(),box=badge.getBoundingClientRect();
-                    assert(Math.abs(ink.left+ink.width/2-(box.left+box.width/2))<=2&&box.top>=ink.bottom&&box.top-ink.bottom<=12,`Shipped slot ${i} badge is misplaced from its actual label ink`);
-                    const hit=region(i).querySelector(".hit-area"),inverse=hit.getScreenCTM().inverse(),kind=hit.closest(".sector").dataset.kind,chordY=Number(hit.closest("[data-bulb-y]").dataset.bulbY);
-                    for(const [x,y] of [[box.left,box.top],[box.right,box.top],[box.left,box.bottom],[box.right,box.bottom]])
-                        assert((kind!=="intent"&&kind!=="hotkey")||new view.DOMPoint(x,y).matrixTransform(inverse).y>=chordY,`Shipped slot ${i} badge crosses a slice chord`);
-                    const sector=doc.getElementById(`slot-${i}`);
-                    assert(!overlapsPainted(sector.querySelector(".chevron-knot"),box)&&[...sector.querySelectorAll(".utility-arc")].every(arc=>!overlapsPainted(arc,box)),`Shipped slot ${i} badge overlaps painted navigation artwork`);
-                }
+                const badge=doc.querySelector(`#slot-${i} .actionLabel`),label=doc.querySelector(`.sectorLabel[data-index="${i}"]`),slot=shippedSlots[i],expected=slot?.label||"";
+                assert(label.textContent===expected,`Shipped ${wheelName} slot ${i} changed its exact label text/order`);
+                assertLabelFrame(i);
+                if(expected)assertInkGeometry(i,label,badge,`Shipped ${wheelName}`);
+                region(i).focus();
+                assertLabelFrame(i);
+                if(expected)assertInkGeometry(i,label,badge,`Selected shipped ${wheelName}`);
+                center.focus();
             }
             key("Escape"); replies.pop();
         }
@@ -915,11 +957,12 @@ frame.addEventListener("load", async () => {
                 assert(transform&&Math.abs(transform.e-1800)<1,"Chevron mark is not centered from wheel origin");
                 const radius=1800-transform.f,w=radius*Math.tan(Math.PI/12)+14*scale,h=.45*w,trail=46*scale,arms=[...mark.querySelectorAll(".flow-band")];
                 const innerRadius=470*subbackScale,outerRadius=1692*subbackScale,envelope=expectedOpacity*Math.sin(Math.PI*(radius-innerRadius)/(outerRadius+trail-innerRadius)),opacity=Number(mark.getAttribute("opacity"));
-                const labelRange=doc.createRange(), labelNode=doc.querySelector(`.sectorLabel[data-index="${index}"]`);
-                labelRange.selectNodeContents(labelNode);
-                const badgeNode=doc.querySelector(`#slot-${index} .actionLabel`), boxes=[labelRange.getBoundingClientRect()];
-                if(badgeNode&&view.getComputedStyle(badgeNode).display!=="none")boxes.push(badgeNode.getBoundingClientRect());
-                const inverse=target.getScreenCTM().inverse(),radii=boxes.flatMap(box=>[[box.left,box.top],[box.right,box.top],[box.left,box.bottom],[box.right,box.bottom]].map(([x,y])=>1800-new view.DOMPoint(x,y).matrixTransform(inverse).y));
+                const labelNode=doc.querySelector(`.sectorLabel[data-index="${index}"]`),badgeNode=doc.querySelector(`#slot-${index} .actionLabel`),points=labelLocalRects(labelNode).flat();
+                if(badgeNode&&view.getComputedStyle(badgeNode).display!=="none") {
+                    const b=badgeNode.getBBox();
+                    points.push(...[[b.x,b.y],[b.x+b.width,b.y],[b.x,b.y+b.height],[b.x+b.width,b.y+b.height]].map(([x,y])=>new view.DOMPoint(x,y)));
+                }
+                const toSlice=target.getScreenCTM().inverse().multiply(labelFrame(labelNode).getScreenCTM()),radii=points.map(point=>1800-point.matrixTransform(toSlice).y);
                 const textMin=Math.min(...radii)-45*subbackScale,textMax=Math.max(...radii)+45*subbackScale,textGap=Math.max(textMin-radius,radius-textMax,0);
                 const dim=.55+.45*Math.min(1,textGap/(80*subbackScale));
                 // Compare exact ink bounds at rest; native text hinting can shift them during the cached lift.
@@ -994,8 +1037,7 @@ frame.addEventListener("load", async () => {
             const ink = range.getBoundingClientRect();
             assert(view.getComputedStyle(label).visibility === "visible" && Number(view.getComputedStyle(label).opacity) === 1 && ink.width > 0 && ink.height > 0, "Hovered label disappeared");
             assert(view.getComputedStyle(box).transform === "none" && view.getComputedStyle(label).transform === "none", "Label uses CSS transform");
-            const m = box.getScreenCTM();
-            assert(Math.abs(m.b) < .001 && Math.abs(m.c) < .001, "Counter-rotated label is not upright");
+            assertLabelFrame(index);
         };
         const reducedFlow = view.matchMedia("(prefers-reduced-motion: reduce)").matches;
         arm("flow-live", flowSlots); await settle(); checkFlow(0,"signal");
@@ -1283,6 +1325,7 @@ frame.addEventListener("load", async () => {
         report.textContent = "PASS: 12-slot choices; straight shared gesture-core/bulb chord with strict side routing, unified selection and dispatch; hotkey cap/pie with unified selection and dispatch; 30-unit selected bands; submenu/back-only knots and utility arcs; muted navigation labels and theme-specific fills; SIGNAL/ACTION/KEY badges; upright broadcast icons centered in their half-disc bulbs; null slots and no-target actions share the pointed disabled outline; vignettes, Shift preview, palettes, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
         report.textContent += " Hotkeys: no target required, F6 hub and KEY badge, Up/Down stays on one slice, either hit region dispatches the typed hotkey, malformed/conflicting payloads fail closed. Utility arcs remain slice-owned, clipped and noninteractive at radii 560/610; hub motion, boundary routing, reduced-motion/0ms behavior and open-key help remain covered.";
         report.textContent += " Flow: geometry-scaled signal/trail/padding; lit non-bulb chevrons use additive warm-white #fff6e0 at peak 0.35 (clamped-addition normal fallback); bulb ripples stay at 0.12 (warm yellow when lit, exact mint when uncoloured, slot-derived lower hue/lightness lift when coloured); HOLD/power-fade profile, exclusions, one shared rAF, 2400ms travel and reduced-motion/0ms behavior. Colours: strict extras, all six kinds/three themes, both idle parts, standard selected fills/bands/caps, lit label/badge colours, disabled actions, malformed extras and reuse cleanup.";
+        report.textContent += " Radial labels and badges: all 12 readable angles, wrapped line order, viewport and slice containment, chord/artwork clearance, and shared lift checked across all five shipped wheels.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

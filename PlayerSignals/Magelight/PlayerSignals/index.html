@@ -520,7 +520,7 @@
         if (completedRequest === nextRequest) { failClosed(); return; }
         let data;
         try { data = JSON.parse(payload.slice(divider + 1)); } catch (_) { failClosed(nextRequest); return; }
-        if (!data || !Number.isInteger(data.openKey) || data.openKey < 1 || data.openKey > 255 || !["slate", "moss", "ember"].includes(data.theme) || !Array.isArray(data.slots) || data.slots.length !== 12 || (data.target !== undefined && typeof data.target !== "string") || data.slots.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back", "hotkey"].includes(item[2]) || (item[2] === "hotkey" && (!/^[1-9]\d*$/.test(item[1]) || Number(item[1]) > 255 || Number(item[1]) === data.openKey))))) { failClosed(nextRequest); return; }
+        if (!data || !Number.isInteger(data.openKey) || data.openKey < 1 || data.openKey > 255 || !["slate", "moss", "ember"].includes(data.theme) || !Array.isArray(data.slots) || data.slots.length !== 12 || (data.target !== undefined && typeof data.target !== "string") || data.slots.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back", "hotkey"].includes(item[2]) || (item[2] === "hotkey" && (!/^[1-9]\d*$/.test(item[1]) || Number(item[1]) > 263 || Number(item[1]) === data.openKey))))) { failClosed(nextRequest); return; }
         failClosed(nextRequest); finished = false; targetName = data.target || "";
         openKeyBrowserCode = DX_KEY_CODES[data.openKey] || "";
         const openKeyName = keyName(data.openKey);

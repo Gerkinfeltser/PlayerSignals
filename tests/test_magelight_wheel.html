@@ -302,7 +302,7 @@ frame.addEventListener("load", async () => {
         const cap=region(0,"nearby").querySelector(".hit-area");
         region(0,"nearby").focus(); assert(region(0).classList.contains("hot")&&region(0,"nearby").classList.contains("hot"),"Hotkey cap focus did not unify visual state");
         click(cap); assert(replies.pop()==="hotkey-cap|0|64|hotkey"&&!visible(),"Hotkey cap did not dispatch the same typed choice");
-        for (const [i,invalid] of [0,"0","256","64.0","064","184","F6",null].entries()) {
+        for (const [i,invalid] of [0,"0","264","64.0","064","184","F6",null].entries()) {
             const data=payload([{label:"Dashboard",hotkey:64}]);
             data.slots[0][1]=invalid; begin("hotkey-invalid-"+i,data); view.psWheelArm("hotkey-invalid-"+i);
             assert(!visible() && !replies.length, "Malformed or opening-key hotkey payload did not fail closed");

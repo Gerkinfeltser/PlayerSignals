@@ -150,7 +150,7 @@ class ConfigValidation(unittest.TestCase):
         self.parse(layout)
         self.assertEqual(set(layout['wheels']), {'main', 'attitude', 'social', 'signals'})
         expected = {
-            'main': ['confirm', 'social', 'hotkey:258', 'greet', 'signals', 'StopAccompanying',
+            'main': ['confirm', 'social', None, 'greet', 'signals', 'StopAccompanying',
                      'deny', 'attitude', None, 'farewell', 'WaitHere', 'AccompanyTarget'],
             'attitude': ['approve', None, 'understood', 'challenge', 'unsure', 'think',
                          'disapprove', None, 'not_understood', 'yield', 'back', None],

@@ -8,7 +8,7 @@
     "main": [
       { "label": "Yes", "intent": "confirm" },
       { "label": "Social", "submenu": "social" },
-      { "label": "Middle mouse", "hotkey": 258 },
+      null,
       { "label": "Greet", "intent": "greet" },
       { "label": "Signals", "submenu": "signals" },
       { "label": "Stop following", "action": { "name": "StopAccompanying", "args": {} } },

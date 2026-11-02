@@ -259,7 +259,7 @@ class ConfigValidation(unittest.TestCase):
                        'ask', 'respect', 'comfort', 'sorry', 'back', None],
             'signals': ['ready', None, None, 'attention', 'warn', None,
                         'not_ready', 'calm_down', None, 'quiet', 'back', 'give_space'],
-            'debug': ['hotkey:64', 'hotkey:11', None, None, None, 'AccompanyTarget',
+            'debug': ['hotkey:64', 'hotkey:11', 'hotkey:36', None, None, 'AccompanyTarget',
                       'WaitHere', 'StopAccompanying', None, None, 'back', None],
         }
         homes = []

@@ -64,7 +64,7 @@
     "debug": [
       { "label": "SN Dashboard", "hotkey": 64, "raw": true, "delayMs": 0 },
       { "label": "IE Dashboard", "hotkey": 11, "raw": true, "delayMs": 0 },
-      null,
+      { "label": "Journal", "hotkey": 36 },
       null,
       null,
       { "label": "Follow / resume", "action": { "name": "AccompanyTarget", "args": {} } },

@@ -79,7 +79,7 @@ The entries below use UIExtensions' navigation markers. Magelight shows the same
 | Attitude | 0 Approve, 2 Understood, 3 Challenge, 4 Unsure, 5 Let me think, 6 Disapprove, 8 Not understood, 9 Surrender, 10 Back < |
 | Social | 0 Offer, 2 Well done, 4 Welcome, 6 Request, 7 Show respect, 8 Comfort, 9 Sorry, 10 Back < |
 | Signals | 0 Ready, 3 Get attention, 4 Watch out, 6 Not ready, 7 Calm down, 9 Quiet, 10 Back <, 11 Give space |
-| Debug | 0 SN Dashboard (raw key 64), 1 IE Dashboard (raw key 11), 5 Follow / resume (`AccompanyTarget`), 6 Wait here (`WaitHere`), 7 Stop following (`StopAccompanying`), 10 Back < |
+| Debug | 0 SN Dashboard (raw key 64), 1 IE Dashboard (raw key 11), 2 Journal (key 36, J), 5 Follow / resume (`AccompanyTarget`), 6 Wait here (`WaitHere`), 7 Stop following (`StopAccompanying`), 10 Back < |
 
 Positions are zero-based and unlisted positions are null.
 

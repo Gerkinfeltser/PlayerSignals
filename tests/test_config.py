@@ -32,6 +32,56 @@ class ConfigValidation(unittest.TestCase):
             self.parse(value, catalog_text)
 
 
+    def test_colored_slots_validate_for_every_kind_and_preserve_nulls(self):
+        config = minimal()
+        config['wheels'] = {
+            'main': [
+                None,
+                {'label': 'Intent', 'intent': 'confirm', 'color': '#abcdef'},
+                {'label': 'Submenu', 'submenu': 'child', 'color': '#ABCDEF'},
+                {'label': 'Back', 'control': 'back', 'color': '#123456'},
+                {'label': 'Close', 'control': 'close', 'color': '#654321'},
+                {'label': 'Hotkey', 'hotkey': 64, 'color': '#a1B2c3'},
+                {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'color': '#Ff0011'},
+            ],
+            'child': [{'label': 'Return', 'control': 'back'}],
+        }
+        wheel = self.parse(config).wheels.data.main.data
+        self.assertIsNone(wheel[1].kind)
+        for index, color in enumerate(
+            ('#abcdef', '#ABCDEF', '#123456', '#654321', '#a1B2c3', '#Ff0011'), 2
+        ):
+            with self.subTest(index=index):
+                self.assertEqual(wheel[index].data.color, color)
+
+    def test_colored_slots_reject_malformed_colors(self):
+        for color in (
+            '', '#abc', '#abcde', '#abcdef0', 'abcdef', 'red', 'rgb(1,2,3)', '#12xz56',
+            ' #abcdef', '#abcdef ', '#abcdef\n', 0, 1, True, False, None, [], {},
+        ):
+            config = minimal()
+            config['wheels']['main'][0]['color'] = color
+            with self.subTest(color=color):
+                self.rejects(config)
+
+    def test_wheel_payload_adds_only_valid_color_extras(self):
+        slots = self.lua.table()
+        ordinary = self.lua.table()
+        ordinary['label'], ordinary['kind'], ordinary['intent'] = 'Plain "slot"', 'intent', 'confirm'
+        colored = self.lua.table()
+        colored['label'], colored['kind'], colored['intent'] = 'Color', 'intent', 'confirm'
+        colored['color'] = '#aAbB09'
+        slots[1], slots[2], slots[3] = ordinary, None, colored
+        payload = json.loads(self.module.wheelPayload(slots, 'slate', '', 184))
+        self.assertEqual(payload['slots'][:3], [
+            ['Plain "slot"', 'confirm', 'intent'], None,
+            ['Color', 'confirm', 'intent', {'color': '#aAbB09'}],
+        ])
+        for color in ('', '#abc', 1, self.lua.table()):
+            colored['color'] = color
+            with self.subTest(payload_color=color):
+                self.assertEqual(self.module.wheelPayload(slots, 'slate', '', 184), '')
+
     def test_wheel_payload_pads_twelve_slots_and_escapes_target(self):
         slots = self.lua.table()
         slot = self.lua.table()

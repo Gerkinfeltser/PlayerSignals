@@ -61,6 +61,8 @@
     #wheelSvg .sector[aria-disabled="true"] .hit-area { stroke: none; }
     #wheelSvg .sector[aria-disabled="true"] .edge-line { display: none; }
     #wheelSvg .sector[aria-disabled="true"] .target-region .hit-area { fill: var(--nav-fill) !important; stroke: rgba(216,212,200,.28); stroke-width: 9; }
+    #wheelSvg .sector.slot-colored:not([aria-disabled="true"]) .target-region:not(.hot) .hit-area, #wheelSvg .sector.slot-colored:not([aria-disabled="true"]) .nearby-region:not(.hot) .hit-area { fill: var(--slot-idle-fill) !important; }
+    .sector.slot-colored { --lit-kind-fill: var(--slot-idle-fill); }
     #wheelSvg #center-hit { fill: #292c29 !important; fill-opacity: 1 !important; pointer-events: all; }
     #wheelSvg #center path { pointer-events: visiblePainted; cursor: pointer; }
     #center:hover #center-hit, #center:focus #center-hit { fill: #53452e !important; }
@@ -277,6 +279,21 @@
         action: { count: 4, trail: 46 * flowScale, tint: "--flow-lit-tint", litTint: "--flow-lit-tint" },
         util: { count: 4, trail: 46 * flowScale, tint: "--flow-lit-tint", litTint: "--flow-lit-tint" }
     };
+    const SLOT_RIPPLE_HUE_SHIFT = .16; // Turns toward lower hue.
+    const SLOT_RIPPLE_LIGHTNESS_LIFT = 93 / 255; // HSL lightness: #7fe6d4 minus #455766.
+    function slotRippleTint(hex) {
+        const [r, g, b] = [1, 3, 5].map(start => parseInt(hex.slice(start, start + 2), 16) / 255);
+        const max = Math.max(r, g, b), min = Math.min(r, g, b), chroma = max - min;
+        const lightness = (max + min) / 2;
+        const saturation = chroma ? chroma / (1 - Math.abs(2 * lightness - 1)) : 0;
+        let hue = 0;
+        if (chroma) {
+            hue = max === r ? (g - b) / chroma : max === g ? (b - r) / chroma + 2 : (r - g) / chroma + 4;
+            hue /= 6;
+        }
+        hue = (hue - SLOT_RIPPLE_HUE_SHIFT + 1) % 1;
+        return `hsl(${hue * 360}, ${saturation * 100}%, ${Math.min(1, lightness + SLOT_RIPPLE_LIGHTNESS_LIFT) * 100}%)`;
+    }
     const flow = document.createElementNS(NS, "g"), flowClip = document.createElementNS(NS, "clipPath");
     const flowOutline = document.createElementNS(NS, "path"), flowMarks = [], flowGradients = [];
     flow.classList.add("signal-flow"); flow.setAttribute("aria-hidden", "true");
@@ -364,10 +381,11 @@
         const palette = getComputedStyle(document.documentElement);
         flowOpacity = Number(palette.getPropertyValue(flowBulb ? flowLit ? "--flow-lit-signal-opacity" : "--flow-opacity" : "--flow-lit-opacity"));
         let color = palette.getPropertyValue(flowLit ? flowPreset.litTint : flowPreset.tint).trim();
+        if (flowBulb && !flowLit && entries[index][3]) color = slotRippleTint(entries[index][3].color);
         flow.style.mixBlendMode = flowAdditive ? "plus-lighter" : "normal";
         if (!flowAdditive) {
             // Resolve terminal palette colors, never an intermediate hover-tween fill.
-            flow.style.color = flowLit ? flowBulb ? "var(--cap-lit-fill)" : "var(--selection-outline)" : "var(--gesture-fill)";
+            flow.style.color = flowLit ? flowBulb ? "var(--cap-lit-fill)" : "var(--selection-outline)" : flowBulb && sector.group.classList.contains("slot-colored") ? "var(--slot-idle-fill)" : "var(--gesture-fill)";
             const fill = getComputedStyle(flow).color.match(/[\d.]+/g).map(Number);
             flow.style.color = color;
             const tint = getComputedStyle(flow).color.match(/[\d.]+/g).map(Number);
@@ -520,7 +538,7 @@
         document.documentElement.classList.remove("slate", "moss", "ember");
         document.documentElement.classList.add("slate");
         surface.dataset.armed = "false"; entries.fill(null); disable(); clearHighlight();
-        sectors.forEach(({ group, target, content, nearby, actionBadge }) => { delete group.dataset.kind; target.classList.remove("navigation", "gesture", "action", "empty"); content.textContent = ""; nearby.classList.remove("signal"); actionBadge.style.display = "none"; });
+        sectors.forEach(({ group, target, content, nearby, actionBadge }) => { delete group.dataset.kind; group.classList.remove("slot-colored"); group.style.removeProperty("--slot-idle-fill"); target.classList.remove("navigation", "gesture", "action", "empty"); content.textContent = ""; nearby.classList.remove("signal"); actionBadge.style.display = "none"; });
         if (window.magelight) window.magelight.send("__escapecapture", "0");
     }
     function rejectBegin(token, reason) {
@@ -538,7 +556,8 @@
         let data;
         try { data = JSON.parse(payload.slice(divider + 1)); }
         catch (_) { rejectBegin(nextRequest, "rejected"); return; }
-        if (!data || !Number.isInteger(data.openKey) || data.openKey < 1 || data.openKey > 255 || !["slate", "moss", "ember"].includes(data.theme) || !Array.isArray(data.slots) || data.slots.length !== 12 || (data.target !== undefined && typeof data.target !== "string") || data.slots.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back", "hotkey"].includes(item[2]) || (item[2] === "hotkey" && (!/^[1-9]\d*$/.test(item[1]) || Number(item[1]) > 263 || Number(item[1]) === data.openKey))))) { rejectBegin(nextRequest, "rejected"); return; }
+        const validExtra = item => item.length === 3 || (item.length === 4 && item[3] && typeof item[3] === "object" && !Array.isArray(item[3]) && Object.keys(item[3]).every(key => key === "color") && typeof item[3].color === "string" && item[3].color.length === 7 && /^#[0-9A-Fa-f]{6}$/.test(item[3].color));
+        if (!data || !Number.isInteger(data.openKey) || data.openKey < 1 || data.openKey > 255 || !["slate", "moss", "ember"].includes(data.theme) || !Array.isArray(data.slots) || data.slots.length !== 12 || (data.target !== undefined && typeof data.target !== "string") || data.slots.some(item => item !== null && (!Array.isArray(item) || (item.length !== 3 && item.length !== 4) || !validExtra(item) || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back", "hotkey"].includes(item[2]) || (item[2] === "hotkey" && (!/^[1-9]\d*$/.test(item[1]) || Number(item[1]) > 263 || Number(item[1]) === data.openKey))))) { rejectBegin(nextRequest, "rejected"); return; }
         try {
             failClosed(nextRequest); finished = false; targetName = data.target || "";
             openKeyBrowserCode = DX_KEY_CODES[data.openKey] || "";
@@ -574,6 +593,8 @@
                 if (subback) knot.setAttribute("transform", `translate(0 ${1692 * (1 - navScale)})`);
                 else knot.removeAttribute("transform");
                 group.dataset.kind = kind || "";
+                group.classList.toggle("slot-colored", Boolean(item?.[3]));
+                if (item?.[3]) group.style.setProperty("--slot-idle-fill", item[3].color);
                 const navigation = ["navigation", "submenu", "back"].includes(kind);
                 const merged = disabled || (kind !== "intent" && kind !== "hotkey");
                 target.classList.toggle("empty", !item);

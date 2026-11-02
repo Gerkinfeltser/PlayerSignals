@@ -180,7 +180,11 @@ local function validate(root, intents)
         for i, slot in ipairs(wheel.data) do
             if slot ~= null then
                 local path = 'wheels.' .. name .. '[' .. i .. ']'
-                local e = object(slot, path, {label=true, intent=true, submenu=true, control=true, action=true, event=true, hotkey=true, delayMs=true, holdMs=true})
+                local e = object(slot, path, {label=true, intent=true, submenu=true, control=true, action=true, event=true, hotkey=true, delayMs=true, holdMs=true, color=true})
+                if e.color ~= nil then
+                    assert(type(e.color) == 'string' and string.match(e.color, '^#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$'),
+                        path .. '.color: expected #rrggbb')
+                end
                 nonempty(e.label, path .. '.label')
                 local kinds = 0
                 for _, kind in ipairs({'intent','submenu','control','action','hotkey'}) do
@@ -266,17 +270,26 @@ function M.wheelPayload(slots, theme, target, openKey)
             local slot = slots[i]
             if slot == nil then
                 entries[i] = 'null'
-            elseif slot.kind == 'hotkey' then
-                assert(type(slot.hotkey) == 'number' and slot.hotkey == math.floor(slot.hotkey), 'hotkey: expected integer')
-                entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(tostring(slot.hotkey)) .. ',"hotkey"]'
             else
-                local kind = 'navigation'
-                if slot.kind == 'action' or slot.actionName ~= nil then kind = 'action'
-                elseif slot.kind == 'intent' then kind = 'intent'
-                elseif slot.kind == 'submenu' then kind = 'submenu'
-                elseif slot.kind == 'control' and slot.control == 'back' then kind = 'back' end
-                local identity = kind == 'action' and slot.actionName or kind == 'intent' and slot.intent or ''
-                entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. ']'
+                local extras = ''
+                if slot.color ~= nil then
+                    assert(type(slot.color) == 'string' and string.match(slot.color, '^#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$'), 'color: expected #rrggbb')
+                    extras = ',{"color":' .. jsonString(slot.color) .. '}'
+                end
+                local kind, identity = 'navigation', ''
+                if slot.kind == 'hotkey' then
+                    assert(type(slot.hotkey) == 'number' and slot.hotkey == math.floor(slot.hotkey), 'hotkey: expected integer')
+                    kind, identity = 'hotkey', tostring(slot.hotkey)
+                elseif slot.kind == 'action' or slot.actionName ~= nil then
+                    kind, identity = 'action', slot.actionName
+                elseif slot.kind == 'intent' then
+                    kind, identity = 'intent', slot.intent
+                elseif slot.kind == 'submenu' then
+                    kind = 'submenu'
+                elseif slot.kind == 'control' and slot.control == 'back' then
+                    kind = 'back'
+                end
+                entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. extras .. ']'
             end
         end
         return '{"theme":' .. jsonString(theme) .. ',"target":' .. jsonString(target) .. ',"openKey":' .. openKey .. ',"slots":[' .. table.concat(entries, ',') .. ']}'

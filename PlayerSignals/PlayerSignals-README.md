@@ -125,7 +125,19 @@ Add one optional top-level property in `layout.json`, alongside `schemaVersion`,
 "theme": "moss",
 ```
 
-Choose `slate` for the original grey/blue-slate and gold, `moss` for muted dark green, or `ember` for muted dark red/rust. Omit the property to use `slate` (as the shipped layout does). Keep the comma between JSON properties. Unknown names and non-string values reject the layout. Save the file, then load a save to apply it; no recompilation is needed. UIExtensions ignores this setting. The idle Submenu/Back fill uses `--subnav-fill`: slate `#38392f`, moss `#2d3a2f`, ember `#402e2a`; their labels use `--subnav-label` `#bfb8a6` in every theme. Selected labels retain the existing `--nav-fill` colors. All themes keep cream text and the same Chevron/Knot line colours.
+Choose `slate` for the original grey/blue-slate and gold, `moss` for muted dark green, or `ember` for muted dark red/rust. Omit the property to use `slate` (as the shipped layout does). Keep the comma between JSON properties. Unknown names and non-string values reject the layout. Save the file, then load a save to apply it; no recompilation is needed. UIExtensions ignores this setting. The idle Submenu/Back fill uses `--subnav-fill`: slate `#38392f`, moss `#2d3a2f`, ember `#402e2a`; their labels use `--subnav-label` `#bfb8a6` in every theme. Without a slot colour override, selected navigation labels retain the existing `--nav-fill` colors. All themes keep cream text and the same Chevron/Knot line colours.
+
+### Per-slot colours (Magelight)
+
+Any non-null entry can add `color` as exactly `#` plus six hexadecimal digits, using either letter case:
+
+```json
+{ "label": "Greet", "intent": "greet", "color": "#4a6b5c" }
+```
+
+This changes the idle colour only: both gesture parts, both hotkey parts, or the action/navigation necktie. Selected fills stay yellow with the standard band and white caps; the lit label and badge use your chosen idle colour. Disabled entries, including actions without a target, keep their shared disabled look. Slot colours survive theme changes. Very light or very dark colours can hurt label readability. Names, short hex codes, `rgb()` and non-string values are rejected. UIExtensions ignores this option. The shipped layout has no colours.
+
+Custom-coloured gesture bulbs also derive their unlit ripple tint from the slot colour, with a lower hue and increased HSL lightness at the same strength. Uncoloured bulbs keep mint ripples, and lit bulbs keep warm yellow ripples.
 
 ### Rename or move an entry
 

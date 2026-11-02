@@ -277,8 +277,12 @@ frame.addEventListener("load", async () => {
                     for(let n=0;n<=1024;n++){const p=cap.getPointAtLength(cap.getTotalLength()*n/1024);if(Math.abs(p.y-box.y)<.01)flat.push(p.x);}
                     assert(Math.abs((Math.max(...flat)-Math.min(...flat))/box.width-.4)<.01,`Slot ${i} hotkey cap top is not 40% of chord width`);
                     assert(pie.isPointInFill(new view.DOMPoint(1800,chordY+.1))&&!pie.isPointInFill(new view.DOMPoint(1800,chordY-.1))&&cap.isPointInFill(new view.DOMPoint(1800,chordY-.1))&&!cap.isPointInFill(new view.DOMPoint(1800,chordY+.1)),`Slot ${i} hotkey does not split on a straight shared chord`);
-                    const effect=sector.querySelector(".signal-flow"), clip=doc.getElementById(effect?.getAttribute("clip-path")?.slice(5,-1));
-                    assert(effect&&clip.firstElementChild.isPointInFill(new view.DOMPoint(1800,box.y+40))&&clip.firstElementChild.isPointInFill(new view.DOMPoint(1800,chordY+80)),`Slot ${i} hotkey flow does not span both inset interiors`);
+                    const effect=sector.querySelector(".signal-flow"), clip=doc.getElementById(effect?.getAttribute("clip-path")?.slice(5,-1)), clipShape=clip?.firstElementChild, edge=target.querySelector(".edge-line");
+                    assert(effect&&clipShape?.getAttribute("d")===edge.getAttribute("d")&&!clipShape.isPointInFill(new view.DOMPoint(1800,box.y+40))&&clipShape.isPointInFill(new view.DOMPoint(1800,chordY+80)),`Slot ${i} hotkey flow does not use only the original inset pie outline`);
+                    const pieInsetY=edge.getBBox().y;
+                    assert(!clipShape.isPointInFill(new view.DOMPoint(1800,chordY-1))&&!clipShape.isPointInFill(new view.DOMPoint(1800,pieInsetY-1))&&clipShape.isPointInFill(new view.DOMPoint(1800,pieInsetY+1)),`Slot ${i} hotkey flow clip does not respect the pie chord inset`);
+                    assert(!nearby.querySelector(".signal-flow"),`Slot ${i} hotkey flow is attached to the cap`);
+                    assert(target.classList.contains("hot")&&nearby.classList.contains("hot"),`Slot ${i} hotkey cap/pie do not light together`);
                     nearby.focus();
                     assert(target.classList.contains("hot") && nearby.classList.contains("hot"), `Slot ${i} hotkey cap did not light both parts`);
                     click(cap);
@@ -512,15 +516,26 @@ frame.addEventListener("load", async () => {
                 const r=region(index,mode), hit=r.querySelector(".hit-area"), edge=r.querySelector(".edge-line"), band=r.querySelector(".selected-band");
                 const fill=view.getComputedStyle(hit).fill,cap=mode==="nearby";
                 if(cap) {
-                    assert(fill==="rgb(255, 244, 208)",`${theme} ${index} lit cap is not near-white`);
-                    const pieFill=view.getComputedStyle(region(index).querySelector(".hit-area")).fill;
-                    assert(brightness(fill)>brightness(pieFill)+10,`${theme} ${index} lit cap is not visibly brighter than its lit pie`);
+                    const fillUrl=fill.match(/^url\(["']?#([^)"']+)["']?\)$/)?.[1], gradient=fillUrl&&doc.getElementById(fillUrl), stops=[...(gradient?.querySelectorAll("stop")||[])];
+                    const fillColor=value=>{const hex=value.trim().match(/^#([0-9a-f]{6})$/i);return hex?`rgb(${parseInt(hex[1].slice(0,2),16)}, ${parseInt(hex[1].slice(2,4),16)}, ${parseInt(hex[1].slice(4,6),16)})`:value.trim();};
+                    assert(gradient?.tagName==="radialGradient"&&gradient.getAttribute("gradientUnits")==="objectBoundingBox"&&["cx","cy","r"].every(name=>gradient.getAttribute(name)==="50%"),`${theme} ${index} lit cap lacks its shared object-bounding-box radial gradient`);
+                    assert(stops.length===3&&stops.map(stop=>stop.offset.baseVal).every((offset,i)=>Math.abs(offset-[0,.55,1][i])<.001)&&stops.every(stop=>Number(view.getComputedStyle(stop).stopOpacity)===1),`${theme} ${index} lit cap gradient stops/opacity changed`);
+                    const rootStyle=view.getComputedStyle(doc.documentElement),center=fillColor(rootStyle.getPropertyValue("--cap-lit-fill")),warm=fillColor(rootStyle.getPropertyValue("--cap-lit-edge")),pieFill=view.getComputedStyle(region(index).querySelector(".hit-area")).fill;
+                    assert(center==="rgb(255, 255, 255)"&&stops.slice(0,2).every(stop=>view.getComputedStyle(stop).stopColor===center)&&view.getComputedStyle(stops[2]).stopColor===warm,`${theme} ${index} lit cap gradient is not opaque white-centred with the warm edge`);
+                    const warmRgb=warm.match(/[\d.]+/g).map(Number);
+                    assert(warmRgb.every(value=>value>=230)&&warmRgb[0]>warmRgb[1]&&warmRgb[1]>warmRgb[2],`${theme} ${index} cap edge is not a slight pale warmth`);
+                    assert(brightness(center)>brightness(pieFill)+10,`${theme} ${index} lit cap centre is not visibly brighter than its lit pie`);
+                    const box=hit.getBBox(),point=new view.DOMPoint(box.x+box.width/2,box.y+box.height/2).matrixTransform(hit.getScreenCTM());
+                    const veils=[vignette,topVignette],oldPointers=veils.map(node=>node.style.pointerEvents);
+                    try {
+                        veils.forEach(node=>node.style.pointerEvents="auto");
+                        assert(doc.elementFromPoint(point.x,point.y)?.closest(".nearby-region")===r,`${theme} ${index} cap is painted beneath a background vignette`);
+                    } finally { veils.forEach((node,i)=>node.style.pointerEvents=oldPointers[i]); }
                 } else assert(fill==="rgb(255, 220, 140)", `${theme} ${index}/${mode} selected pie fill changed`);
-                assert(view.getComputedStyle(edge).stroke==="rgb(255, 220, 140)", `${theme} ${index}/${mode} selected edge is not bright yellow`);
                 assert(band && view.getComputedStyle(band).display!=="none", `${theme} ${index}/${mode} selected band missing`);
                 assert(parseFloat(view.getComputedStyle(band).strokeWidth)===30,`${theme} ${index}/${mode} selected band stroke is not 30 units`);
                 const bandFill=view.getComputedStyle(band).stroke;
-                if(cap) assert(brightness(bandFill)<brightness(fill)&&brightness(bandFill)>brightness(view.getComputedStyle(region(index).querySelector(".selected-band")).stroke),`${theme} ${index} cap band is not darker than its fill and lighter than the pie band`);
+                if(cap) assert(brightness(bandFill)<brightness("rgb(255, 255, 255)")&&brightness(bandFill)>brightness(view.getComputedStyle(region(index).querySelector(".selected-band")).stroke),`${theme} ${index} cap band is not darker than its fill and lighter than the pie band`);
                 else assert(bandFill==="rgb(168, 135, 63)",`${theme} ${index} selected pie band changed`);
                 const label=doc.querySelector(`.sectorLabel[data-index="${index}"]`),kindVar=index===0?"--gesture-fill":index===1?"--action-fill":index===4?"--hotkey-fill":"--nav-fill";
                 const raw=view.getComputedStyle(doc.documentElement).getPropertyValue(kindVar).trim(),hex=raw.match(/^#([0-9a-f]{6})$/i);
@@ -850,19 +865,25 @@ frame.addEventListener("load", async () => {
             const expectedBlend="plus-lighter";
             assert(blend===expectedBlend||blend==="normal",`Slot ${index} uses the wrong ${expectedBlend} blend mode`);
             const clip=flowOutline(), clippedHit=(signal?nearby:target).querySelector(".hit-area"), box=clippedHit.getBBox();
+            if(type==="hotkey")assert(!nearby.querySelector(".signal-flow")&&clip.getAttribute("d")===target.querySelector(".edge-line").getAttribute("d"),`Slot ${index} hotkey flow is not clipped to the pie edge-line geometry`);
             for(let x=0;x<=8;x++)for(let y=0;y<=8;y++){
                 const p=new view.DOMPoint(box.x+box.width*x/8,box.y+box.height*y/8);
-                if(type==="hotkey") assert(!clip.isPointInFill(p)||target.querySelector(".hit-area").isPointInFill(p)||nearby.querySelector(".hit-area").isPointInFill(p),`Slot ${index} hotkey flow escapes both parts`);
-                else assert(clip.isPointInFill(p)===clippedHit.isPointInFill(p),`Slot ${index} flow clip does not follow its hit geometry`);
+                assert(clip.isPointInFill(p)===(type==="hotkey"?target.querySelector(".edge-line"):clippedHit).isPointInFill(p),`Slot ${index} ${type} flow clip does not follow its painted geometry`);
             }
             assert(paths.length===count*(signal?1:2) && paths.every(path=>view.getComputedStyle(path).fill!=="none"&&view.getComputedStyle(path).stroke==="none"), "Flow does not use filled bands");
             const prop=signal?(lit?"--flow-lit-signal-tint":"--flow-signal-tint"):"--flow-lit-tint";
             const rawTint=view.getComputedStyle(doc.documentElement).getPropertyValue(prop).trim(),rgb=rawTint.match(/^#([0-9a-f]{6})$/i);
             if(lit&&!signal)assert(rawTint.toLowerCase()==="#fff6e0",`Lit ${type} flow is not warm-white #fff6e0`);
             let color=rgb?[parseInt(rgb[1].slice(0,2),16),parseInt(rgb[1].slice(2,4),16),parseInt(rgb[1].slice(4,6),16)]:[];
-            const fill=view.getComputedStyle(clippedHit).fill.match(/[\d.]+/g).map(Number);
-            if(blend==="normal")color=color.map((value,i)=>Math.min(255,value+fill[i]));
-            const expectedTint=rgb?`rgb(${color.join(", ")})`:rawTint,opacityProp=signal?(lit?"--flow-lit-signal-opacity":"--flow-opacity"):(lit?"--flow-lit-opacity":"--flow-opacity");
+            let expectedTint=rgb?`rgb(${color.join(", ")})`:rawTint;
+            if(blend==="normal"&&rgb){
+                const fill=view.getComputedStyle(clippedHit).fill,fillUrl=fill.match(/^url\(["']?#([^)"']+)["']?\)$/)?.[1],gradient=fillUrl&&doc.getElementById(fillUrl);
+                const fills=gradient?[...gradient.querySelectorAll("stop")].map(stop=>view.getComputedStyle(stop).stopColor.match(/[\d.]+/g).map(Number)):[fill.match(/[\d.]+/g).map(Number)];
+                const results=fills.map(part=>color.map((value,i)=>Math.min(255,value+part[i])));
+                assert(results.every(result=>result.every((value,i)=>value===results[0][i])),`Normal fallback cannot represent the gradient's clamped sum uniformly`);
+                expectedTint=`rgb(${results[0].join(", ")})`;
+            }
+            const opacityProp=signal?(lit?"--flow-lit-signal-opacity":"--flow-opacity"):(lit?"--flow-lit-opacity":"--flow-opacity");
             const expectedOpacity=Number(view.getComputedStyle(doc.documentElement).getPropertyValue(opacityProp).trim());
             assert(Math.abs(expectedOpacity-(signal?0.12:0.35))<.001,`Flow peak variable ${opacityProp} is incorrect`);
             assert(paths.every(path=>[...doc.getElementById(path.getAttribute("fill").slice(5,-1)).querySelectorAll("stop")].every(stop=>view.getComputedStyle(stop).stopColor===expectedTint)),`Flow tint/fallback ${prop} is incorrect`);
@@ -936,6 +957,8 @@ frame.addEventListener("load", async () => {
         const stillUtil=flowSnapshot();
         await new Promise(resolve=>setTimeout(resolve,100));
         assert(flowSnapshot()===stillUtil,"Zero-tween utility flow moves");
+        arm("flow-hotkeys-static",Array.from({length:12},()=>flowSlots[5]));
+        for(let i=0;i<12;i++){region(i).focus();checkFlow(i,"hotkey",true);}
         arm("flow-disabled-actions",Array.from({length:12},()=>flowSlots[1]),"");
         for (let i = 0; i < 12; i++) {
             region(i).focus(); region(i).dispatchEvent(new view.MouseEvent("mouseenter"));

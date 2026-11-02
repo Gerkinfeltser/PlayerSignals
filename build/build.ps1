@@ -258,7 +258,6 @@ $hotkeyCapTopRight = Line-Crossing $hotkeyTopLine $lines[2]
 $hotkeyCapEdgeD = 'M{0}L{1}L{2}L{3}Z' -f `
     (Svg-Point $hotkeyCapLeft), (Svg-Point $hotkeyCapTopLeft),
     (Svg-Point $hotkeyCapTopRight), (Svg-Point $hotkeyCapRight)
-$hotkeyInnerD = $hotkeyPieEdgeD + $hotkeyCapEdgeD
 $coreEdgeD = $hotkeyPieEdgeD
 function Tip-EdgePath {
     $radius = $capRadius - $edgeInset
@@ -377,7 +376,6 @@ foreach ($region in $regions) {
     $piece.SetAttribute('data-index', [string]$slot)
     $piece.SetAttribute('data-core-radius', $coreOuter.ToString([Globalization.CultureInfo]::InvariantCulture))
     $piece.SetAttribute('data-hotkey-union-d', $hotkeyUnionD)
-    $piece.SetAttribute('data-hotkey-inner-d', $hotkeyInnerD)
     $piece.SetAttribute('data-label-radius', $labelRadius.ToString('0.######', [Globalization.CultureInfo]::InvariantCulture))
     $piece.SetAttribute('data-bulb-x', (1800 + $capCenter[0]).ToString('0.###', [Globalization.CultureInfo]::InvariantCulture))
     $piece.SetAttribute('data-bulb-y', (1800 + $capCenter[1]).ToString('0.###', [Globalization.CultureInfo]::InvariantCulture))

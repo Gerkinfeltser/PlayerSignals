@@ -566,23 +566,110 @@ frame.addEventListener("load", async () => {
         }
         [frame.width, frame.height] = originalSize;
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-        arm("all-action-badges", Array.from({length:12},(_,i)=>({label:i%2 ? "Drink alcohol" : "Wait here",action:{name:"WaitHere"}})));
-        const badgeBox = i => doc.querySelectorAll(".actionLabel")[i]?.getBoundingClientRect();
-        for (let i = 0; i < 12; i++) {
-            const label = doc.querySelector(`.sectorLabel[data-index="${i}"]`), range = doc.createRange(), badge = doc.querySelectorAll(".actionLabel")[i];
-            range.selectNodeContents(label);
-            const ink = range.getBoundingClientRect(), before = badge.getBoundingClientRect(), matrix = badge.getScreenCTM();
-            assert(Math.abs(ink.left+ink.width/2-(before.left+before.width/2)) <= 2, `Action badge ${i} is not centered below its label`);
-            assert(before.top >= ink.bottom && before.top-ink.bottom <= 12, `Action badge ${i} gap from label is not small and positive`);
-            assert(Math.abs(matrix.b) < .001 && Math.abs(matrix.c) < .001, `Action badge ${i} is not upright in screen space`);
-            region(i).focus();
-            const after = badgeBox(i);
-            range.selectNodeContents(label);
-            const hovered = range.getBoundingClientRect();
-            assert(Math.abs(after.left+after.width/2-(hovered.left+hovered.width/2)) <= 2 && after.top >= hovered.bottom && after.top-hovered.bottom <= 12, `Hovered action badge ${i} no longer tracks its label`);
-            doc.getElementById("center").focus();
+        const badgeKinds = [
+            ["intent", {label:"Greet",intent:"greet"}, "SIGNAL", "--gesture-fill"],
+            ["action", {label:"Wait here",action:{name:"WaitHere"}}, "ACTION", "--action-fill"],
+            ["submenu", {label:"Social",submenu:"social"}, "NAV", "--nav-fill"],
+            ["back", {label:"Back",control:"back"}, "NAV", "--nav-fill"],
+            ["hotkey", {label:"Dashboard",hotkey:64}, "KEY", "--hotkey-fill"]
+        ];
+        const badgeLabels = ["Yes", "Follow the target / resume following"];
+        const badgeRgb = raw => {
+            const hex=raw.trim().match(/^#([0-9a-f]{6})$/i);
+            return hex?`rgb(${parseInt(hex[1].slice(0,2),16)}, ${parseInt(hex[1].slice(2,4),16)}, ${parseInt(hex[1].slice(4,6),16)})`:raw;
+        };
+        const overlapsPainted = (node, box) => {
+            if(!node||view.getComputedStyle(node).display==="none")return false;
+            const paths=node.matches("path")?[node]:[...node.querySelectorAll("path")];
+            for(const path of paths) {
+                const style=view.getComputedStyle(path),rect=path.getBoundingClientRect();
+                if(style.display==="none"||style.visibility!=="visible"||style.fill==="none"&&style.stroke==="none"||box.left>=rect.right||box.right<=rect.left||box.top>=rect.bottom||box.bottom<=rect.top)continue;
+                const inverse=path.getScreenCTM().inverse(),step=2;
+                for(let x=Math.max(box.left,rect.left);x<=Math.min(box.right,rect.right);x+=step)for(let y=Math.max(box.top,rect.top);y<=Math.min(box.bottom,rect.bottom);y+=step) {
+                    const point=new view.DOMPoint(x,y).matrixTransform(inverse);
+                    if(style.fill!=="none"&&path.isPointInFill(point)||style.stroke!=="none"&&path.isPointInStroke(point))return true;
+                }
+            }
+            return false;
+        };
+        const assertBadgeLayout = (i, badge, label, kind, text) => {
+            const range=doc.createRange(); range.selectNodeContents(label);
+            assert(text==="Yes"?range.getClientRects().length===1:range.getClientRects().length>1,`${kind} ${text} did not exercise the expected label wrapping`);
+            const ink=range.getBoundingClientRect(), box=badge.getBoundingClientRect(), matrix=badge.getScreenCTM();
+            assert(Math.abs(ink.left+ink.width/2-(box.left+box.width/2))<=2,`${kind} badge ${i}/${text} is not centered below its label ink`);
+            assert(box.top>=ink.bottom&&box.top-ink.bottom<=12,`${kind} badge ${i}/${text} gap from actual label ink is not small and positive`);
+            assert(Math.abs(matrix.b)<.001&&Math.abs(matrix.c)<.001,`${kind} badge ${i}/${text} is not upright in screen space`);
+            const hit=region(i).querySelector(".hit-area"),inverse=hit.getScreenCTM().inverse(),chordY=Number(hit.closest("[data-bulb-y]").dataset.bulbY);
+            for(const [x,y] of [[box.left,box.top],[box.right,box.top],[box.left,box.bottom],[box.right,box.bottom]]) {
+                const point=new view.DOMPoint(x,y).matrixTransform(inverse);
+                assert((kind!=="intent"&&kind!=="hotkey")||point.y>=chordY,`${kind} badge ${i}/${text} crosses a slice chord`);
+            }
+            const sector=doc.getElementById(`slot-${i}`);
+            assert(!overlapsPainted(sector.querySelector(".chevron-knot"),box)&&[...sector.querySelectorAll(".utility-arc")].every(arc=>!overlapsPainted(arc,box)),`${kind} badge ${i}/${text} overlaps painted navigation artwork`);
+        };
+        for(const [kind,slot,badgeText,fillVar] of badgeKinds) for(const text of badgeLabels) {
+            const slots=Array.from({length:12},()=>({...slot,label:text}));
+            arm(`badges-${kind}-${text.replaceAll(" ","-")}`,slots);
+            center.focus();
+            for(let i=0;i<12;i++) {
+                const label=doc.querySelector(`.sectorLabel[data-index="${i}"]`),badge=doc.querySelector(`#slot-${i} .actionLabel`);
+                assert(badge.textContent===badgeText&&view.getComputedStyle(badge).display!=="none",`${kind} badge ${i} has incorrect visible text`);
+                assert(view.getComputedStyle(badge).fill==="rgb(240, 206, 137)",`${kind} badge ${i} idle fill is not #f0ce89`);
+                assertBadgeLayout(i,badge,label,kind,text);
+                region(i).focus();
+                assert(view.getComputedStyle(badge).fill===badgeRgb(view.getComputedStyle(doc.documentElement).getPropertyValue(fillVar)),`${kind} badge ${i} lit fill does not match its kind`);
+                const range=doc.createRange(); range.selectNodeContents(label);
+                const ink=range.getBoundingClientRect(),lit=badge.getBoundingClientRect();
+                assert(Math.abs(ink.left+ink.width/2-(lit.left+lit.width/2))<=2&&lit.top>=ink.bottom&&lit.top-ink.bottom<=12,`Lit ${kind} badge ${i} stopped tracking its label`);
+                doc.getElementById("center").focus();
+            }
+            key("Escape"); assert(replies.pop()===`badges-${kind}-${text.replaceAll(" ","-")}|-1||cancel`,`${kind} badge setup failed to cancel`);
         }
-        key("Escape"); assert(replies.pop() === "all-action-badges|-1||cancel", "Badge setup failed to cancel");
+        for(const theme of ["slate","moss","ember"]) {
+            const themedSlots=Array.from({length:12},(_,i)=>badgeKinds[i%badgeKinds.length][1]);
+            arm(`badge-colors-${theme}`,themedSlots,"Lydia",theme);
+            for(let i=0;i<12;i++) {
+                const badge=doc.querySelector(`#slot-${i} .actionLabel`),slot=badgeKinds[i%badgeKinds.length];
+                region(i).focus();
+                assert(view.getComputedStyle(badge).fill===badgeRgb(view.getComputedStyle(doc.documentElement).getPropertyValue(slot[3])),`${theme} ${slot[0]} badge ${i} lit fill does not match its kind`);
+                doc.getElementById("center").focus();
+            }
+            key("Escape"); replies.pop();
+        }
+        for(const [step,slot,expected] of [
+            ["action",{label:"Action",action:{name:"WaitHere"}},"ACTION"],
+            ["signal",{label:"Signal",intent:"greet"},"SIGNAL"],
+            ["submenu",{label:"Menu",submenu:"social"},"NAV"],
+            ["hotkey",{label:"Hotkey",hotkey:64},"KEY"],
+            ["close",{label:"Close",control:"close"},null],
+            ["null",null,null]
+        ]) {
+            arm(`badge-visibility-${step}`,slot?[slot]:[]);
+            const badge=doc.querySelector("#slot-0 .actionLabel");
+            assert(expected?badge.textContent===expected&&view.getComputedStyle(badge).display!=="none":view.getComputedStyle(badge).display==="none",`Badge switch to ${step} retained stale or incorrect text`);
+        }
+        key("Escape"); assert(replies.pop()==="badge-visibility-null|-1||cancel","Badge visibility setup failed to cancel");
+        for(const [wheelName,shippedSlots] of Object.entries(layout.wheels)) {
+            arm(`badge-shipped-${wheelName}`,shippedSlots);
+            for(let i=0;i<12;i++) {
+                const badge=doc.querySelector(`#slot-${i} .actionLabel`),label=doc.querySelector(`.sectorLabel[data-index="${i}"]`);
+                if(view.getComputedStyle(badge).display!=="none") {
+                    const inkRange=doc.createRange(); inkRange.selectNodeContents(label);
+                    const ink=inkRange.getBoundingClientRect(),box=badge.getBoundingClientRect();
+                    assert(Math.abs(ink.left+ink.width/2-(box.left+box.width/2))<=2&&box.top>=ink.bottom&&box.top-ink.bottom<=12,`Shipped slot ${i} badge is misplaced from its actual label ink`);
+                    const hit=region(i).querySelector(".hit-area"),inverse=hit.getScreenCTM().inverse(),kind=hit.closest(".sector").dataset.kind,chordY=Number(hit.closest("[data-bulb-y]").dataset.bulbY);
+                    for(const [x,y] of [[box.left,box.top],[box.right,box.top],[box.left,box.bottom],[box.right,box.bottom]])
+                        assert((kind!=="intent"&&kind!=="hotkey")||new view.DOMPoint(x,y).matrixTransform(inverse).y>=chordY,`Shipped slot ${i} badge crosses a slice chord`);
+                    const sector=doc.getElementById(`slot-${i}`);
+                    assert(!overlapsPainted(sector.querySelector(".chevron-knot"),box)&&[...sector.querySelectorAll(".utility-arc")].every(arc=>!overlapsPainted(arc,box)),`Shipped slot ${i} badge overlaps painted navigation artwork`);
+                }
+            }
+            key("Escape"); replies.pop();
+        }
+        arm("badge-disabled-action",[{label:"Wait here",action:{name:"WaitHere"}}],"");
+        const disabledBadge=doc.querySelector("#slot-0 .actionLabel"),disabledSector=doc.getElementById("slot-0");
+        assert(disabledSector.getAttribute("aria-disabled")==="true"&&view.getComputedStyle(disabledBadge).display!=="none"&&disabledBadge.textContent==="ACTION"&&Number(view.getComputedStyle(disabledSector).opacity)===.5,"Disabled ACTION badge is hidden or not dimmed with its sector");
+        key("Escape"); assert(replies.pop()==="badge-disabled-action|-1||cancel","Disabled badge setup failed to cancel");
         arm("shift-preview", [{label:"Gesture",intent:"greet"},{label:"Action",action:{name:"WaitHere"}},{label:"Menu",submenu:"social"}]);
         doc.getElementById("center").focus(); region(0).focus();
         assert(region(0).classList.contains("hot") && !region(0,"nearby").classList.contains("hot") && doc.getElementById("destination").textContent === "Lydia", "Gesture starts in the wrong preview state");
@@ -746,7 +833,9 @@ frame.addEventListener("load", async () => {
             assert(paths.every(path=>[...doc.getElementById(path.getAttribute("fill").slice(5,-1)).querySelectorAll("stop")].every(stop=>view.getComputedStyle(stop).stopColor===expectedTint)),`Flow tint/fallback ${prop} is incorrect`);
             const label=doc.querySelector(`.sectorLabel[data-index="${index}"]`).closest("foreignObject");
             assert(effect.compareDocumentPosition(label)&view.Node.DOCUMENT_POSITION_FOLLOWING,"Flow paints over label");
-            if(type==="action") assert(effect.compareDocumentPosition(doc.querySelectorAll(".actionLabel")[index])&view.Node.DOCUMENT_POSITION_FOLLOWING,"Flow paints over ACTION");
+            const flowBadge=doc.querySelector(`#slot-${index} .actionLabel`);
+            if(type==="action"||type==="hotkey"||type==="util"&&["submenu","back"].includes(sector.dataset.kind))
+                assert(flowBadge&&view.getComputedStyle(flowBadge).display!=="none"&&(effect.compareDocumentPosition(flowBadge)&view.Node.DOCUMENT_POSITION_FOLLOWING),`Flow paints over ${sector.dataset.kind==="submenu"||sector.dataset.kind==="back"?"NAV":"kind"} badge`);
             if(signal){
                 assert(effect.parentElement===nearby&&!target.querySelector(".signal-flow"),"Gesture flow is not owned by the bulb beneath the core");
                 const x=Number(sector.dataset.bulbX),y=Number(sector.dataset.bulbY),toRoot=svg.getCTM().inverse();
@@ -766,7 +855,17 @@ frame.addEventListener("load", async () => {
                 assert(transform&&Math.abs(transform.e-1800)<1,"Chevron mark is not centered from wheel origin");
                 const radius=1800-transform.f,w=radius*Math.tan(Math.PI/12)+14*scale,h=.45*w,trail=46*scale,arms=[...mark.querySelectorAll(".flow-band")];
                 const innerRadius=470*subbackScale,outerRadius=1692*subbackScale,envelope=expectedOpacity*Math.sin(Math.PI*(radius-innerRadius)/(outerRadius+trail-innerRadius)),opacity=Number(mark.getAttribute("opacity"));
-                assert(arms.length===2&&opacity>0&&opacity<=envelope+.003&&opacity>=.55*envelope-.003,"Chevron opacity violates the sine envelope or text-dimming range");
+                const labelRange=doc.createRange(), labelNode=doc.querySelector(`.sectorLabel[data-index="${index}"]`);
+                labelRange.selectNodeContents(labelNode);
+                const badgeNode=doc.querySelector(`#slot-${index} .actionLabel`), boxes=[labelRange.getBoundingClientRect()];
+                if(badgeNode&&view.getComputedStyle(badgeNode).display!=="none")boxes.push(badgeNode.getBoundingClientRect());
+                const inverse=target.getScreenCTM().inverse(),radii=boxes.flatMap(box=>[[box.left,box.top],[box.right,box.top],[box.left,box.bottom],[box.right,box.bottom]].map(([x,y])=>1800-new view.DOMPoint(x,y).matrixTransform(inverse).y));
+                const textMin=Math.min(...radii)-45*subbackScale,textMax=Math.max(...radii)+45*subbackScale,textGap=Math.max(textMin-radius,radius-textMax,0);
+                const dim=.55+.45*Math.min(1,textGap/(80*subbackScale));
+                // Compare exact ink bounds at rest; native text hinting can shift them during the cached lift.
+                if(parseFloat(view.getComputedStyle(doc.documentElement).getPropertyValue("--ps-tween"))===0)
+                    assert(Math.abs(opacity-envelope*dim)<.004,"Chevron opacity does not dim across the rendered label and badge region");
+                else assert(opacity>=.55*envelope-.003&&opacity<=envelope+.003,"Moving chevron opacity leaves its dimming envelope");
                 for(const [i,path] of arms.entries()){
                     const bounds=path.getBBox();
                     assert(Math.abs(bounds.width-w)<1&&Math.abs(bounds.height-(h+trail))<1,`Chevron pad/trail is not scaled from core radius (${scale})`);

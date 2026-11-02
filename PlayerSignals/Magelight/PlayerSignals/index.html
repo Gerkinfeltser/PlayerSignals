@@ -380,7 +380,7 @@
         if (!flowBulb) {
             const range = document.createRange(); range.selectNodeContents(sector.content);
             const boxes = [range.getBoundingClientRect()];
-            if (kind === "action" || kind === "hotkey") boxes.push(sector.actionBadge.getBoundingClientRect());
+            if (sector.actionBadge.style.display !== "none") boxes.push(sector.actionBadge.getBoundingClientRect());
             const inverse = sector.target.getScreenCTM().inverse(), radii = [];
             boxes.forEach(box => {
                 for (const x of [box.left, box.right]) for (const y of [box.top, box.bottom])
@@ -549,13 +549,20 @@
                 const { group, pop, target, nearby, content, labelBox, labelRadius, actionBadge, knot } = sectors[index];
                 const kind = item?.[2], disabled = !item || (kind === "action" && !targetName);
                 const subback = !disabled && (kind === "submenu" || kind === "back");
+                actionBadge.textContent = kind === "hotkey" ? "KEY" : kind === "intent" ? "SIGNAL" : kind === "submenu" || kind === "back" ? "NAV" : "ACTION";
+                const badged = ["action", "hotkey", "intent", "submenu", "back"].includes(kind);
+                actionBadge.style.display = item && badged ? "" : "none";
                 content.textContent = item ? item[0] : "";
                 const angle = index * Math.PI / 6, labelScale = subback ? navScale : 1;
                 const labelX = 1800 + labelRadius * Math.sin(angle) * 1.2 * labelScale;
                 const labelY = 1800 - labelRadius * Math.cos(angle) * 1.2 * labelScale;
                 labelBox.setAttribute("x", labelX - 250 * labelScale); labelBox.setAttribute("y", labelY - 170 * labelScale);
-                labelBox.setAttribute("width", 500 * labelScale); labelBox.setAttribute("height", 340 * labelScale);
+                // Fit long labels with room for the badge, then retain the existing label centre.
+                const labelHeight = 340 * labelScale;
+                labelBox.setAttribute("width", 500 * labelScale);
+                labelBox.setAttribute("height", labelHeight - (badged ? actionBadge.getBBox().height + 12 : 0));
                 fit(content, 80);
+                labelBox.setAttribute("height", labelHeight);
                 if (subback) knot.setAttribute("transform", `translate(0 ${1692 * (1 - navScale)})`);
                 else knot.removeAttribute("transform");
                 group.dataset.kind = kind || "";
@@ -578,9 +585,6 @@
                 target.setAttribute("aria-label", !item ? "Empty slot" : kind === "hotkey" ? `${item[0]} — Hotkey ${keyName(Number(item[1])) || item[1]}` : kind === "action" ? `${item[0]} — Action, ${targetName || "Target NPC"}${disabled ? ", disabled: no target" : ""}` : kind === "intent" ? `${item[0]} — ${targetName || "No target"}${targetName ? "" : " · Openly"}` : `${item[0]} — Navigation`);
                 nearby.setAttribute("aria-label", kind === "intent" ? `${item[0]} — Openly` : target.getAttribute("aria-label"));
                 nearby.classList.toggle("signal", kind === "intent");
-                actionBadge.textContent = kind === "hotkey" ? "KEY" : "ACTION";
-                const badged = kind === "action" || kind === "hotkey";
-                actionBadge.style.display = item && badged ? "" : "none";
                 if (badged) {
                     // Position actual text ink in the label's upright SVG frame, including wrapped labels.
                     const range = document.createRange(); range.selectNodeContents(content);

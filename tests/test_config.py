@@ -149,7 +149,7 @@ class ConfigValidation(unittest.TestCase):
         layout = json.loads(CATALOG.with_name('layout.json').read_text(encoding='utf-8'))
         self.parse(layout)
         expected = {
-            'main': ['confirm', 'social', 'hotkey:64', 'greet', 'signals', None,
+            'main': ['confirm', 'social', 'hotkey:11', 'greet', 'signals', None,
                      'deny', 'attitude', None, 'farewell', 'actions', None],
             'attitude': ['approve', None, 'understood', 'challenge', 'unsure', 'think',
                          'disapprove', None, 'not_understood', 'yield', 'back', None],

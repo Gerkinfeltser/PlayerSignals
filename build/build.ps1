@@ -215,8 +215,7 @@ $outerLeft = Local-Point $coreOuter (-$half + $coreOuterGap)
 $outerRight = Local-Point $coreOuter ($half - $coreOuterGap)
 $innerRight = Local-Point $coreInner ($half - $coreInnerGap)
 $apex = Line-Crossing (Side-Line $innerLeft $outerLeft 0) (Side-Line $outerRight $innerRight 0)
-$coreD = 'M{0}L{1}A{2},{2} 0 0 1 {3}Z' -f `
-    (Svg-Point $apex), (Svg-Point $outerLeft), $coreOuter, (Svg-Point $outerRight)
+$coreD = 'M{0}L{1}L{2}Z' -f (Svg-Point $apex), (Svg-Point $outerLeft), (Svg-Point $outerRight)
 $capCenter = @((($outerLeft[0] + $outerRight[0]) / 2), (($outerLeft[1] + $outerRight[1]) / 2))
 $capRadius = [Math]::Sqrt(($outerRight[0] - $outerLeft[0]) * ($outerRight[0] - $outerLeft[0]) +
     ($outerRight[1] - $outerLeft[1]) * ($outerRight[1] - $outerLeft[1])) / 2
@@ -260,31 +259,17 @@ $hotkeyCapEdgeD = 'M{0}L{1}L{2}L{3}Z' -f `
     (Svg-Point $hotkeyCapLeft), (Svg-Point $hotkeyCapTopLeft),
     (Svg-Point $hotkeyCapTopRight), (Svg-Point $hotkeyCapRight)
 $hotkeyInnerD = $hotkeyPieEdgeD + $hotkeyCapEdgeD
-function Core-EdgePath {
-    $outer = $coreOuter - $edgeInset; $line = $lines[0]
-    $dot = $line[0] * $line[2] + $line[1] * $line[3]
-    $t = -$dot + [Math]::Sqrt($dot * $dot - ($line[0] * $line[0] + $line[1] * $line[1] - $outer * $outer))
-    $hit = @(($line[0] + $t * $line[2]), ($line[1] + $t * $line[3]))
-    $side = @(($hit[0] - $edgeChamfer * $line[2]), ($hit[1] - $edgeChamfer * $line[3]))
-    $angle = [Math]::Atan2($hit[0], -$hit[1]) * 180 / [Math]::PI + $edgeChamfer / $outer * 180 / [Math]::PI
-    'M{0}L{1}L{2}A{3},{3} 0 0 1 {4}L{5}Z' -f `
-        (Svg-Point $insetApex), (Svg-Point $side), (Point $outer $angle), $outer,
-        (Point $outer (-$angle)), (Svg-Point @((-$side[0]), $side[1]))
-}
+$coreEdgeD = $hotkeyPieEdgeD
 function Tip-EdgePath {
     $radius = $capRadius - $edgeInset
-    $wheelRadius = $coreOuter + $edgeInset
-    $centerDistance = [Math]::Sqrt($capCenter[0] * $capCenter[0] + $capCenter[1] * $capCenter[1])
-    $along = ($wheelRadius * $wheelRadius - $radius * $radius + $centerDistance * $centerDistance) / (2 * $centerDistance)
-    $x = [Math]::Sqrt($wheelRadius * $wheelRadius - $along * $along)
-    $y = $capCenter[1] / $centerDistance * $along
-    $left = @(-$x, $y); $right = @($x, $y)
+    $chordY = $outerLeft[1] - $edgeInset
+    $offsetY = $chordY - $capCenter[1]
+    $x = [Math]::Sqrt($radius * $radius - $offsetY * $offsetY)
+    $left = @(-$x, $chordY); $right = @($x, $chordY)
     $radiusText = $radius.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
-    $wheelRadiusText = $wheelRadius.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
-    'M{0}A{1},{1} 0 0 1 {2}A{3},{3} 0 0 0 {0}Z' -f `
-        (Svg-Point $left), $radiusText, (Svg-Point $right), $wheelRadiusText
+    'M{0}A{1},{1} 0 0 1 {2}Z' -f `
+        (Svg-Point $left), $radiusText, (Svg-Point $right)
 }
-$coreEdgeD = Core-EdgePath
 $tipEdgeD = Tip-EdgePath
 # Only Submenu/Back use these baked alternatives; strokes keep their original widths.
 $navScale = 0.85

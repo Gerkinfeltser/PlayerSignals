@@ -180,6 +180,9 @@ frame.addEventListener("load", async () => {
                 assert(hit.getAttribute("d")===hit.getAttribute("data-core-d")&&edge.getAttribute("d")===edge.getAttribute("data-core-d")&&sector,`Slot ${i} lacks core path/radius geometry`);
             }
             assert(length > 0 && view.getComputedStyle(edge).pointerEvents === "none", "Inset edge missing or intercepts input");
+            const bandClip=doc.getElementById(`slot-${i}-${mode}-selected-band-clip`).firstElementChild,clipLength=bandClip.getTotalLength(),clipToHit=hit.getCTM().inverse().multiply(bandClip.getCTM());
+            assert(clipLength>0,`Slot ${i} ${mode} selected-band clip is empty`);
+            for(let n=0;n<=64;n++)assert(hit.isPointInFill(bandClip.getPointAtLength(clipLength*n/64).matrixTransform(clipToHit)),`Slot ${i} ${mode} selected-band clip escapes its hit inset`);
             for (let j = 0; j < 128; j++) {
                 const p = edge.getPointAtLength(length * j / 128);
                 assert(hit.isPointInFill(p.matrixTransform(hit.getCTM().inverse().multiply(edge.getCTM()))), `Slot ${i} ${mode} inset leaves its shape`);
@@ -196,8 +199,6 @@ frame.addEventListener("load", async () => {
                     const p=hit.getPointAtLength(Math.PI*r*sample/16);
                     assert(Math.abs(Math.hypot(p.x-x,p.y-y)-r)<1, `Slot ${i} bulb outer edge is not semicircular`);
                 }
-                const screen = point.matrixTransform(svg.getScreenCTM()), actual = doc.elementFromPoint(screen.x,screen.y);
-                assert(actual?.closest(".region") === region(i), `Slot ${i} core does not win the overlapping bulb chord hit`);
             }
         }
         center.blur();
@@ -210,18 +211,30 @@ frame.addEventListener("load", async () => {
         assert(core.classList.contains("hot") && tip.classList.contains("hot"), "Gesture tip failed to highlight both regions");
         const pop = doc.getElementById("slot-0").querySelector(".pop");
         const liftScale = () => pop.parentElement.getCTM().inverse().multiply(pop.getCTM()).a;
-        // Fill-only pointer events preserve distinct routing immediately across the shared arc.
+        // The core and bulb share a straight outer chord; each side owns only its strict interior.
+        const wheelHitAt=point=>{const screen=point.matrixTransform(svg.getScreenCTM());return doc.elementFromPoint(screen.x,screen.y);};
+        let geometryToken = "geometry";
         doc.getElementById("center").focus();
-        for (let i = 0; i < 12; i++) for (const offset of [-13, -8, 0, 8, 13]) for (const [mode, radius] of [["target",1295.9],["nearby",1296.1]]) {
-            const angle = (i*30+offset)*Math.PI/180, point = svg.createSVGPoint();
-            point.x = 1800+radius*Math.sin(angle); point.y = 1800-radius*Math.cos(angle);
-            const hit = doc.getElementById(`slot-${i}-${mode}-hit`), local = point.matrixTransform(hit.getCTM().inverse().multiply(svg.getCTM()));
-            assert(hit.isPointInFill(local), `Slot ${i} ${mode} does not own its side of the shared 1296-unit boundary`);
-            const other = doc.getElementById(`slot-${i}-${mode === "target" ? "nearby" : "target"}-hit`);
-            const otherLocal = point.matrixTransform(other.getCTM().inverse().multiply(svg.getCTM()));
-            if (mode === "nearby") assert(!other.isPointInFill(otherLocal), `Slot ${i} core extends beyond its visible boundary into the bulb`);
-            const screen = point.matrixTransform(svg.getScreenCTM());
-            assert(doc.elementFromPoint(screen.x,screen.y)?.closest(".region") === region(i,mode), `Slot ${i} ${mode} boundary routing overlaps or is stolen`);
+        for (let i = 0; i < 12; i++) {
+            const sector=region(i).closest("g[data-bulb-x]"), angle=i*Math.PI/6, radial=new view.DOMPoint(Math.sin(angle),-Math.cos(angle));
+            const chord=new view.DOMPoint(Number(sector.dataset.bulbX),Number(sector.dataset.bulbY)).matrixTransform(svg.getCTM().inverse().multiply(region(i,"nearby").getCTM()));
+            const chordTarget=wheelHitAt(chord);
+            assert([region(i),region(i,"nearby")].includes(chordTarget?.closest(".region")),`Slot ${i} shared chord has a hit gap`);
+            for(const [mode,sign] of [["target",-1],["nearby",1]]){
+                const hit=doc.getElementById(`slot-${i}-${mode}-hit`),other=doc.getElementById(`slot-${i}-${mode==="target"?"nearby":"target"}-hit`);
+                for(const along of [-.45,-.2,0,.2,.45]){
+                    const point=new view.DOMPoint(chord.x+Math.cos(angle)*Number(sector.dataset.bulbRadius)*2*along+radial.x*sign*4,chord.y+Math.sin(angle)*Number(sector.dataset.bulbRadius)*2*along+radial.y*sign*4);
+                    const local=point.matrixTransform(hit.getCTM().inverse().multiply(svg.getCTM())),otherLocal=point.matrixTransform(other.getCTM().inverse().multiply(svg.getCTM()));
+                    assert(hit.isPointInFill(local),`Slot ${i} ${mode} misses its strict interior beside the shared chord`);
+                    assert(!other.isPointInFill(otherLocal),`Slot ${i} ${mode} overlaps its neighbor beside the shared chord`);
+                    assert(wheelHitAt(point)?.closest(".region")===region(i,mode),`Slot ${i} ${mode} chord-side hit routes incorrectly`);
+                }
+                const point=new view.DOMPoint(chord.x+radial.x*sign*4,chord.y+radial.y*sign*4),actual=wheelHitAt(point);
+                click(actual); assert(replies.pop()===`${geometryToken}|${i}|greet|${mode}`,`Slot ${i} ${mode} chord-side click failed to dispatch`);
+                geometryToken = `chord-${i}-${mode}`;
+                arm(geometryToken,Array.from({length:12},()=>({label:"Gesture",intent:"greet"})));
+                center.focus();
+            }
         }
         assert(Math.abs(liftScale() - 1) < .001, "Boundary checks require an unlifted wheel");
         core.focus();
@@ -229,8 +242,7 @@ frame.addEventListener("load", async () => {
         region(1).focus();
         assert(Math.abs(liftScale() - 1) < .001, "Previous slice retained lift");
         click(doc.getElementById("center"));
-        assert(replies.pop() === "geometry|-1||cancel", "Geometry setup failed to cancel");
-        // Navigation keeps its split core/bulb hit paths; only submenu/back carry baked knots.
+        assert(replies.pop() === `${geometryToken}|-1||cancel`, "Geometry setup failed to cancel");
         for (const [kind, slot] of [
             ["submenu", {label:"Menu",submenu:"social"}],
             ["back", {label:"Back",control:"back"}],
@@ -307,7 +319,9 @@ frame.addEventListener("load", async () => {
         center.focus();
         for (let i = 0; i < 12; i++) {
             const pop = doc.getElementById(`slot-${i}`).querySelector(".pop"), arcs = [...pop.querySelectorAll(".utility-arc")], hit = region(i).querySelector(".hit-area");
+            const expectedVisible=i%4<2;
             assert(arcs.length===2&&arcs.every(arc=>arc.parentElement===pop&&arc.getAttribute("aria-hidden")==="true"&&view.getComputedStyle(arc).pointerEvents==="none"),`Utility ${i} arcs are missing, interactive, or outside their slice lift`);
+            assert(arcs.every(arc=>(view.getComputedStyle(arc).display!=="none")===expectedVisible),`Utility ${i} arcs do not appear only on submenu/back`);
             const clips=arcs.map(arc=>doc.getElementById(arc.getAttribute("clip-path").slice(5,-1)));
             assert(clips.every(clip=>clip&&clip===clips[0]),`Utility ${i} arcs do not share their slice clip`);
             const arcStyles=arcs.map(arc=>view.getComputedStyle(arc));
@@ -339,9 +353,10 @@ frame.addEventListener("load", async () => {
         key("Escape"); assert(replies.pop() === "utility-exclusions|-1||cancel", "Utility exclusion setup failed to cancel");
         arm("hotkey", [{label:"Dashboard",hotkey:64},{label:"Close",control:"close"}], "");
         center.focus();
-        assert(view.getComputedStyle(region(0).querySelector(".hit-area")).fill === view.getComputedStyle(region(1).querySelector(".hit-area")).fill, "Hotkey does not use the neutral navigation fill");
+        assert(view.getComputedStyle(region(0).querySelector(".hit-area")).fill === "rgb(61, 90, 85)" && view.getComputedStyle(region(0,"nearby").querySelector(".hit-area")).fill === "rgb(61, 90, 85)", "Hotkey idle pie/cap do not use slate teal");
         region(0).focus();
         assert(region(0).getAttribute("aria-disabled")==="false"&&region(0,"nearby").getAttribute("aria-disabled")==="false","No-target hotkey cap/pie is disabled");
+        assert(region(2).getAttribute("aria-disabled")==="true"&&view.getComputedStyle(region(2).querySelector(".hit-area")).fill==="rgb(70, 71, 64)", "Empty slot does not retain the shared slate navigation grey");
         assert(doc.getElementById("destination").textContent==="Hotkey · F6","Hotkey hub does not show its mapped F6 name");
         const keyBadge=doc.querySelector("#slot-0 .actionLabel");
         assert(keyBadge.textContent==="KEY"&&keyBadge.getBoundingClientRect().width>0,"Hotkey KEY badge is not visible");
@@ -467,9 +482,9 @@ frame.addEventListener("load", async () => {
             key("Enter"); assert(replies.pop() === `${token}|1|greet|target`, "No-target gesture unavailable (native dispatcher supplies group fallback)");
         }
         const fills = {
-            slate: ["rgb(70, 71, 64)", "rgb(69, 87, 102)", "rgb(94, 61, 56)", "rgb(114, 86, 44)"],
-            moss: ["rgb(56, 72, 59)", "rgb(67, 89, 74)", "rgb(90, 68, 54)", "rgb(98, 105, 64)"],
-            ember: ["rgb(80, 58, 53)", "rgb(100, 71, 61)", "rgb(110, 58, 51)", "rgb(128, 84, 58)"]
+            slate: ["rgb(70, 71, 64)", "rgb(69, 87, 102)", "rgb(94, 61, 56)", "rgb(114, 86, 44)", "rgb(61, 90, 85)"],
+            moss: ["rgb(56, 72, 59)", "rgb(67, 89, 74)", "rgb(90, 68, 54)", "rgb(98, 105, 64)", "rgb(60, 85, 96)"],
+            ember: ["rgb(80, 58, 53)", "rgb(100, 71, 61)", "rgb(110, 58, 51)", "rgb(128, 84, 58)", "rgb(63, 86, 84)"]
         };
         for (const theme of ["slate", "moss", "ember"]) {
             const sample = [
@@ -478,8 +493,8 @@ frame.addEventListener("load", async () => {
             ];
             arm("kind-fills-" + theme, sample, "Lydia", theme);
             doc.getElementById("center").focus();
-            const actualKinds = [0,1,2,3].map(index => view.getComputedStyle(region(index).querySelector(".hit-area")).fill);
-            assert(actualKinds.every((fill,index) => fill === [fills[theme][1],fills[theme][2],fills[theme][0],fills[theme][0]][index]), `Idle gesture/action/navigation fills mismatch in ${theme}: ${actualKinds}`);
+            const actualKinds = [0,1,2,3,4].map(index => view.getComputedStyle(region(index).querySelector(".hit-area")).fill);
+            assert(actualKinds.every((fill,index) => fill === [fills[theme][1],fills[theme][2],fills[theme][0],fills[theme][0],fills[theme][4]][index]), `Idle gesture/action/navigation/hotkey fills mismatch in ${theme}: ${actualKinds}`);
             const brightness = color => {
                 const rgb=color.match(/[\d.]+/g).map(Number);
                 return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];
@@ -488,6 +503,7 @@ frame.addEventListener("load", async () => {
                 const r=region(index,mode), hit=r.querySelector(".hit-area"), edge=r.querySelector(".edge-line"), band=r.querySelector(".selected-band");
                 const fill=view.getComputedStyle(hit).fill,cap=mode==="nearby";
                 if(cap) {
+                    assert(fill==="rgb(255, 244, 208)",`${theme} ${index} lit cap is not near-white`);
                     const pieFill=view.getComputedStyle(region(index).querySelector(".hit-area")).fill;
                     assert(brightness(fill)>brightness(pieFill)+10,`${theme} ${index} lit cap is not visibly brighter than its lit pie`);
                 } else assert(fill==="rgb(255, 220, 140)", `${theme} ${index}/${mode} selected pie fill changed`);
@@ -497,7 +513,7 @@ frame.addEventListener("load", async () => {
                 if(cap) assert(brightness(bandFill)<brightness(fill)&&brightness(bandFill)>brightness(view.getComputedStyle(region(index).querySelector(".selected-band")).stroke),`${theme} ${index} cap band is not darker than its fill and lighter than the pie band`);
                 else assert(bandFill==="rgb(168, 135, 63)",`${theme} ${index} selected pie band changed`);
                 const label=doc.querySelector(`.sectorLabel[data-index="${index}"]`);
-                const kindVar=index===0?"--gesture-fill":index===1?"--action-fill":"--nav-fill",raw=view.getComputedStyle(doc.documentElement).getPropertyValue(kindVar).trim(),hex=raw.match(/^#([0-9a-f]{6})$/i);
+                const kindVar=index===0?"--gesture-fill":index===1?"--action-fill":index===4?"--hotkey-fill":"--nav-fill",raw=view.getComputedStyle(doc.documentElement).getPropertyValue(kindVar).trim(),hex=raw.match(/^#([0-9a-f]{6})$/i);
                 const idle=hex?`rgb(${parseInt(hex[1].slice(0,2),16)}, ${parseInt(hex[1].slice(2,4),16)}, ${parseInt(hex[1].slice(4,6),16)})`:raw;
                 assert(view.getComputedStyle(label).color===idle,`${theme} ${index} lit label does not use ${kindVar}`);
                 const badge=doc.querySelector(`#slot-${index} .actionLabel`);
@@ -745,8 +761,6 @@ frame.addEventListener("load", async () => {
                     assert(path.getAttribute("fill-rule")==="evenodd"&&/A/.test(path.getAttribute("d")),"Signal band is not an annular arc");
                     for(const depth of [0,.125,.25,.5,.75,1])if(radius>=depth*trail)assert(Math.abs(gradientAlpha(gradient,(radius-depth*trail)/radius)-profile(depth))<.025,`Signal trail does not scale to ${trail} units`);
                 }
-                const overlap=new view.DOMPoint(x,y).matrixTransform(toRoot.multiply(nearby.getCTM()));
-                assert(actualAt(overlap)?.closest(".region")===target,"Core does not win bulb chord overlap hit");
             }else for(const mark of marks){
                 const transform=mark.transform.baseVal.consolidate()?.matrix;
                 assert(transform&&Math.abs(transform.e-1800)<1,"Chevron mark is not centered from wheel origin");
@@ -869,9 +883,12 @@ frame.addEventListener("load", async () => {
         assert(!flow() && !raf.pending.size && !visible(), "Host disarm retains flow work");
         arm("ripples", Array.from({length:12}, (_,i) => ({label:"Ripple "+i,intent:"greet"})));
         const assertUprightRipple = i => {
-            const symbol = region(i,"nearby").querySelector(".broadcast-symbol");
-            const m = svg.getCTM().inverse().multiply(symbol.getCTM());
-            assert(symbol && Math.abs(m.b) < .001 && Math.abs(m.c) < .001, `Ripple ${i} has effective rotation`);
+            const symbol=region(i,"nearby").querySelector(".broadcast-symbol"), bulb=region(i,"nearby").querySelector(".hit-area");
+            const toWheel=svg.getCTM().inverse(), symbolMatrix=toWheel.multiply(symbol.getCTM()), bulbMatrix=toWheel.multiply(bulb.getCTM()), symbolBox=symbol.getBBox(), bulbBox=bulb.getBBox();
+            const symbolCenter=new view.DOMPoint(symbolBox.x+symbolBox.width/2,symbolBox.y+symbolBox.height/2).matrixTransform(symbolMatrix);
+            const bulbCenter=new view.DOMPoint(bulbBox.x+bulbBox.width/2,bulbBox.y+bulbBox.height/2).matrixTransform(bulbMatrix);
+            assert(Math.abs(symbolMatrix.b)<.001&&Math.abs(symbolMatrix.c)<.001,`Ripple ${i} has effective rotation`);
+            assert(Math.hypot(symbolCenter.x-bulbCenter.x,symbolCenter.y-bulbCenter.y)<3,`Ripple ${i} is not centered in the half-disc bulb bounds`);
         };
         doc.getElementById("center").focus();
         for (let i = 0; i < 12; i++) { assertUprightRipple(i); region(i,"nearby").focus(); assertUprightRipple(i); }
@@ -997,7 +1014,7 @@ frame.addEventListener("load", async () => {
         arm("interrupted", [{label:"Signal",intent:"greet"}]);
         await nextFrame(); view.hostMode("0");
         assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
-        report.textContent = "PASS: 12-slot choices; split gesture bulbs/core and hotkey cap/pie with unified selection and dispatch; yellow selected fill/band and kind-fill labels/badges; submenu/back-only fixed-size knots aligned to the .85 outline tips (tail overhang allowed); null slots and no-target actions share the pointed disabled outline; vignettes, Shift preview, palettes, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
+        report.textContent = "PASS: 12-slot choices; straight shared gesture-core/bulb chord with strict side routing, unified selection and dispatch; hotkey cap/pie with unified selection and dispatch; yellow selected fill/band and teal kind-fill labels/badges; submenu/back-only knots and utility arcs; upright broadcast icons centered in their half-disc bulbs; null slots and no-target actions share the pointed disabled outline; vignettes, Shift preview, palettes, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
         report.textContent += " Hotkeys: no target required, F6 hub and KEY badge, Up/Down stays on one slice, either hit region dispatches the typed hotkey, malformed/conflicting payloads fail closed. Utility arcs remain slice-owned, clipped and noninteractive at radii 560/610; hub motion, boundary routing, reduced-motion/0ms behavior and open-key help remain covered.";
         report.textContent += " Flow: geometry-scaled signal/trail/padding; lit non-bulb chevrons use additive warm-white #fff6e0 at peak 0.35 (clamped-addition normal fallback); bulb ripples stay plus-lighter at 0.12 (warm yellow when lit, mint when unlit); HOLD/power-fade profile, exclusions, one shared rAF, 2400ms travel and reduced-motion/0ms behavior.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }

@@ -56,6 +56,8 @@ The NPC under your crosshair when the wheel opens is captured for that choice. M
 
 If no NPC was captured, the Magelight hub shows **No target · Openly** and gesture narration is addressed to everyone nearby. You can also choose that mode intentionally: hold either **Left Shift** or **Right Shift** through the selection until the wheel closes. PlayerSignals checks Shift when the final selection returns from the wheel; it does not promise to sample the exact click instant. Shift overrides a captured NPC and uses group narration and feedback without that NPC's name.
 
+With no captured NPC, selecting either part of a gesture lights both the core and its bright white Openly bulb without Shift. With a captured NPC, core selection leaves the bulb unlit unless Shift is held; selecting the bulb still shows Openly.
+
 Action entries require a captured NPC; without one they are disabled before selection. Actions do not have an Openly destination, and Shift does not convert them to group mode. The existing submission-time validity checks are unchanged.
 
 Group narration explicitly says the gesture is addressed to everyone nearby. Nearby witnesses may join, but no one is guaranteed to speak or comply. The group wording does not force every nearby NPC to reply.

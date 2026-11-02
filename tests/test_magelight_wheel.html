@@ -472,8 +472,8 @@ frame.addEventListener("load", async () => {
         key("ArrowDown"); assert(doc.activeElement === region(1) && doc.getElementById("destination").textContent === literal, "Down did not return to the captured-target core");
         key("ArrowUp");
         key("Enter"); assert(replies.pop() === "literal|1|greet|nearby", "Openly choice was not preserved");
-        for (const target of [undefined, ""]) {
-            const token = target === undefined ? "absent-target" : "empty-target";
+        for (const target of [undefined, ""]) for (const mode of ["target", "nearby"]) {
+            const token = (target === undefined ? "absent-target" : "empty-target") + "-" + mode;
             const slots = [{label:"Action", action:{name:"WaitHere"}}, {label:"Greet", intent:"greet"}];
             const data = payload(slots, target); if (target === undefined) delete data.target;
             begin(token, data); view.psWheelArm(token);
@@ -481,9 +481,14 @@ frame.addEventListener("load", async () => {
             const disabledHit=region(0).querySelector(".hit-area"),emptyHit=region(2).querySelector(".hit-area");
             assert(disabledHit.isPointInFill(new view.DOMPoint(1800,109))&&view.getComputedStyle(disabledHit).fill===view.getComputedStyle(emptyHit).fill&&view.getComputedStyle(disabledHit).stroke===view.getComputedStyle(emptyHit).stroke,"No-target action does not share the pointed disabled outline and colours");
             click(region(0)); click(region(0,"nearby")); assert(!replies.length,"Disabled action submitted");
-            region(1).focus();
+            region(1,mode).focus();
             assert(doc.getElementById("destination").textContent === "No target · Openly", "Missing-target cue incorrect");
-            key("Enter"); assert(replies.pop() === `${token}|1|greet|target`, "No-target gesture unavailable (native dispatcher supplies group fallback)");
+            assert(view.getComputedStyle(region(1).querySelector(".hit-area")).fill === "rgb(255, 220, 140)" && view.getComputedStyle(region(1,"nearby").querySelector(".hit-area")).fill.includes("cap-lit-gradient"), "No-target gesture did not light both core and white Openly bulb");
+            keyEvent("keydown","Shift","ShiftLeft",1);
+            assert(view.getComputedStyle(region(1,"nearby").querySelector(".hit-area")).fill.includes("cap-lit-gradient"), "Shift cleared the no-target Openly bulb");
+            keyEvent("keyup","Shift","ShiftLeft",1);
+            assert(view.getComputedStyle(region(1,"nearby").querySelector(".hit-area")).fill.includes("cap-lit-gradient"), "Releasing Shift cleared the no-target Openly bulb");
+            key("Enter"); assert(replies.pop() === `${token}|1|greet|${mode}`, "No-target Openly display changed the original region reply");
         }
         const fills = {
             slate: ["rgb(70, 71, 64)", "rgb(69, 87, 102)", "rgb(94, 61, 56)", "rgb(114, 86, 44)", "rgb(61, 90, 85)"],
@@ -723,6 +728,7 @@ frame.addEventListener("load", async () => {
         arm("shift-preview", [{label:"Gesture",intent:"greet"},{label:"Action",action:{name:"WaitHere"}},{label:"Menu",submenu:"social"}]);
         doc.getElementById("center").focus(); region(0).focus();
         assert(region(0).classList.contains("hot") && !region(0,"nearby").classList.contains("hot") && doc.getElementById("destination").textContent === "Lydia", "Gesture starts in the wrong preview state");
+        assert(!view.getComputedStyle(region(0,"nearby").querySelector(".hit-area")).fill.includes("cap-lit-gradient"), "Captured-target core selection lit the Openly bulb");
         keyEvent("keydown","Shift","ShiftLeft",1);
         assert(region(0).classList.contains("hot") && region(0,"nearby").classList.contains("hot") && doc.getElementById("destination").textContent === "Openly", "Left Shift failed to preview the full gesture");
         assert(Number(view.getComputedStyle(region(0,"nearby").querySelector(".broadcast-symbol")).opacity) === 1 && !replies.length, "Shift preview omitted full ripple or dispatched a choice");

@@ -490,7 +490,7 @@
         focused = index; focusedMode = mode; clearHighlight();
         const sector = sectors[index], [label, , kind] = entries[index];
         sector[mode].classList.add("hot"); sector.target.classList.add("hot");
-        const preview = kind === "intent" && shiftKeys.size > 0;
+        const preview = kind === "intent" && (!targetName || shiftKeys.size > 0);
         if (preview) sector.nearby.classList.add("hot");
         if (kind === "hotkey") sector.nearby.classList.add("hot");
         sector.group.classList.add("lit");

@@ -286,6 +286,17 @@ function Tip-EdgePath {
 }
 $coreEdgeD = Core-EdgePath
 $tipEdgeD = Tip-EdgePath
+# Only Submenu/Back use these baked alternatives; strokes keep their original widths.
+$navScale = 0.85
+$subbackMatrix = @($navScale, 0, 0, $navScale, (1800 * (1 - $navScale)), (1800 * (1 - $navScale)))
+function Subback-Path($d) {
+    $path = $art.CreateElement('path', $svg.NamespaceURI); $path.SetAttribute('d', $d)
+    Transform-PathData $path $subbackMatrix
+    $path.GetAttribute('d')
+}
+$subbackUnionD = Subback-Path $unionD
+$subbackEdgeD = Subback-Path $unionEdgeD
+$svg.SetAttribute('data-nav-scale', $navScale.ToString('0.##', [Globalization.CultureInfo]::InvariantCulture))
 # Fixed slice-local placement clears the hub's maximum pop; fit once at each glyph's outer extent.
 $arrowRadius = 525
 $sideSlope = [Math]::Abs(($outerLeft[0] - $innerLeft[0]) / ($outerLeft[1] - $innerLeft[1]))
@@ -401,6 +412,7 @@ foreach ($region in $regions) {
         else {
             $hit.SetAttribute('data-core-d', $coreD)
             $hit.SetAttribute('data-nav-d', $unionD)
+            $hit.SetAttribute('data-subback-d', $subbackUnionD)
         }
         [void]$wrapper.PrependChild($hit)
         $edge = $art.CreateElement('path', $svg.NamespaceURI)
@@ -412,6 +424,7 @@ foreach ($region in $regions) {
         else {
             $edge.SetAttribute('data-core-d', $coreEdgeD)
             $edge.SetAttribute('data-nav-d', $unionEdgeD)
+            $edge.SetAttribute('data-subback-d', $subbackEdgeD)
         }
         $clip = $art.CreateElement('clipPath', $svg.NamespaceURI)
         $clip.SetAttribute('id', "slot-$slot-$mode-selected-band-clip")
@@ -426,6 +439,7 @@ foreach ($region in $regions) {
         } else {
             $clipShape.SetAttribute('data-core-d', $coreEdgeD)
             $clipShape.SetAttribute('data-nav-d', $unionEdgeD)
+            $clipShape.SetAttribute('data-subback-d', $subbackEdgeD)
         }
         [void]$clip.AppendChild($clipShape)
         [void]$wrapper.AppendChild($clip)
@@ -440,6 +454,7 @@ foreach ($region in $regions) {
         else {
             $band.SetAttribute('data-core-d', $coreEdgeD)
             $band.SetAttribute('data-nav-d', $unionEdgeD)
+            $band.SetAttribute('data-subback-d', $subbackEdgeD)
         }
         [void]$wrapper.AppendChild($band)
         [void]$wrapper.AppendChild($edge)
@@ -447,7 +462,10 @@ foreach ($region in $regions) {
     $clip = $art.CreateElement('clipPath', $svg.NamespaceURI)
     $clip.SetAttribute('id', "slot-$slot-utility-clip")
     $clip.SetAttribute('clipPathUnits', 'userSpaceOnUse')
-    $clipShape = $art.CreateElement('path', $svg.NamespaceURI); $clipShape.SetAttribute('d', $unionD)
+    $clipShape = $art.CreateElement('path', $svg.NamespaceURI)
+    $clipShape.SetAttribute('d', $unionD)
+    $clipShape.SetAttribute('data-nav-d', $unionD)
+    $clipShape.SetAttribute('data-subback-d', $subbackUnionD)
     [void]$clip.AppendChild($clipShape); [void]$defs.AppendChild($clip)
     foreach ($radius in @(560, 610)) {
         $utilityArc = $art.CreateElement('path', $svg.NamespaceURI)
@@ -461,7 +479,7 @@ foreach ($region in $regions) {
     [void]$pop.AppendChild($parts.Submenu)
     [void]$pop.AppendChild($parts.Upmenu)
     $parts.ChevronKnot.SetAttribute('class', 'chevron-knot')
-    # Affinely fit the authored V to the live hit-area tip and adjacent edge vertices.
+    # Retain the approved baked knot size; the page translates it for Submenu/Back.
     $knotSourceApex = @((1738.95 * 1.09023 - 91.5177), (815.264 * 1.05313 - 636.273))
     $knotSourceRight = @((1960.12 * 1.09023 - 91.5177), (1046.35 * 1.05313 - 636.273))
     $knotSourceLeft = @((1507.65 * 1.09023 - 91.5177), (1046.56 * 1.05313 - 636.273))
@@ -492,8 +510,7 @@ foreach ($region in $regions) {
     $knotFit = @($knotA, $knotB, $knotC, $knotD,
         ($knotTargetApex[0] - $knotA * $knotSourceApex[0] - $knotC * $knotSourceApex[1]),
         ($knotTargetApex[1] - $knotB * $knotSourceApex[0] - $knotD * $knotSourceApex[1]))
-    # The interlaced tails extend beyond the V: shorten the complete ornament to fit
-    # the finite tip edges (746 units of fitted tail depth versus 436 of edge depth).
+    # The approved ornament includes its existing finite-edge length fit.
     $knotLengthScale = 0.56
     $knotFit = Compose-Matrix @($knotLengthScale, 0, 0, $knotLengthScale,
         (1800 * (1 - $knotLengthScale)), ((1800 - $tipOuter) * (1 - $knotLengthScale))) $knotFit

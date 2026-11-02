@@ -39,11 +39,11 @@ frame.addEventListener("load", async () => {
         assert(!doc.querySelector("image"), "Wheel retains raster images");
         const vignette = doc.getElementById("vignette"), topVignette = doc.getElementById("vignette-top"), raf = view.qaRAF;
         assert(vignette && topVignette && view.getComputedStyle(vignette).visibility === "hidden" && view.getComputedStyle(topVignette).visibility === "hidden", "A vignette is visible while disarmed");
-        const knotContainmentChecked = new WeakSet();
         const checkKnot=(art,i,kind)=>{
             assert(art&&art.parentElement===doc.getElementById(`slot-${i}`).querySelector(".pop")&&view.getComputedStyle(art).display!=="none",`Slot ${i} ${kind} knot is not visible in its lifted slice`);
-            const matrix=svg.getCTM().inverse().multiply(art.getCTM()),xScale=Math.hypot(matrix.a,matrix.b),yScale=Math.hypot(matrix.c,matrix.d);
+            const matrix=svg.getCTM().inverse().multiply(art.getCTM()),xScale=Math.hypot(matrix.a,matrix.b),yScale=Math.hypot(matrix.c,matrix.d),bounds=art.getBBox();
             assert(Math.abs(xScale-yScale)<.001&&Math.abs(matrix.a*matrix.c+matrix.b*matrix.d)<.001,`Slot ${i} knot uses a nonuniform transform`);
+            assert(Math.abs(bounds.width-579.122)<.01&&Math.abs(bounds.height-417.919)<.01,`Slot ${i} knot changed its approved baseline path size`);
             const paths=[...art.querySelectorAll("path")],strokeWidth=path=>{
                 const style=view.getComputedStyle(path),m=svg.getCTM().inverse().multiply(path.getCTM());
                 return parseFloat(style.strokeWidth)*Math.hypot(m.a,m.b)/xScale;
@@ -51,31 +51,11 @@ frame.addEventListener("load", async () => {
             const black=paths.find(path=>view.getComputedStyle(path).stroke==="rgb(0, 0, 0)"),white=paths.find(path=>view.getComputedStyle(path).stroke==="rgb(255, 255, 255)");
             const blackWidth=black&&strokeWidth(black),whiteWidth=white&&strokeWidth(white),ratio=blackWidth/31.1;
             assert(black&&white&&Math.abs(ratio-1)<.01&&Math.abs(whiteWidth/11.66-ratio)<.01,`Slot ${i} knot lost the original stroke widths/ratio retained after the true-size trial`);
-            const angle=i*Math.PI/6,radial=[Math.sin(angle),-Math.cos(angle)],tangent=[Math.cos(angle),Math.sin(angle)],sample=node=>{
-                const points=[],paths=node.tagName.toLowerCase()==="path"?[node]:[...node.querySelectorAll("path")];
-                for(const path of paths){
-                    const length=path.getTotalLength(),m=svg.getCTM().inverse().multiply(path.getCTM());
-                    for(let n=0;n<=256;n++){
-                        const p=path.getPointAtLength(length*n/256).matrixTransform(m);
-                        points.push({x:1800+(p.x-1800)/xScale,y:1800+(p.y-1800)/xScale});
-                    }
-                }
-                return points.map(p=>({x:p.x,y:p.y,r:(p.x-1800)*radial[0]+(p.y-1800)*radial[1],t:(p.x-1800)*tangent[0]+(p.y-1800)*tangent[1]}));
-            };
-            const hit=region(i).querySelector(".hit-area"),hitMatrix=hit.getCTM().inverse().multiply(svg.getCTM()),polygon=[...hit.getAttribute("d").matchAll(/[ML]\s*(-?[\d.]+),(-?[\d.]+)/g)].map(([,x,y])=>new view.DOMPoint(Number(x),Number(y)).matrixTransform(svg.getCTM().inverse().multiply(hit.getCTM()))).map(p=>({x:1800+(p.x-1800)/xScale,y:1800+(p.y-1800)/xScale,r:(p.x-1800)*radial[0]+(p.y-1800)*radial[1],t:(p.x-1800)*tangent[0]+(p.y-1800)*tangent[1]})),tip=polygon.reduce((a,p)=>p.r>a.r?p:a),vPaths=paths.filter(path=>/^M[-\d.,]+L[-\d.,]+L[-\d.,]+$/.test(path.getAttribute("d")));
+            const angle=i*Math.PI/6,radial=[Math.sin(angle),-Math.cos(angle)],tangent=[Math.cos(angle),Math.sin(angle)];
+            const hit=region(i).querySelector(".hit-area"),polygon=[...hit.getAttribute("d").matchAll(/[ML]\s*(-?[\d.]+),(-?[\d.]+)/g)].map(([,x,y])=>new view.DOMPoint(Number(x),Number(y)).matrixTransform(svg.getCTM().inverse().multiply(hit.getCTM()))).map(p=>({x:1800+(p.x-1800)/xScale,y:1800+(p.y-1800)/xScale,r:(p.x-1800)*radial[0]+(p.y-1800)*radial[1],t:(p.x-1800)*tangent[0]+(p.y-1800)*tangent[1]})),tip=polygon.reduce((a,p)=>p.r>a.r?p:a),vPaths=paths.filter(path=>/^M[-\d.,]+L[-\d.,]+L[-\d.,]+$/.test(path.getAttribute("d")));
             assert(polygon.length===4&&vPaths.length>0,`Slot ${i} ${kind} lacks its four-corner hit outline or authored V`);
             const vertices=vPaths.flatMap(path=>[...path.getAttribute("d").matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map(([,x,y])=>new view.DOMPoint(Number(x),Number(y)).matrixTransform(svg.getCTM().inverse().multiply(path.getCTM())))).map(p=>({x:1800+(p.x-1800)/xScale,y:1800+(p.y-1800)/xScale,r:(p.x-1800)*radial[0]+(p.y-1800)*radial[1],t:(p.x-1800)*tangent[0]+(p.y-1800)*tangent[1]})),apex=vertices.reduce((a,p)=>p.r>a.r?p:a);
-            assert(Math.hypot(apex.x-tip.x,apex.y-tip.y)<=4,`Slot ${i} ${kind} knot apex misses its actual hit-outline tip by more than 4 units`);
-            if (!knotContainmentChecked.has(art)) {
-                for(const p of sample(art)){
-                    const local=new view.DOMPoint(1800+(p.x-1800)*xScale,1800+(p.y-1800)*xScale).matrixTransform(hitMatrix),clearance=Math.min(...polygon.map((a,n)=>{
-                        const b=polygon[(n+1)%polygon.length],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/(dx*dx+dy*dy)));
-                        return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);
-                    }));
-                    assert(hit.isPointInFill(local)||clearance<=3,`Slot ${i} ${kind} knot leaves the actual hit outline`);
-                }
-                knotContainmentChecked.add(art);
-            }
+            assert(Math.hypot(apex.x-tip.x,apex.y-tip.y)<=4&&Math.abs(tip.x-1800-radial[0]*1438.2)<.1&&Math.abs(tip.y-1800-radial[1]*1438.2)<.1,`Slot ${i} ${kind} knot apex misses the scaled 1800/361.8 outline tip`);
             for(const side of [-1,1]){
                 const arm=vertices.filter(p=>p!==apex&&p.t*side>0).reduce((a,p)=>Math.hypot(p.x-apex.x,p.y-apex.y)>Math.hypot(a.x-apex.x,a.y-apex.y)?p:a),edge=polygon.filter(p=>p!==tip&&p.t*side>0).reduce((a,p)=>Math.hypot(p.x-tip.x,p.y-tip.y)<Math.hypot(a.x-tip.x,a.y-tip.y)?p:a);
                 const armAngle=Math.atan2(arm.y-apex.y,arm.x-apex.x),edgeAngle=Math.atan2(edge.y-tip.y,edge.x-tip.x),delta=Math.abs(Math.atan2(Math.sin(armAngle-edgeAngle),Math.cos(armAngle-edgeAngle)));
@@ -109,6 +89,38 @@ frame.addEventListener("load", async () => {
             }
             hubRadiusCache.set(key,inner/hubScale());
             return inner;
+        };
+        const navigationGeometry = i => [
+            region(i).querySelector(".hit-area"), region(i).querySelector(".edge-line"),
+            region(i).querySelector(".selected-band"), doc.getElementById(`slot-${i}-target-selected-band-clip`)?.firstElementChild,
+            doc.getElementById(`slot-${i}-utility-clip`)?.firstElementChild
+        ].filter(Boolean);
+        const comparePath = (node, scale, label) => {
+            const original=node.getAttribute("data-nav-d"),variant=node.getAttribute("data-subback-d");
+            assert(original&&variant&&node.getAttribute("d")===variant,`${label} lacks its active/original subback geometry`);
+            const baseline=doc.createElementNS("http://www.w3.org/2000/svg","path");
+            baseline.setAttribute("d",original);
+            const length=baseline.getTotalLength(),currentLength=node.getTotalLength();
+            assert(length>0&&currentLength>0,`${label} has empty geometry`);
+            for(let n=0;n<=64;n++){
+                const a=baseline.getPointAtLength(length*n/64),b=node.getPointAtLength(currentLength*n/64);
+                assert(Math.hypot(b.x-(1800+(a.x-1800)*scale),b.y-(1800+(a.y-1800)*scale))<1,`${label} is not center-scaled from data-nav-d`);
+            }
+        };
+        assert(Number(svg.getAttribute("data-nav-scale"))===.85,"Wheel root does not publish the approved navigation scale");
+        const assertSubbackGeometry = i => {
+            const nodes=navigationGeometry(i);
+            assert(nodes.length===5,`Slot ${i} lacks target/inset/band/clip/utilclip geometry`);
+            nodes.forEach((node,n)=>comparePath(node,.85,`Slot ${i} subback geometry ${n}`));
+        };
+        const assertOriginalNavigationGeometry = i => {
+            const nodes=navigationGeometry(i),polygon="M1800,1730.481L1481.989,543.622L1800,108L2118.011,543.622Z",inset="M1800,1653.205L1506.889,559.278L1510.859,537.995L1792.925,151.612L1807.075,151.612L2089.141,537.995L2093.111,559.278Z";
+            nodes.forEach((node,n)=>{
+                const expected=node.classList.contains("hit-area")||node.closest("clipPath")?.id.endsWith("utility-clip")?polygon:inset;
+                assert(node.getAttribute("data-nav-d")===expected,`Slot ${i} non-subback geometry ${n} lost its saved data-nav-d baseline`);
+                const baselineD=[node.getAttribute("data-nav-d"),node.getAttribute("data-core-d"),node.getAttribute("data-hotkey-d")].filter(Boolean);
+                assert(baselineD.includes(node.getAttribute("d")),`Slot ${i} non-subback geometry ${n} no longer uses an original path`);
+            });
         };
         const hubOctagonCorners = () => Array.from({length:8}, (_,n) => hubRadiusAt(n*Math.PI/4));
         const hubBoundaryEstimate = (angle, corners) => {
@@ -235,8 +247,14 @@ frame.addEventListener("load", async () => {
                 if(kind==="submenu"||kind==="back"){
                     const knot=sector.querySelector(".chevron-knot");
                     assert(knot&&view.getComputedStyle(knot).display!=="none",`Slot ${i} ${kind} knot missing`);
+                    const local=sector.querySelector(".pop").getCTM().inverse().multiply(knot.getCTM());
+                    assert(Math.abs(local.e)<.01&&Math.abs(local.f-253.8)<.01&&Math.abs(local.a-1)<.001&&Math.abs(local.d-1)<.001,`Slot ${i} ${kind} knot is not translated to the scaled tip without resizing`);
+                    assertSubbackGeometry(i);
                     checkKnot(knot,i,kind);
-                } else assert(view.getComputedStyle(sector.querySelector(".chevron-knot")).display==="none",`Slot ${i} ${kind} unexpectedly shows a navigation knot`);
+                } else {
+                    assertOriginalNavigationGeometry(i);
+                    assert(view.getComputedStyle(sector.querySelector(".chevron-knot")).display==="none",`Slot ${i} ${kind} unexpectedly shows a navigation knot`);
+                }
                 assert(kind==="hotkey"?nearby.getAttribute("aria-disabled")==="false":nearby.getAttribute("aria-disabled")==="true"&&nearby.getAttribute("tabindex")==="-1"&&view.getComputedStyle(nearby).display==="none",`Slot ${i} ${kind} nearby state is wrong`);
                 target.focus(); key("ArrowUp"); assert(doc.activeElement===target, `${kind} Up left its slice`);
                 key("ArrowDown"); assert(doc.activeElement===target, `${kind} Down left its slice`); center.focus(); center.blur();
@@ -263,6 +281,18 @@ frame.addEventListener("load", async () => {
                 }
             }
             if(kind!=="hotkey"){click(region(11).querySelector(".hit-area"));assert(replies.pop()===`arrows-${kind}|11|${kind==="action"?"WaitHere":""}|${kind==="action"?"target":"navigate"}`,`${kind} slice failed to dispatch`);}
+        }
+        for(const [kind,slot] of [["submenu",{label:"Menu",submenu:"social"}],["back",{label:"Back",control:"back"}]]) {
+            for(let i=0;i<12;i++){
+                const token=`${kind}-scaled-gap-${i}`,slots=Array(12).fill(slot);
+                arm(token,slots); center.focus();
+                const angle=i*Math.PI/6,radial=[Math.sin(angle),-Math.cos(angle)],gapPoint=new view.DOMPoint(1800+1550*radial[0],1800+1550*radial[1]).matrixTransform(svg.getScreenCTM()),gap=doc.elementFromPoint(gapPoint.x,gapPoint.y);
+                assert(gap&&gap.closest(".region")!==region(i),`Slot ${i} ${kind} reduced-outline gap still hit-routes to its old slice`);
+                click(gap); assert(visible()&&!replies.length,`Slot ${i} ${kind} reduced-outline gap dispatched`);
+                const next=(i+1)%12,nextAngle=next*Math.PI/6,nextPoint=new view.DOMPoint(1800+1100*Math.sin(nextAngle),1800-1100*Math.cos(nextAngle)).matrixTransform(svg.getScreenCTM()),neighbor=doc.elementFromPoint(nextPoint.x,nextPoint.y);
+                assert(neighbor?.closest(".region")===region(next),`Slot ${i} ${kind} gap changed neighbor ${next}'s hit routing`);
+                click(neighbor); assert(replies.pop()===`${token}|${next}||navigate`,`Slot ${i} ${kind} neighbor click no longer dispatches normally`);
+            }
         }
         arm("arrows-hidden", [{label:"Signal",intent:"greet"}, {label:"Action",action:{name:"WaitHere"}}]);
         assert([...doc.querySelectorAll(".navigation-art")].every(art => view.getComputedStyle(art).display === "none"), "Legacy navigation artwork is not switched off by default");
@@ -675,7 +705,7 @@ frame.addEventListener("load", async () => {
         const profile = depth => depth <= .25 ? 1 : Math.pow((1-depth)/.75,2.2);
         const checkFlow = (index, type, lit=false) => {
             const effect=flow(), marks=flowMarks(), paths=flowPaths(), target=region(index), nearby=region(index,"nearby");
-            const signal=type==="signal", sector=target.closest("[data-core-radius]"), scale=Number(sector?.dataset.coreRadius)/320;
+            const signal=type==="signal", sector=target.closest("[data-core-radius]"), subbackScale=["submenu","back"].includes(sector?.dataset.kind) ? .85 : 1, scale=Number(sector?.dataset.coreRadius)/320*subbackScale;
             const count=signal?2:4, blend=effect?view.getComputedStyle(effect).mixBlendMode:"";
             assert(effect && marks.length===count && scale>0, `Slot ${index} lacks scaled ${type} flow`);
             assert(["plus-lighter","normal"].includes(blend), "Flow blend mode is not additive or normal fallback");
@@ -721,7 +751,7 @@ frame.addEventListener("load", async () => {
                 const transform=mark.transform.baseVal.consolidate()?.matrix;
                 assert(transform&&Math.abs(transform.e-1800)<1,"Chevron mark is not centered from wheel origin");
                 const radius=1800-transform.f,w=radius*Math.tan(Math.PI/12)+14*scale,h=.45*w,trail=46*scale,arms=[...mark.querySelectorAll(".flow-band")];
-                const envelope=expectedOpacity*Math.sin(Math.PI*(radius-470)/(1692+trail-470)),opacity=Number(mark.getAttribute("opacity"));
+                const innerRadius=470*subbackScale,outerRadius=1692*subbackScale,envelope=expectedOpacity*Math.sin(Math.PI*(radius-innerRadius)/(outerRadius+trail-innerRadius)),opacity=Number(mark.getAttribute("opacity"));
                 assert(arms.length===2&&opacity>0&&opacity<=envelope+.003&&opacity>=.55*envelope-.003,"Chevron opacity violates the sine envelope or text-dimming range");
                 for(const [i,path] of arms.entries()){
                     const bounds=path.getBBox();
@@ -967,7 +997,7 @@ frame.addEventListener("load", async () => {
         arm("interrupted", [{label:"Signal",intent:"greet"}]);
         await nextFrame(); view.hostMode("0");
         assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
-        report.textContent = "PASS: 12-slot choices; split gesture bulbs/core and hotkey cap/pie with unified selection and dispatch; yellow selected fill/band and kind-fill labels/badges; submenu/back knots only, apex aligned to the measured outline tip, arms aligned to measured outline edges, original stroke widths retained; null slots and no-target actions share the pointed disabled outline; vignettes, Shift preview, palettes, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
+        report.textContent = "PASS: 12-slot choices; split gesture bulbs/core and hotkey cap/pie with unified selection and dispatch; yellow selected fill/band and kind-fill labels/badges; submenu/back-only fixed-size knots aligned to the .85 outline tips (tail overhang allowed); null slots and no-target actions share the pointed disabled outline; vignettes, Shift preview, palettes, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
         report.textContent += " Hotkeys: no target required, F6 hub and KEY badge, Up/Down stays on one slice, either hit region dispatches the typed hotkey, malformed/conflicting payloads fail closed. Utility arcs remain slice-owned, clipped and noninteractive at radii 560/610; hub motion, boundary routing, reduced-motion/0ms behavior and open-key help remain covered.";
         report.textContent += " Flow: geometry-scaled signal/trail/padding; lit non-bulb chevrons use additive warm-white #fff6e0 at peak 0.35 (clamped-addition normal fallback); bulb ripples stay plus-lighter at 0.12 (warm yellow when lit, mint when unlit); HOLD/power-fade profile, exclusions, one shared rAF, 2400ms travel and reduced-motion/0ms behavior.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }

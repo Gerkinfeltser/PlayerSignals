@@ -23,13 +23,14 @@ build/                       PowerShell build and local compiler flags
 tests/                       Raw JSON/schema regressions executed on LuaJIT
 ```
 
-The mod root contains `PlayerSignals.esp`, startup quest SEQ, two Papyrus scripts and compiled PEX files, four default wheels, sibling layout and intent JSON, and a JContainers Lua loader. An optional prompt-only SkyrimNet bundle supplies the WebUI agent `playersignals_intent_helper`; it generates JSON for users to save from pasted configuration, not automatic file edits. Wheel dispatch does not depend on its manifest or external bundle, and no YAML triggers/actions are shipped. The inherited agent rendered against installed base content with zero validation findings; live WebUI discovery/model behavior remain unverified.
+The mod root contains `PlayerSignals.esp`, startup quest SEQ, three Papyrus scripts and compiled PEX files, the native `PlayerSignals.dll`, four default wheels, sibling layout and intent JSON, and a JContainers Lua loader. An optional prompt-only SkyrimNet bundle supplies the WebUI agent `playersignals_intent_helper`; it generates JSON for users to save from pasted configuration, not automatic file edits. Wheel dispatch does not depend on its manifest or external bundle, and no YAML triggers/actions are shipped. The inherited agent rendered against installed base content with zero validation findings; live WebUI discovery/model behavior remain unverified.
 
 ## Dependencies and targeting
 
 Required: SKSE, UIExtensions, JContainers API 4 / feature 2 with working Lua support, and SkyrimNet. Startup requires `SkyrimNet.esp` loaded and a nonempty `SkyrimNetApi.GetBuildVersion()`.
 
 The enabled Magelight backend also requires Magelight host **0.31.2+** and its matching runtime. Action entries require SkyrimNet's `IsActionRegistered`, `ExecuteAction`, `SkyrimNetInternal` built-in eligibility functions and, when configured, persistent/short-lived event APIs.
+Only layouts containing a `raw: true` hotkey additionally require `PlayerSignals.dll` (native API version 1) and Address Library for SKSE Plugins (the VR Address Library for Skyrim VR). Layouts without raw slots do not require either; ordinary hotkeys retain Skyrim input dispatch.
 
 Before the wheel opens, PlayerSignals captures the current crosshair NPC. If a valid NPC remains captured when you select a gesture, SkyrimNet receives direct narration with the player as originator (`From`) and the captured NPC as the explicit target. The narration names your character as the gesture actor and explicitly addresses the captured NPC. Moving the crosshair after opening does not change the submitted recipient. The captured NPC must remain alive, enabled, and 3D-loaded when submitting or the selection fails closed. SkyrimNet selects the responder; this call does not force the captured NPC to respond, and SkyrimNet may replace event `To` with the selected responder.
 
@@ -57,7 +58,7 @@ PlayerSignals does not add gesture spells, edit NPC world records, or toggle pla
 
 Edit `PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json` and, for intent IDs or phrases, `PlayerSignals/SKSE/Plugins/PlayerSignals/intents.json` inside the mod, then load a save to apply changes. Right Alt defaults to keyboard scan code `184`; configurable opening-key codes are `1–255`. In Magelight, press the configured open key again to cancel an armed wheel, like Tab/Escape/center, without narration. The page requires an integer `openKey` in its Lua payload and maps known DirectInput scan codes to physical `KeyboardEvent.code` values; unmapped codes warn once per page/code and retain Tab/Escape/center cancellation. Pre-arm keydowns, repeat keydowns and keyups cannot toggle it closed. No live reload or JSON write-back.
 
-Each wheel supports 1–12 ordered slots. Magelight lays out 12 slices of 30° clockwise from slot 0 at the top. UIExtensions supports at most 8 slots; a wheel configured with more than 8 fails closed with an actionable notification rather than being truncated. A slot is `null` (disabled) or has a nonempty label and exactly one primary kind: `intent`, `action`, `submenu`, `control` (`back` / `close`), or `hotkey`. A hotkey slot may have only `hotkey`, `delayMs`, `holdMs`, and optional `color` in addition to `label`; timings apply only to hotkeys. The `hotkey` code is a strict integer 1–263 (1–255 keyboard DirectInput scan codes, 256–263 SKSE mouse buttons: 256 left, 257 right, 258 middle), `delayMs` defaults to 100 (integer 0–2000), and `holdMs` defaults to 50 (integer 1–2000). Its code must differ from `input.openKeyCode`. Actions may additionally supply paired `event` (`persistent`, `shortLived`, or `both`) and catalog `intent` fields for context text. Every narration/event intent must exist in `intents.json`; action names are not catalog IDs. All wheels and catalog entries are validated. Unknown fields, wrong types, broken references, cycles and oversized wheels fail closed.
+Each wheel supports 1–12 ordered slots. Magelight lays out 12 slices of 30° clockwise from slot 0 at the top. UIExtensions supports at most 8 slots; a wheel configured with more than 8 fails closed with an actionable notification rather than being truncated. A slot is `null` (disabled) or has a nonempty label and exactly one primary kind: `intent`, `action`, `submenu`, `control` (`back` / `close`), or `hotkey`. A hotkey slot may have `hotkey`, `delayMs`, `holdMs`, optional `color`, and optional strict boolean `raw` in addition to `label`; timings apply only to hotkeys. The `hotkey` code is a strict integer 1–263 (1–255 keyboard DirectInput scan codes, 256–263 SKSE mouse buttons: 256 left, 257 right, 258 middle), `delayMs` defaults to 100 (integer 0–2000), and `holdMs` defaults to 50 (integer 1–2000). Its code must differ from `input.openKeyCode`. `raw: true` is keyboard-only and requires scan code 1–255; `raw: false` retains normal hotkey behavior. Actions may additionally supply paired `event` (`persistent`, `shortLived`, or `both`) and catalog `intent` fields for context text. Every narration/event intent must exist in `intents.json`; action names are not catalog IDs. All wheels and catalog entries are validated. Unknown fields, wrong types, broken references, cycles and oversized wheels fail closed.
 
 In Magelight, any non-null slot can override its idle colour with a six-digit hex string (`#rrggbb`, either letter case):
 
@@ -78,6 +79,30 @@ For a custom slot that clicks the **middle mouse button** (SKSE code `258`), add
 ```
 
 The shipped layout has no hotkey slot. A hotkey slot presses the key only after the wheel/view fully closes, needs no target, ignores Shift, and emits no narration or success notification. Its code must differ from the configured opening key; timing defaults and strict ranges are listed above. The injected press reaches only mods that read Skyrim's own input (owner-verified in game for middle mouse); mods that poll Windows key state directly, such as the SkyrimNet (F6) and IntelEngine dashboard hotkeys, do not see it.
+
+#### Raw keyboard hotkeys
+
+Set `"raw": true` on a hotkey slot to send a Windows scan-code key press for mods that poll Windows key state. It is valid only for keyboard scan codes 1–255; mouse codes 256–263 cannot be raw. `"raw": false` is allowed but behaves like an ordinary hotkey. Raw dispatch waits until an accepted wheel choice has closed the wheel, and sends only while Skyrim is the foreground process; if focus has moved elsewhere, it fails closed. There is no `HoldKey` fallback. The `"KEY"` badge remains unchanged.
+
+Raw slots require `PlayerSignals.dll` and Address Library for SKSE Plugins (use the VR Address Library for Skyrim VR); these are required only if your layout contains a `raw: true` slot. Without them, ordinary hotkeys continue to use Skyrim input as before. A raw layout with a missing DLL shows one warning per load at maintenance; a missing or incompatible DLL also makes raw selection fail closed with a notification and sends nothing. Restart Skyrim after updating the DLL or controller; load a save after changing JSON so the layout and any missing-DLL load warning apply.
+
+The shipped layout has no raw slots. For example, these flat authored slots use `delayMs: 0` for the SkyrimNet (scan code 64) and IntelEngine (scan code 11) dashboards; add each to a wheel position:
+
+```json
+[
+  { "label": "SN Dashboard", "hotkey": 64, "raw": true, "delayMs": 0 },
+  { "label": "IE Dashboard", "hotkey": 11, "raw": true, "delayMs": 0 }
+]
+```
+
+The owner verified both dashboard examples in the spike, not this production DLL:
+
+| Skyrim runtime | Evidence / remaining validation |
+|---|---|
+| AE 1.6.1170 | Owner-verified dashboards in the spike; production cases 1–6 still required. |
+| AE 1.7.104 | Production cases 1–6 still required; IntelEngine working on the same pin is not PlayerSignals proof. |
+| SE 1.5.97 | Build-only support; in-game untested. |
+| VR | Build-only support; in-game untested. |
 
 Labels, slot order, disabled slots, repeated supported intents, wheel names/submenus, and opening key are customizable without recompiling. UIExtensions supports at most eight slots; Magelight places twelve 30° slices clockwise from the top. Every shipped submenu puts Back at zero-based slot 10. Submenu, Back, Close and target-only actions use merged neckties. Only Submenu/Back neckties scale by 0.85 about the wheel centre, including hits, insets, selected bands, flow and label placement/fit; their stroke widths stay unchanged. Submenu and Back alone show the authored ChevronKnot with its V apex on the smaller outer tip and arms hugging the tip edges. The knot retains its approved absolute size and original stroke widths; tails may extend beyond the shortened outer edges. It lifts with its slice and stays hidden when disabled. Only Submenu/Back show two thin clipped arcs at radii 560 and 610, outside the hub's maximum pop, clipped to the active outline. Hotkeys have a flat-topped trapezoid cap and straight-chord pie with separate borders: either part selects the same key and lights both. Gesture cores and half-disc bulbs share a straight outer-corner chord without a fill gap or overlap sliver; insets, selected bands and flow clips follow it. The upright broadcast icon is centered in the half-disc's bounds at its existing size; ripple motion stays centered on the chord midpoint. Shift previews Openly on a gesture without changing page dispatch. SIGNAL, ACTION and KEY badges remain upright beneath wrapped labels; Submenu, Back, Close and null slots have no badge. Lit badges use their kind's idle fill, and navigation chevrons dim behind the label only; actual visible badges on other kinds remain respected. The selected band is 30 units wide (15 visible units), including the lit cap; its stroke width is 30. Slices lift to 1.06. All disabled slots use the same faint pointed necktie, not a split/trapezoid; actions without a target are disabled. Captured-target names and untampered custom labels are unchanged.
 
@@ -111,9 +136,12 @@ For exact schema rules and all shipped narration defaults, see the internal `doc
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File build/build.ps1
+# Rebuild the optional native DLL from PlayerSignals_native/ as well.
+powershell -NoProfile -ExecutionPolicy Bypass -File build/build.ps1 -Native
 python -m pip install "lupa==2.8"
 python -m unittest discover -s tests -v
 ```
+The root build automatically rebuilds the native project when its sources are newer; `-Native` forces that optional native build. Native project prerequisites and build details: [`PlayerSignals_native/README.md`](PlayerSignals_native/README.md).
 
 For browser-only rendering QA, serve the checkout with `python -m http.server` and open `tests/test_magelight_wheel.html`. Run with normal/reduced-motion preferences; `?blend=normal` exercises the unsupported-additive fallback, including hover-color transitions. These checks do not launch Skyrim or prove Ultralight/native behavior.
 

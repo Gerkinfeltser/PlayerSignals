@@ -107,6 +107,57 @@ class ConfigValidation(unittest.TestCase):
         payload = self.module.wheelPayload(slots, 'slate', '', 184)
         self.assertEqual(json.loads(payload)['slots'][0], ['Dashboard', '64', 'hotkey'])
 
+    def test_raw_hotkey_validation_is_strict_and_false_allows_mouse(self):
+        for raw, code, accepted in ((True, 1, True), (True, 255, True), (True, 256, False),
+                                   (False, 256, True), (False, 263, True)):
+            config = minimal()
+            config['wheels']['main'] = [{'label': 'Key', 'hotkey': code, 'raw': raw}]
+            with self.subTest(raw=raw, code=code):
+                if accepted:
+                    self.parse(config)
+                else:
+                    self.rejects(config)
+        for raw in (0, 1, 1.0, 'true', 'false', None, [], {}):
+            config = minimal()
+            config['wheels']['main'] = [{'label': 'Key', 'hotkey': 64, 'raw': raw}]
+            with self.subTest(raw=raw):
+                self.rejects(config)
+        for action in (
+            {'intent': 'confirm'}, {'action': {'name': 'x', 'args': {}}},
+            {'submenu': 'child'}, {'control': 'back'}, {'control': 'close'},
+        ):
+            for raw in (False, True):
+                config = minimal()
+                config['wheels']['child'] = [{'label': 'Return', 'control': 'back'}]
+                config['wheels']['main'] = [{'label': 'Not a hotkey', **action, 'raw': raw}]
+                with self.subTest(non_hotkey=action, raw=raw):
+                    self.rejects(config)
+
+    def test_raw_payload_extras_keep_legacy_shape_and_combine_with_color(self):
+        slots = self.lua.table()
+        for index, code, raw, color in ((1, 64, 1, None), (2, 64, 1, '#aabbcc'),
+                                        (3, 64, 0, '#123456'), (4, 258, 0, None)):
+            slot = self.lua.table()
+            slot['label'], slot['kind'], slot['hotkey'], slot['raw'] = 'Key', 'hotkey', code, raw
+            if color:
+                slot['color'] = color
+            slots[index] = slot
+        payload = json.loads(self.module.wheelPayload(slots, 'slate', '', 184))
+        self.assertEqual(payload['slots'][:4], [
+            ['Key', '64', 'hotkey', {'raw': True}],
+            ['Key', '64', 'hotkey', {'color': '#aabbcc', 'raw': True}],
+            ['Key', '64', 'hotkey', {'color': '#123456'}],
+            ['Key', '258', 'hotkey'],
+        ])
+
+
+    def test_raw_presence_includes_unreachable_wheels(self):
+        config = minimal()
+        config['wheels']['unused'] = [{'label': 'Raw', 'hotkey': 64, 'raw': True}]
+        self.assertTrue(self.parse(config).hasRawSlots)
+        config['wheels']['unused'][0]['raw'] = False
+        self.assertFalse(self.parse(config).hasRawSlots)
+
     def test_hotkey_defaults_and_bounds(self):
         config = minimal()
         config['wheels']['main'] = [{'label': 'Dashboard', 'hotkey': 64}]

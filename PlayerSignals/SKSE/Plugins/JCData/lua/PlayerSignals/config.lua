@@ -164,6 +164,7 @@ end
 local themes = {slate=true, moss=true, ember=true}
 local function validate(root, intents)
     local r = object(root, 'root', {schemaVersion=true, root=true, input=true, wheels=true, theme=true})
+    r.hasRawSlots = false
     assert(type(r.schemaVersion) == 'number' and r.schemaVersion == 1, 'schemaVersion: expected integer 1')
     if r.theme == nil then r.theme = 'slate' end
     assert(type(r.theme) == 'string' and themes[r.theme], 'theme: expected slate, moss or ember')
@@ -180,7 +181,14 @@ local function validate(root, intents)
         for i, slot in ipairs(wheel.data) do
             if slot ~= null then
                 local path = 'wheels.' .. name .. '[' .. i .. ']'
-                local e = object(slot, path, {label=true, intent=true, submenu=true, control=true, action=true, event=true, hotkey=true, delayMs=true, holdMs=true, color=true})
+                local e = object(slot, path, {label=true, intent=true, submenu=true, control=true, action=true, event=true, hotkey=true, delayMs=true, holdMs=true, color=true, raw=true})
+                if e.raw ~= nil then
+                    assert(type(e.raw) == 'boolean', path .. '.raw: expected boolean')
+                    assert(e.hotkey ~= nil, path .. '.raw: only valid for hotkey entries')
+                    if e.raw then
+                        r.hasRawSlots = true
+                    end
+                end
                 if e.color ~= nil then
                     assert(type(e.color) == 'string' and string.match(e.color, '^#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$'),
                         path .. '.color: expected #rrggbb')
@@ -200,6 +208,7 @@ local function validate(root, intents)
                 if e.control ~= nil then assert(e.control == 'back' or e.control == 'close', path .. '.control: expected back or close') end
                 if e.hotkey ~= nil then
                     assert(type(e.hotkey) == 'number' and e.hotkey >= 1 and e.hotkey <= 263, path .. '.hotkey: expected integer 1..263 (1..255 keyboard, 256..263 SKSE mouse buttons)')
+                    assert(e.raw ~= true or e.hotkey <= 255, path .. '.raw: requires keyboard hotkey code 1..255')
                     assert(e.hotkey ~= input.openKeyCode, path .. '.hotkey: must differ from input.openKeyCode')
                     e.delayMs = e.delayMs == nil and 100 or e.delayMs
                     e.holdMs = e.holdMs == nil and 50 or e.holdMs
@@ -271,10 +280,10 @@ function M.wheelPayload(slots, theme, target, openKey)
             if slot == nil then
                 entries[i] = 'null'
             else
-                local extras = ''
-                if slot.color ~= nil then
-                    assert(type(slot.color) == 'string' and string.match(slot.color, '^#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$'), 'color: expected #rrggbb')
-                    extras = ',{"color":' .. jsonString(slot.color) .. '}'
+                local raw = slot.raw == 1
+                if slot.raw ~= nil then
+                    assert(type(slot.raw) == 'number' and (slot.raw == 0 or slot.raw == 1) and slot.kind == 'hotkey', 'raw: expected native integer 0/1 on hotkey')
+                    assert(not raw or (type(slot.hotkey) == 'number' and slot.hotkey >= 1 and slot.hotkey <= 255), 'raw: requires keyboard hotkey code 1..255')
                 end
                 local kind, identity = 'navigation', ''
                 if slot.kind == 'hotkey' then
@@ -288,6 +297,17 @@ function M.wheelPayload(slots, theme, target, openKey)
                     kind = 'submenu'
                 elseif slot.kind == 'control' and slot.control == 'back' then
                     kind = 'back'
+                end
+                local extras = ''
+                if slot.color ~= nil then
+                    assert(type(slot.color) == 'string' and string.match(slot.color, '^#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$'), 'color: expected #rrggbb')
+                end
+                if slot.color ~= nil or raw == true then
+                    extras = ',{'
+                    if slot.color ~= nil then extras = extras .. '"color":' .. jsonString(slot.color) end
+                    if slot.color ~= nil and raw == true then extras = extras .. ',' end
+                    if raw == true then extras = extras .. '"raw":true' end
+                    extras = extras .. '}'
                 end
                 entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. extras .. ']'
             end
@@ -324,7 +344,7 @@ function M.load(args)
         if not layoutOk then error(args.path .. ': ' .. tostring(r), 0) end
         -- Build native containers directly: no metadata/reference-string reinterpretation.
         -- Numeric fields use the native JSON integer decoder only after raw validation.
-        local root = JValue.objectFromPrototype('{"schemaVersion":1,"input":{"openKeyCode":' .. r.input.data.openKeyCode .. '}}')
+        local root = JValue.objectFromPrototype('{"schemaVersion":1,"hasRawSlots":' .. (r.hasRawSlots and 1 or 0) .. ',"input":{"openKeyCode":' .. r.input.data.openKeyCode .. '}}')
         root.theme = r.theme
         local notifications = JMap.object(); root.notifications = notifications
         local narrations = JMap.object(); root.narrations = narrations
@@ -350,7 +370,7 @@ function M.load(args)
                 if slot ~= null then
                     local entry
                     if slot.data.hotkey then
-                        entry = JValue.objectFromPrototype('{"kind":"hotkey","hotkey":' .. slot.data.hotkey .. ',"delayMs":' .. slot.data.delayMs .. ',"holdMs":' .. slot.data.holdMs .. '}')
+                        entry = JValue.objectFromPrototype('{"kind":"hotkey","hotkey":' .. slot.data.hotkey .. ',"delayMs":' .. slot.data.delayMs .. ',"holdMs":' .. slot.data.holdMs .. ',"raw":' .. (slot.data.raw and 1 or 0) .. '}')
                     else
                         entry = JMap.object()
                     end
@@ -371,7 +391,7 @@ function M.load(args)
                     end
                     for key, v in pairs(slot.data) do
                         if key == 'submenu' then v = names[v] end
-                        if key ~= 'action' and key ~= 'hotkey' and key ~= 'delayMs' and key ~= 'holdMs' then entry[key] = v end
+                        if key ~= 'action' and key ~= 'hotkey' and key ~= 'delayMs' and key ~= 'holdMs' and key ~= 'raw' then entry[key] = v end
                     end
                     if slot.data.submenu then entry.label = slot.data.label .. ' >'
                     elseif slot.data.control == 'back' then entry.label = slot.data.label .. ' <' end

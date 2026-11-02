@@ -15,13 +15,14 @@ PlayerSignals is a JSON-configurable, nonverbal communication wheel for SkyrimNe
 - Targeted submission is one `SkyrimNetApi.DirectNarration(text, respondingNPC, player)` call. The captured NPC is the responder/originator context, the player is listener, and narration text still describes the player as the gesture actor. Group submission is one `SkyrimNetApi.DirectNarration(text, player, None)` call with text explicitly addressing everyone nearby. Nearby witnesses may join; no reply/compliance is guaranteed.
 - `intents.json` defines the dynamically validated registry and its `narration`, group `notification`, and `targetedNotification` phrases. Lua builds native `narrations`, `notifications`, `targetNotificationPrefixes`, and `targetNotificationSuffixes` maps from that file; no hardcoded phrase/ID catalog remains in Lua. Phrase values omit the player prefix/final period; the sole literal `{target}` appears exactly once in `targetedNotification`. One local player-named `Debug.Notification` is permitted only when DirectNarration returns `0`; group feedback omits the recipient, targeted feedback uses the captured recipient's name, and failures/stale stacks stay silent. Never restore a mod-event, trigger, or alternate narration submission path.
 - The optional `SKSE/Plugins/SkyrimNet/external/phospheneoverdrive.playersignals/` bundle contains only a manifest and `prompts/agent_playersignals_intent_helper.prompt`. It inherits the base agent and drafts JSON from pasted files; standard SkyrimNet agent tools have no general filesystem access or PlayerSignals schema validator. Never claim automatic editing or actual Lua/game validation. This bundle does not own wheel dispatch and must not regain triggers/actions.
-- Hotkey slots are non-narration dispatches using only SKSE `Input.HoldKey`/`Input.ReleaseKey`, never player-control or animation APIs.
+- Hotkey slots are non-narration dispatches: ordinary slots use SKSE `Input.HoldKey`/`Input.ReleaseKey`; `raw: true` keyboard slots use only `PlayerSignals_Native.SendRawKey(scanCode, holdMs)` after the wheel closes and Skyrim is foreground. Check `SKSE.GetPluginVersion("PlayerSignals")` before either PlayerSignals native; require `GetNativeVersion() == 1` before sending. Never call an unbound native or fall back to HoldKey for raw slots. No animation or player-control APIs.
 
 ## Key directories
 
 | Path | Editing/deployment boundary |
 |---|---|
 | `PlayerSignals/` | Actual mod root; only this child folder may be installed/symlinked into MO2. |
+| `PlayerSignals_native/` | Native SKSE project sources/build files, inside this repository but outside the mod payload; output DLL belongs in `PlayerSignals/SKSE/Plugins/`. |
 | `PlayerSignals/Source/Scripts/` | Authored Papyrus controller/alias; generated PEX goes in `PlayerSignals/Scripts/`. |
 | `PlayerSignals/SKSE/Plugins/` | Runtime layout and JContainers Lua module/catalog. |
 | `PlayerSignals_spriggit/` | Authored plugin records; keep outside the mod payload. |
@@ -32,8 +33,9 @@ PlayerSignals is a JSON-configurable, nonverbal communication wheel for SkyrimNe
 Run from the repository root:
 
 ```powershell
-# Compile both scripts, build ESP, and regenerate SEQ; does not deploy.
+# Compile all three scripts, build ESP/SEQ; rebuild native DLL if missing/stale. No deployment.
 powershell -NoProfile -ExecutionPolicy Bypass -File build/build.ps1
+# Force the native step: add -Native to the build command.
 
 # Development-only test dependency and raw-validator suite.
 python -m pip install "lupa==2.8"
@@ -71,7 +73,9 @@ No dedicated lint/formatter command is configured. Running the mod means launchi
 
 Use Windows PowerShell, the installed Papyrus compiler, and Spriggit `Spriggit.Yaml.Skyrim` **0.40.0**. Preserve import order: feature source → SKSE → JContainers → installed SkyrimNet scripts → full vanilla → UIExtensions → fallback headers. Stub headers must not shadow full vanilla declarations. Generate SEQ from the authored quest FormID, not a runtime load-order-prefixed ID.
 
-Runtime dependencies are SKSE64, stock-compatible UIExtensions, JContainers API 4/feature 2 including Lua support, and SkyrimNet with `SkyrimNet.esp`, `GetBuildVersion()`, and `DirectNarration` available. Do not bundle dependency PEX/SWF/source or copy the animation-wheel mod. No MO2 changes are authorized by this document.
+Runtime dependencies are SKSE64, stock-compatible UIExtensions, JContainers API 4/feature 2 including Lua support, and SkyrimNet with `SkyrimNet.esp`, `GetBuildVersion()`, and `DirectNarration` available. Raw slots only additionally require `PlayerSignals.dll` (native API version 1) and Address Library for SKSE Plugins (the VR Address Library for Skyrim VR); without raw slots, neither is required and ordinary hotkeys remain unchanged. The native project is `PlayerSignals_native/` at repository root; its build README documents prerequisites.
+
+Raw-slot runtime status: Skyrim 1.6.1170 owner-verified in the spike only, not this production DLL; 1.7.104 needs production in-game testing; Skyrim 1.5.97 and VR are build-only, untested.
 
 Backups are recommended before install/update. Do not claim a guaranteed clean mid-playthrough uninstall: saves can retain quest/script state, and no shutdown/uninstall cleaner exists. Direct users to the spec/player-guide rollback guidance. SkyrimNet's separately stored narration history may remain after Skyrim save rollback.
 

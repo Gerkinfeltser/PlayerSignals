@@ -294,6 +294,17 @@ Function Maintenance(Int token)
         Report(_path + ": invalid native validator result")
         Return
     EndIf
+    If JMap.getInt(candidate, "hasRawSlots") == 1
+        Int nativePlugin = SKSE.GetPluginVersion("PlayerSignals")
+        If token != _generation
+            candidate = JValue.release(candidate)
+            Return
+        EndIf
+        If nativePlugin < 0
+            ; One warning during this load's maintenance; normal slots remain available.
+            Report("raw key slot needs PlayerSignals.dll")
+        EndIf
+    EndIf
     Int newKey = JMap.getInt(JMap.getObj(candidate, "input"), "openKeyCode")
     Bool newHeld = Input.IsKeyPressed(newKey)
     If token != _generation
@@ -327,6 +338,14 @@ Bool Function ValidateNative(Int config)
     If JMap.valueType(config, "targetNotificationPrefixes") != 5 || JMap.valueType(config, "targetNotificationSuffixes") != 5
         Return False
     EndIf
+    If JMap.valueType(config, "hasRawSlots") != 2
+        Return False
+    EndIf
+    Int expectedRaw = JMap.getInt(config, "hasRawSlots")
+    If expectedRaw < 0 || expectedRaw > 1
+        Return False
+    EndIf
+    Bool foundRaw = False
     Int notifications = JMap.getObj(config, "notifications")
     Int narrations = JMap.getObj(config, "narrations")
     Int targetPrefixes = JMap.getObj(config, "targetNotificationPrefixes")
@@ -386,14 +405,18 @@ Bool Function ValidateNative(Int config)
                         Return False
                     EndIf
                 ElseIf entryKind == "hotkey"
-                    If JMap.valueType(entry, "hotkey") != 2 || JMap.valueType(entry, "delayMs") != 2 || JMap.valueType(entry, "holdMs") != 2
+                    If JMap.valueType(entry, "hotkey") != 2 || JMap.valueType(entry, "delayMs") != 2 || JMap.valueType(entry, "holdMs") != 2 || JMap.valueType(entry, "raw") != 2
                         Return False
                     EndIf
                     Int hotkey = JMap.getInt(entry, "hotkey")
                     Int delayMs = JMap.getInt(entry, "delayMs")
                     Int holdMs = JMap.getInt(entry, "holdMs")
-                    If hotkey < 1 || hotkey > 263 || hotkey == code || delayMs < 0 || delayMs > 2000 || holdMs < 1 || holdMs > 2000
+                    Int rawMode = JMap.getInt(entry, "raw")
+                    If hotkey < 1 || hotkey > 263 || hotkey == code || delayMs < 0 || delayMs > 2000 || holdMs < 1 || holdMs > 2000 || rawMode < 0 || rawMode > 1 || (rawMode == 1 && hotkey > 255)
                         Return False
+                    EndIf
+                    If rawMode == 1
+                        foundRaw = True
                     EndIf
                 ElseIf entryKind == "intent"
                     If JMap.valueType(entry, "intent") != 6
@@ -430,7 +453,7 @@ Bool Function ValidateNative(Int config)
         EndWhile
         name = JMap.nextKey(wheels, name)
     EndWhile
-    Return True
+    Return foundRaw == (expectedRaw == 1)
 EndFunction
 
 Event OnKeyDown(Int keyCode)
@@ -496,11 +519,13 @@ Event OnKeyDown(Int keyCode)
     Int hotkey = 0
     Int delayMs = 0
     Int holdMs = 0
+    Bool rawHotkey = False
     If selection != 0 && token == _generation && _ready
         If kind == "hotkey"
             hotkey = JMap.getInt(selection, "hotkey")
             delayMs = JMap.getInt(selection, "delayMs")
             holdMs = JMap.getInt(selection, "holdMs")
+            rawHotkey = JMap.getInt(selection, "raw") == 1
         ElseIf kind == "intent"
             ; Capture text while the session lease is alive, before the final dispatch guard.
             String name = player.GetDisplayName()
@@ -550,17 +575,44 @@ Event OnKeyDown(Int keyCode)
         _browsing = False
     EndIf
     If kind == "hotkey"
-        DispatchHotkey(hotkey, delayMs, holdMs, token)
+        DispatchHotkey(hotkey, delayMs, holdMs, rawHotkey, token)
     EndIf
 EndEvent
 
-Function DispatchHotkey(Int code, Int delayMs, Int holdMs, Int token)
+Function DispatchHotkey(Int code, Int delayMs, Int holdMs, Bool rawHotkey, Int token)
     If token != _generation || !_ready
         Return
     EndIf
     ; Browse/FinishMagelight and session cleanup have already released the view.
     Utility.Wait(delayMs / 1000.0)
     If token != _generation || !_ready
+        Return
+    EndIf
+    If rawHotkey
+        ; Presence must be checked before calling either native declaration.
+        Int nativePlugin = SKSE.GetPluginVersion("PlayerSignals")
+        If token != _generation || !_ready
+            Return
+        EndIf
+        If nativePlugin < 0
+            Report("raw key slot needs PlayerSignals.dll", token)
+            Return
+        EndIf
+        Int nativeVersion = PlayerSignals_Native.GetNativeVersion()
+        If token != _generation || !_ready
+            Return
+        EndIf
+        If nativeVersion != 1
+            Report("raw key slot needs PlayerSignals.dll", token)
+            Return
+        EndIf
+        Bool sent = PlayerSignals_Native.SendRawKey(code, holdMs)
+        If token != _generation || !_ready
+            Return
+        EndIf
+        If !sent
+            Report("Raw key was not sent; check focus and PlayerSignals.log.", token)
+        EndIf
         Return
     EndIf
     Input.HoldKey(code)
@@ -801,6 +853,7 @@ Int Function BrowseWheels(Int config, Int history, Int token, Actor player)
                 JMap.setInt(selection, "hotkey", JMap.getInt(choice, "hotkey"))
                 JMap.setInt(selection, "delayMs", JMap.getInt(choice, "delayMs"))
                 JMap.setInt(selection, "holdMs", JMap.getInt(choice, "holdMs"))
+                JMap.setInt(selection, "raw", JMap.getInt(choice, "raw"))
             Else
                 JMap.setStr(selection, "identity", JMap.getStr(choice, "actionName"))
                 JMap.setStr(selection, "actionName", JMap.getStr(choice, "actionName"))

@@ -20,6 +20,7 @@ You'll need:
 - SkyrimNet, with `SkyrimNet.esp` loaded and its native API available.
 - Magelight host 0.31.2+ and its matching runtime when using the enabled experimental radial backend.
 - For action entries, SkyrimNet with `IsActionRegistered`, `ExecuteAction`, the built-in `SkyrimNetInternal` eligibility functions, and optional persistent/short-lived event APIs.
+- Only for layouts containing a `raw: true` hotkey: `PlayerSignals.dll` (native API version 1) and Address Library for SKSE Plugins; Skyrim VR requires the VR Address Library. Ordinary hotkeys do not require either.
 
 Back up your save and matching SKSE cosave before installing or updating. The startup quest and player-alias save-load handling are designed to initialize PlayerSignals on existing saves. The limited removal test below does not establish installation/update compatibility with every existing save.
 
@@ -109,13 +110,35 @@ You can change labels, reorder entries, move supported intents between wheels, m
 
 ### Hotkey slots
 
-A hotkey slot presses its DirectX scan code after the wheel has fully closed; it needs no captured target, ignores Shift, and does not narrate or notify. For example, add this entry to a wheel to click the **middle mouse button** (SKSE code `258`):
+A hotkey slot normally presses its DirectX scan code after the wheel has fully closed; it needs no captured target, ignores Shift, and does not narrate or notify. For example, add this entry to click the **middle mouse button** (SKSE code `258`):
 
 ```json
 { "label": "Middle mouse", "hotkey": 258, "delayMs": 100, "holdMs": 50 }
 ```
 
-`hotkey` must be a strict integer from 1–263 (1–255 keyboard scan codes; 256–263 SKSE mouse buttons, e.g. 258 = middle mouse) and cannot equal the configured `input.openKeyCode`. `delayMs` is optional (default `100`, integer 0–2000); `holdMs` is optional (default `50`, integer 1–2000). These timing fields are hotkey-only. A hotkey is exclusive with `intent`, `submenu`, `control`, and `action`. Dispatch occurs only after the browsing session and Magelight view have fully released. Injected keys reach only mods that read Skyrim's input; mods polling Windows key state directly (e.g. the SkyrimNet and IntelEngine dashboard hotkeys) do not see them.
+`hotkey` must be a strict integer from 1–263 (1–255 keyboard scan codes; 256–263 SKSE mouse buttons, e.g. 258 = middle mouse) and cannot equal the configured `input.openKeyCode`. `delayMs` is optional (default `100`, integer 0–2000); `holdMs` is optional (default `50`, integer 1–2000). These timing fields are hotkey-only. A hotkey is exclusive with `intent`, `submenu`, `control`, and `action`. Dispatch occurs only after the browsing session and Magelight view have fully released.
+
+For keyboard hotkeys, optional `"raw": true` sends a Windows scan-code key press for mods that poll Windows key state. It is allowed only for hotkeys with scan codes 1–255; `raw: false` is allowed and leaves ordinary hotkey behavior unchanged. Raw presses are sent only after an accepted wheel choice closes and only while Skyrim is the foreground process. If focus has moved elsewhere, dispatch fails closed; there is no `HoldKey` fallback. A raw layout with a missing DLL gets one warning per load at maintenance; a missing or incompatible DLL also fails raw selection closed with a notification and sends nothing. The badge remains **KEY**. Raw slots require `PlayerSignals.dll` and Address Library for SKSE Plugins (the VR Address Library for Skyrim VR), but these dependencies are needed only when a layout has a `raw: true` slot. Layouts without raw slots continue to use normal Skyrim input; mods polling Windows key state directly do not receive those ordinary injected keys.
+
+Add either example to a wheel position. The authored `raw` flag is flat beside `hotkey`; the page payload carries it in its fourth extras object as `{ "raw": true }`, combined with an optional color as `{ "color": "#aabbcc", "raw": true }`. `raw: false` is omitted from page extras.
+
+```json
+[
+  { "label": "SN Dashboard", "hotkey": 64, "raw": true, "delayMs": 0 },
+  { "label": "IE Dashboard", "hotkey": 11, "raw": true, "delayMs": 0 }
+]
+```
+
+The owner verified the two dashboards in the spike, not this production DLL:
+
+| Skyrim runtime | Current evidence |
+|---|---|
+| AE 1.6.1170 | Dashboards owner-verified in the spike; this production DLL still needs in-game testing. |
+| AE 1.7.104 | Production in-game testing still required. |
+| SE 1.5.97 | Build-only support; in-game untested. |
+| VR | Build-only support; in-game untested. |
+
+Restart Skyrim after a DLL or controller update. Load a save after JSON edits to apply the layout and missing-DLL load warning.
 
 ### Wheel colour theme (Magelight)
 

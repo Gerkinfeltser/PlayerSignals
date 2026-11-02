@@ -556,7 +556,15 @@
         let data;
         try { data = JSON.parse(payload.slice(divider + 1)); }
         catch (_) { rejectBegin(nextRequest, "rejected"); return; }
-        const validExtra = item => item.length === 3 || (item.length === 4 && item[3] && typeof item[3] === "object" && !Array.isArray(item[3]) && Object.keys(item[3]).every(key => key === "color") && typeof item[3].color === "string" && item[3].color.length === 7 && /^#[0-9A-Fa-f]{6}$/.test(item[3].color));
+        const validExtra = item => {
+            if (item.length === 3) return true;
+            const extra = item[3];
+            if (!extra || typeof extra !== "object" || Array.isArray(extra)) return false;
+            const keys = Object.keys(extra);
+            if (!keys.length || keys.some(key => key !== "color" && key !== "raw")) return false;
+            if ("color" in extra && (typeof extra.color !== "string" || extra.color.length !== 7 || !/^#[0-9A-Fa-f]{6}$/.test(extra.color))) return false;
+            return !("raw" in extra) || (item[2] === "hotkey" && extra.raw === true && /^[1-9]\d*$/.test(item[1]) && Number(item[1]) <= 255);
+        };
         if (!data || !Number.isInteger(data.openKey) || data.openKey < 1 || data.openKey > 255 || !["slate", "moss", "ember"].includes(data.theme) || !Array.isArray(data.slots) || data.slots.length !== 12 || (data.target !== undefined && typeof data.target !== "string") || data.slots.some(item => item !== null && (!Array.isArray(item) || (item.length !== 3 && item.length !== 4) || !validExtra(item) || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back", "hotkey"].includes(item[2]) || (item[2] === "hotkey" && (!/^[1-9]\d*$/.test(item[1]) || Number(item[1]) > 263 || Number(item[1]) === data.openKey))))) { rejectBegin(nextRequest, "rejected"); return; }
         try {
             failClosed(nextRequest); finished = false; targetName = data.target || "";
@@ -593,8 +601,8 @@
                 if (subback) knot.setAttribute("transform", `translate(0 ${1692 * (1 - navScale)})`);
                 else knot.removeAttribute("transform");
                 group.dataset.kind = kind || "";
-                group.classList.toggle("slot-colored", Boolean(item?.[3]));
-                if (item?.[3]) group.style.setProperty("--slot-idle-fill", item[3].color);
+                group.classList.toggle("slot-colored", Boolean(item?.[3]?.color));
+                if (item?.[3]?.color) group.style.setProperty("--slot-idle-fill", item[3].color);
                 const navigation = ["navigation", "submenu", "back"].includes(kind);
                 const merged = disabled || (kind !== "intent" && kind !== "hotkey");
                 target.classList.toggle("empty", !item);

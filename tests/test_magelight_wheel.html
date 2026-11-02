@@ -23,7 +23,7 @@ frame.addEventListener("load", async () => {
         const key = key => keyEvent("keydown", key);
         const visible = () => view.getComputedStyle(doc.querySelector("main")).visibility === "visible";
         const layout = await (await fetch("../PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json")).json();
-        const entry = s => !s ? null : [s.label + (s.submenu ? " >" : s.control === "back" ? " <" : ""), s.hotkey !== undefined ? String(s.hotkey) : s.action?.name || s.intent || "", s.hotkey !== undefined ? "hotkey" : s.action ? "action" : s.intent ? "intent" : s.submenu ? "submenu" : s.control === "back" ? "back" : "navigation", ...(s.color ? [{color:s.color}] : [])];
+        const entry = s => !s ? null : [s.label + (s.submenu ? " >" : s.control === "back" ? " <" : ""), s.hotkey !== undefined ? String(s.hotkey) : s.action?.name || s.intent || "", s.hotkey !== undefined ? "hotkey" : s.action ? "action" : s.intent ? "intent" : s.submenu ? "submenu" : s.control === "back" ? "back" : "navigation", ...(s.color || s.raw === true ? [{...(s.color ? {color:s.color} : {}), ...(s.raw === true ? {raw:true} : {})}] : [])];
         const payload = (slots, target = "Lydia", theme = "slate", openKey = 184) => ({theme, target, openKey, slots:Array.from({length:12}, (_, i) => entry(slots[i]))});
         const begin = (token, data) => view.psWheelBegin(token + "|" + JSON.stringify(data));
         const arm = (token, slots, target = "Lydia", theme = "slate", openKey = 184) => {
@@ -1215,12 +1215,39 @@ frame.addEventListener("load", async () => {
         assert(region(0).getAttribute("aria-disabled") === "true" && view.getComputedStyle(region(0).querySelector(".hit-area")).fill === "rgb(70, 71, 64)", "Colored no-target action escaped shared disabled look");
         click(region(0).querySelector(".hit-area")); assert(!replies.length, "Disabled colored action dispatched");
         view.hostMode("0");
-        const malformedExtras = [true,false,{},null,[],1,"#123456",{raw:true},{other:"#123456"},{color:"#123456",raw:false},
+        const malformedExtras = [true,false,{},null,[],1,"#123456",{raw:true},{raw:false},{raw:1},{raw:"true"},{other:"#123456"},{color:"#123456",raw:false},
             ...["","#abc","red","rgb(1,2,3)","123456","#12345g"," #123456","#123456 ","#123456\n",123,true,null,[]].map(color => ({color}))];
         for (const [i,extra] of malformedExtras.entries()) {
             const token = `color-invalid-${i}`, data = payload([{label:"Signal",intent:"greet"}]); data.slots[0].push(extra);
             begin(token,data); view.psWheelArm(token);
             assert(!visible() && replies.pop() === `${token}|-1|rejected|cancel`, `Malformed extras ${i} did not fail closed`);
+        }
+        for (const [i,slot] of [
+            {label:"Key",hotkey:64,raw:true},
+            {label:"Key",hotkey:64,color:"#aabbcc",raw:true}
+        ].entries()) {
+            const token=`raw-hotkey-${i}`;
+            begin(token,payload([slot])); view.psWheelArm(token);
+            assert(visible()&&doc.querySelector("#slot-0 .actionLabel").textContent==="KEY","Raw hotkey changed the standard KEY badge");
+            center.focus();
+            const expected = slot.color ? rgb(slot.color) : "rgb(61, 90, 85)";
+            for (const mode of ["target","nearby"])
+                assert(view.getComputedStyle(region(0,mode).querySelector(".hit-area")).fill === expected, "Raw extras changed the hotkey idle fill");
+            region(0).focus();
+            assert(view.getComputedStyle(doc.querySelector("#slot-0 .sectorLabel")).color === expected, "Raw extras changed the lit label palette");
+            click(region(0));
+            assert(!visible()&&replies.pop()===`${token}|0|64|hotkey`,"Raw hotkey changed ordinary hotkey dispatch");
+        }
+        for (const [i,slot] of [
+            {label:"Key",hotkey:64,raw:false},
+            {label:"Key",hotkey:64,raw:1},
+            {label:"Signal",intent:"greet",raw:true},
+            {label:"Mouse",hotkey:256,raw:true}
+        ].entries()) {
+            const token=`raw-invalid-${i}`, plain={...slot}; delete plain.raw;
+            const data=payload([plain]); data.slots[0].push({raw:slot.raw});
+            begin(token,data); view.psWheelArm(token);
+            assert(!visible()&&replies.pop()===`${token}|-1|rejected|cancel`,`Invalid raw slot ${i} did not fail closed`);
         }
         const plainPalettes = [
             ["#455766","#5e3d38","#3d5a55","#38392f","#38392f","#464740"],

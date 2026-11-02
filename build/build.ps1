@@ -4,7 +4,8 @@ param(
     [string]$UiExtensionsSources = 'D:/git/SkyrimNet-GamePlugin/headers',
     [string]$FallbackHeaders = 'D:/git/SkyrimNet-GamePlugin/headers',
     [string]$MagelightSources = 'D:/git/MagelightUI/papyrus',
-    [string]$Spriggit = 'D:/SkyrimMisc/SpriggitCLI/Spriggit.CLI.exe'
+    [string]$Spriggit = 'D:/SkyrimMisc/SpriggitCLI/Spriggit.CLI.exe',
+    [switch]$Native
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
@@ -540,7 +541,28 @@ $view = $view.Substring(0, $begin + $artBegin.Length) + "`n" + $svg.OuterXml + "
 [IO.File]::WriteAllText($viewPath, $view, (New-Object Text.UTF8Encoding($false)))
 $output = Join-Path $mod 'Scripts'
 New-Item -ItemType Directory -Force $output | Out-Null
-foreach ($name in @('PlayerSignals_Controller', 'PlayerSignals_PlayerAlias')) {
+$nativeDir = Join-Path $repo 'PlayerSignals_native'
+# Build the DLL when requested, missing, or older than any native project source.
+$nativeDll = Join-Path $mod 'SKSE/Plugins/PlayerSignals.dll'
+$nativeSources = @(
+    (Join-Path $nativeDir 'CMakeLists.txt'),
+    (Join-Path $nativeDir 'build.ps1'),
+    (Join-Path $nativeDir 'vcpkg.json'),
+    (Join-Path $nativeDir 'vcpkg-configuration.json')
+) + @(Get-ChildItem (Join-Path $nativeDir 'src') -File -Recurse | ForEach-Object FullName)
+$nativeNeedsBuild = $Native -or !(Test-Path -LiteralPath $nativeDll -PathType Leaf)
+if (-not $nativeNeedsBuild) {
+    $dllTime = (Get-Item -LiteralPath $nativeDll).LastWriteTimeUtc
+    $nativeNeedsBuild = @($nativeSources | Where-Object {
+        (Test-Path -LiteralPath $_ -PathType Leaf) -and
+        (Get-Item -LiteralPath $_).LastWriteTimeUtc -gt $dllTime
+    }).Count -gt 0
+}
+if ($nativeNeedsBuild) {
+    & (Join-Path $nativeDir 'build.ps1')
+    if ($LASTEXITCODE -ne 0) { throw "Native build failed ($LASTEXITCODE)" }
+}
+foreach ($name in @('PlayerSignals_Controller', 'PlayerSignals_PlayerAlias', 'PlayerSignals_Native')) {
     & $compiler (Join-Path $mod "Source/Scripts/$name.psc") "-flags=$flags" "-import=$imports" "-output=$output"
     if ($LASTEXITCODE -ne 0) { throw "Papyrus compilation failed: $name" }
 }

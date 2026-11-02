@@ -494,7 +494,16 @@ frame.addEventListener("load", async () => {
             arm("kind-fills-" + theme, sample, "Lydia", theme);
             doc.getElementById("center").focus();
             const actualKinds = [0,1,2,3,4].map(index => view.getComputedStyle(region(index).querySelector(".hit-area")).fill);
-            assert(actualKinds.every((fill,index) => fill === [fills[theme][1],fills[theme][2],fills[theme][0],fills[theme][0],fills[theme][4]][index]), `Idle gesture/action/navigation/hotkey fills mismatch in ${theme}: ${actualKinds}`);
+            const subnavFill={slate:"rgb(56, 57, 47)",moss:"rgb(45, 58, 47)",ember:"rgb(64, 46, 42)"}[theme];
+            assert(actualKinds.every((fill,index) => fill === (index===2||index===3?subnavFill:[fills[theme][1],fills[theme][2],null,null,fills[theme][4]][index])), `Idle gesture/action/navigation/hotkey fills mismatch in ${theme}: ${actualKinds}`);
+            assert([2,3].every(index=>view.getComputedStyle(region(index).querySelector(".hit-area")).fill===subnavFill),`${theme} idle submenu/back fill changed`);
+            for(const index of [2,3]) {
+                const label=doc.querySelector(`.sectorLabel[data-index="${index}"]`),range=doc.createRange();
+                range.selectNodeContents(label);
+                const ink=range.getBoundingClientRect(),box=label.getBoundingClientRect(),badge=doc.querySelector(`#slot-${index} .actionLabel`);
+                assert(ink.width>0&&ink.height>0&&ink.left>=box.left&&ink.right<=box.right&&ink.top>=box.top&&ink.bottom<=box.bottom,`${theme} navigation label ${index} does not fit its label box`);
+                assert(view.getComputedStyle(label).color==="rgb(191, 184, 166)"&&view.getComputedStyle(badge).display==="none",`${theme} idle navigation label/badge styling changed`);
+            }
             const brightness = color => {
                 const rgb=color.match(/[\d.]+/g).map(Number);
                 return .2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2];
@@ -509,15 +518,17 @@ frame.addEventListener("load", async () => {
                 } else assert(fill==="rgb(255, 220, 140)", `${theme} ${index}/${mode} selected pie fill changed`);
                 assert(view.getComputedStyle(edge).stroke==="rgb(255, 220, 140)", `${theme} ${index}/${mode} selected edge is not bright yellow`);
                 assert(band && view.getComputedStyle(band).display!=="none", `${theme} ${index}/${mode} selected band missing`);
+                assert(parseFloat(view.getComputedStyle(band).strokeWidth)===30,`${theme} ${index}/${mode} selected band stroke is not 30 units`);
                 const bandFill=view.getComputedStyle(band).stroke;
                 if(cap) assert(brightness(bandFill)<brightness(fill)&&brightness(bandFill)>brightness(view.getComputedStyle(region(index).querySelector(".selected-band")).stroke),`${theme} ${index} cap band is not darker than its fill and lighter than the pie band`);
                 else assert(bandFill==="rgb(168, 135, 63)",`${theme} ${index} selected pie band changed`);
-                const label=doc.querySelector(`.sectorLabel[data-index="${index}"]`);
-                const kindVar=index===0?"--gesture-fill":index===1?"--action-fill":index===4?"--hotkey-fill":"--nav-fill",raw=view.getComputedStyle(doc.documentElement).getPropertyValue(kindVar).trim(),hex=raw.match(/^#([0-9a-f]{6})$/i);
+                const label=doc.querySelector(`.sectorLabel[data-index="${index}"]`),kindVar=index===0?"--gesture-fill":index===1?"--action-fill":index===4?"--hotkey-fill":"--nav-fill";
+                const raw=view.getComputedStyle(doc.documentElement).getPropertyValue(kindVar).trim(),hex=raw.match(/^#([0-9a-f]{6})$/i);
                 const idle=hex?`rgb(${parseInt(hex[1].slice(0,2),16)}, ${parseInt(hex[1].slice(2,4),16)}, ${parseInt(hex[1].slice(4,6),16)})`:raw;
                 assert(view.getComputedStyle(label).color===idle,`${theme} ${index} lit label does not use ${kindVar}`);
                 const badge=doc.querySelector(`#slot-${index} .actionLabel`);
-                if(badge&&view.getComputedStyle(badge).display!=="none")assert(view.getComputedStyle(badge).fill===idle,`${theme} ${index} lit badge does not use ${kindVar}`);
+                if(index===2||index===3) assert(view.getComputedStyle(badge).display==="none",`${theme} ${index} navigation badge is visible`);
+                else if(badge&&view.getComputedStyle(badge).display!=="none")assert(view.getComputedStyle(badge).fill===idle,`${theme} ${index} lit badge does not use ${kindVar}`);
             };
             for (let i=0;i<5;i++) {
                 region(i).focus(); checkLit(i);
@@ -528,6 +539,26 @@ frame.addEventListener("load", async () => {
             region(4,"nearby").focus(); checkLit(4,"nearby"); checkLit(4);
             key("Escape"); assert(replies.pop() === `kind-fills-${theme}|-1||cancel`, "Kind-fill setup failed to cancel");
         }
+        const longNav=Array.from({length:12},(_,i)=>({label:i%2?"Return to previous menu":"Open social interaction submenu",...(i%2?{control:"back"}:{submenu:"social"})}));
+        arm("nav-label-fit",longNav);
+        for(let i=0;i<12;i++) {
+            const label=doc.querySelector(`.sectorLabel[data-index="${i}"]`),box=label.closest("foreignObject"),range=doc.createRange(),badge=doc.querySelector(`#slot-${i} .actionLabel`);
+            range.selectNodeContents(label);
+            const ink=range.getBoundingClientRect(),bounds=box.getBoundingClientRect();
+            assert(ink.width>0&&ink.height>0&&ink.left>=bounds.left&&ink.right<=bounds.right&&ink.top>=bounds.top&&ink.bottom<=bounds.bottom,`Long navigation label ${i} overflows its .85 label box`);
+            assert(view.getComputedStyle(badge).display==="none",`Long navigation label ${i} reserved or displayed a badge`);
+        }
+        key("Escape"); assert(replies.pop()==="nav-label-fit|-1||cancel","Navigation label-fit setup failed to cancel");
+        arm("close-selected-band",Array.from({length:12},()=>({label:"Close",control:"close"})));
+        doc.getElementById("center").focus();
+        for(let i=0;i<12;i++) {
+            assert(view.getComputedStyle(region(i).querySelector(".hit-area")).fill==="rgb(70, 71, 64)",`Close ${i} idle navigation fill changed`);
+            region(i).focus();
+            const band=region(i).querySelector(".selected-band"),label=doc.querySelector(`.sectorLabel[data-index="${i}"]`),badge=doc.querySelector(`#slot-${i} .actionLabel`);
+            assert(parseFloat(view.getComputedStyle(band).strokeWidth)===30,`Close ${i} selected band stroke is not 30 units`);
+            assert(view.getComputedStyle(label).color==="rgb(70, 71, 64)"&&view.getComputedStyle(badge).display==="none",`Close ${i} selected label or no-badge styling changed`);
+        }
+        key("Escape"); assert(replies.pop()==="close-selected-band|-1||cancel","Close selected-band setup failed to cancel");
         arm("help-stack", [{label:"Probe",intent:"greet"}]);
         const help = doc.getElementById("help"), helpBox = help.getBoundingClientRect(), vignetteBox = vignette.getBoundingClientRect();
         const overlap = {left:Math.max(helpBox.left,vignetteBox.left), right:Math.min(helpBox.right,vignetteBox.right), top:Math.max(helpBox.top,vignetteBox.top), bottom:Math.min(helpBox.bottom,vignetteBox.bottom)};
@@ -569,8 +600,6 @@ frame.addEventListener("load", async () => {
         const badgeKinds = [
             ["intent", {label:"Greet",intent:"greet"}, "SIGNAL", "--gesture-fill"],
             ["action", {label:"Wait here",action:{name:"WaitHere"}}, "ACTION", "--action-fill"],
-            ["submenu", {label:"Social",submenu:"social"}, "NAV", "--nav-fill"],
-            ["back", {label:"Back",control:"back"}, "NAV", "--nav-fill"],
             ["hotkey", {label:"Dashboard",hotkey:64}, "KEY", "--hotkey-fill"]
         ];
         const badgeLabels = ["Yes", "Follow the target / resume following"];
@@ -639,16 +668,22 @@ frame.addEventListener("load", async () => {
         for(const [step,slot,expected] of [
             ["action",{label:"Action",action:{name:"WaitHere"}},"ACTION"],
             ["signal",{label:"Signal",intent:"greet"},"SIGNAL"],
-            ["submenu",{label:"Menu",submenu:"social"},"NAV"],
+            ["submenu",{label:"Menu",submenu:"social"},null],
+            ["back",{label:"Back",control:"back"},null],
             ["hotkey",{label:"Hotkey",hotkey:64},"KEY"],
             ["close",{label:"Close",control:"close"},null],
             ["null",null,null]
         ]) {
-            arm(`badge-visibility-${step}`,slot?[slot]:[]);
-            const badge=doc.querySelector("#slot-0 .actionLabel");
-            assert(expected?badge.textContent===expected&&view.getComputedStyle(badge).display!=="none":view.getComputedStyle(badge).display==="none",`Badge switch to ${step} retained stale or incorrect text`);
+            for(let position=0;position<12;position++) {
+                const slots=Array.from({length:12},(_,i)=>i===position?slot:null);
+                arm(`badge-visibility-${step}-${position}`,slots);
+                for(let i=0;i<12;i++) {
+                    const badge=doc.querySelector(`#slot-${i} .actionLabel`),visible=!!expected&&i===position;
+                    assert(visible?badge.textContent===expected&&view.getComputedStyle(badge).display!=="none":view.getComputedStyle(badge).display==="none",`Badge switch to ${step} retained stale or incorrect slot ${i}`);
+                }
+            }
         }
-        key("Escape"); assert(replies.pop()==="badge-visibility-null|-1||cancel","Badge visibility setup failed to cancel");
+        key("Escape"); assert(replies.pop()==="badge-visibility-null-11|-1||cancel","Badge visibility setup failed to cancel");
         for(const [wheelName,shippedSlots] of Object.entries(layout.wheels)) {
             arm(`badge-shipped-${wheelName}`,shippedSlots);
             for(let i=0;i<12;i++) {
@@ -831,11 +866,9 @@ frame.addEventListener("load", async () => {
             const expectedOpacity=Number(view.getComputedStyle(doc.documentElement).getPropertyValue(opacityProp).trim());
             assert(Math.abs(expectedOpacity-(signal?0.12:0.35))<.001,`Flow peak variable ${opacityProp} is incorrect`);
             assert(paths.every(path=>[...doc.getElementById(path.getAttribute("fill").slice(5,-1)).querySelectorAll("stop")].every(stop=>view.getComputedStyle(stop).stopColor===expectedTint)),`Flow tint/fallback ${prop} is incorrect`);
-            const label=doc.querySelector(`.sectorLabel[data-index="${index}"]`).closest("foreignObject");
-            assert(effect.compareDocumentPosition(label)&view.Node.DOCUMENT_POSITION_FOLLOWING,"Flow paints over label");
             const flowBadge=doc.querySelector(`#slot-${index} .actionLabel`);
-            if(type==="action"||type==="hotkey"||type==="util"&&["submenu","back"].includes(sector.dataset.kind))
-                assert(flowBadge&&view.getComputedStyle(flowBadge).display!=="none"&&(effect.compareDocumentPosition(flowBadge)&view.Node.DOCUMENT_POSITION_FOLLOWING),`Flow paints over ${sector.dataset.kind==="submenu"||sector.dataset.kind==="back"?"NAV":"kind"} badge`);
+            if(type==="action"||type==="hotkey")
+                assert(flowBadge&&view.getComputedStyle(flowBadge).display!=="none"&&(effect.compareDocumentPosition(flowBadge)&view.Node.DOCUMENT_POSITION_FOLLOWING),`Flow paints over ${type} badge`);
             if(signal){
                 assert(effect.parentElement===nearby&&!target.querySelector(".signal-flow"),"Gesture flow is not owned by the bulb beneath the core");
                 const x=Number(sector.dataset.bulbX),y=Number(sector.dataset.bulbY),toRoot=svg.getCTM().inverse();
@@ -1113,7 +1146,7 @@ frame.addEventListener("load", async () => {
         arm("interrupted", [{label:"Signal",intent:"greet"}]);
         await nextFrame(); view.hostMode("0");
         assert(raf.pending.size === 0 && !visible(), "Host disarm retained pending lift work");
-        report.textContent = "PASS: 12-slot choices; straight shared gesture-core/bulb chord with strict side routing, unified selection and dispatch; hotkey cap/pie with unified selection and dispatch; yellow selected fill/band and teal kind-fill labels/badges; submenu/back-only knots and utility arcs; upright broadcast icons centered in their half-disc bulbs; null slots and no-target actions share the pointed disabled outline; vignettes, Shift preview, palettes, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
+        report.textContent = "PASS: 12-slot choices; straight shared gesture-core/bulb chord with strict side routing, unified selection and dispatch; hotkey cap/pie with unified selection and dispatch; 30-unit selected bands; submenu/back-only knots and utility arcs; muted navigation labels and theme-specific fills; SIGNAL/ACTION/KEY badges; upright broadcast icons centered in their half-disc bulbs; null slots and no-target actions share the pointed disabled outline; vignettes, Shift preview, palettes, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
         report.textContent += " Hotkeys: no target required, F6 hub and KEY badge, Up/Down stays on one slice, either hit region dispatches the typed hotkey, malformed/conflicting payloads fail closed. Utility arcs remain slice-owned, clipped and noninteractive at radii 560/610; hub motion, boundary routing, reduced-motion/0ms behavior and open-key help remain covered.";
         report.textContent += " Flow: geometry-scaled signal/trail/padding; lit non-bulb chevrons use additive warm-white #fff6e0 at peak 0.35 (clamped-addition normal fallback); bulb ripples stay plus-lighter at 0.12 (warm yellow when lit, mint when unlit); HOLD/power-fade profile, exclusions, one shared rAF, 2400ms travel and reduced-motion/0ms behavior.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }

@@ -249,16 +249,18 @@ class ConfigValidation(unittest.TestCase):
     def test_shipped_layout_matches_owner_positions_and_preserves_unused_catalog(self):
         layout = json.loads(CATALOG.with_name('layout.json').read_text(encoding='utf-8'))
         self.parse(layout)
-        self.assertEqual(set(layout['wheels']), {'main', 'attitude', 'social', 'signals'})
+        self.assertEqual(set(layout['wheels']), {'main', 'attitude', 'social', 'signals', 'debug'})
         expected = {
             'main': ['confirm', 'deny', 'thanks', 'greet', 'social', 'signals',
-                     'attitude', 'sorry', 'wait_here', 'farewell', 'follow_me', 'come_here'],
+                     'attitude', 'debug', 'wait_here', 'farewell', 'follow_me', 'come_here'],
             'attitude': ['approve', None, 'understood', 'challenge', 'unsure', 'think',
                          'disapprove', None, 'not_understood', 'yield', 'back', None],
             'social': ['offer', None, 'congratulate', None, 'welcome', None,
-                       'ask', 'respect', 'comfort', None, 'back', None],
+                       'ask', 'respect', 'comfort', 'sorry', 'back', None],
             'signals': ['ready', None, None, 'attention', 'warn', None,
                         'not_ready', 'calm_down', None, 'quiet', 'back', 'give_space'],
+            'debug': ['hotkey:64', 'hotkey:11', None, None, None, 'AccompanyTarget',
+                      'WaitHere', 'StopAccompanying', None, None, 'back', None],
         }
         homes = []
         for name, identities in expected.items():

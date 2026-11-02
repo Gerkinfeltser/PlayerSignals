@@ -75,10 +75,11 @@ The entries below use UIExtensions' navigation markers. Magelight shows the same
 
 | Wheel | Entries |
 |---|---|
-| Main | 0 Yes, 1 No, 2 Thank you, 3 Greet, 4 Social >, 5 Signals >, 6 Attitude >, 7 Sorry, 8 Wait here, 9 Farewell, 10 Follow me, 11 Come here |
+| Main | 0 Yes, 1 No, 2 Thank you, 3 Greet, 4 Social >, 5 Signals >, 6 Attitude >, 7 Debug >, 8 Wait here, 9 Farewell, 10 Follow me, 11 Come here |
 | Attitude | 0 Approve, 2 Understood, 3 Challenge, 4 Unsure, 5 Let me think, 6 Disapprove, 8 Not understood, 9 Surrender, 10 Back < |
-| Social | 0 Offer, 2 Well done, 4 Welcome, 6 Request, 7 Show respect, 8 Comfort, 10 Back < |
+| Social | 0 Offer, 2 Well done, 4 Welcome, 6 Request, 7 Show respect, 8 Comfort, 9 Sorry, 10 Back < |
 | Signals | 0 Ready, 3 Get attention, 4 Watch out, 6 Not ready, 7 Calm down, 9 Quiet, 10 Back <, 11 Give space |
+| Debug | 0 SN Dashboard (raw key 64), 1 IE Dashboard (raw key 11), 5 Follow / resume (`AccompanyTarget`), 6 Wait here (`WaitHere`), 7 Stop following (`StopAccompanying`), 10 Back < |
 
 Positions are zero-based and unlisted positions are null.
 
@@ -91,7 +92,7 @@ A few distinctions are worth keeping:
 - **Comfort** offers reassurance; **Well done** congratulates.
 - **Offer** and **Request** suggest giving or asking for something. They don't move items or name a particular object.
 
-Quiet and the other gestures are requests, not remote controls for NPCs. **Follow me** and **Wait here** are gestures too: the NPC may react, but nothing forces them to follow or wait. The shipped layout has no action slots; to call registered SkyrimNet actions such as `AccompanyTarget`, add them to a custom layout (see below).
+Quiet and the other gestures are requests, not remote controls for NPCs. **Follow me** and **Wait here** are gestures too: the NPC may react, but nothing forces them to follow or wait. The **Debug** submenu holds demo slots: the SkyrimNet and IntelEngine dashboard raw keys (these need `PlayerSignals.dll`; the IntelEngine one does nothing without IntelEngine) and three registered SkyrimNet actions that act on the captured NPC (Follow / resume, Wait here, Stop following).
 
 ## Make the wheel your own
 
@@ -158,7 +159,7 @@ Any non-null entry can add `color` as exactly `#` plus six hexadecimal digits, u
 { "label": "Greet", "intent": "greet", "color": "#4a6b5c" }
 ```
 
-This changes the idle colour only: both gesture parts, both hotkey parts, or the action/navigation necktie. Selected fills stay yellow with the standard band and white caps; the lit label and badge use your chosen idle colour. Disabled entries, including actions without a target, keep their shared disabled look. Slot colours survive theme changes. Very light or very dark colours can hurt label readability. Names, short hex codes, `rgb()` and non-string values are rejected. UIExtensions ignores this option. The shipped layout has no colours.
+This changes the idle colour only: both gesture parts, both hotkey parts, or the action/navigation necktie. Selected fills stay yellow with the standard band and white caps; the lit label and badge use your chosen idle colour. Disabled entries, including actions without a target, keep their shared disabled look. Slot colours survive theme changes. Very light or very dark colours can hurt label readability. Names, short hex codes, `rgb()` and non-string values are rejected. UIExtensions ignores this option. The shipped layout colours only Yes (green) and No (red).
 
 Custom-coloured gesture bulbs also derive their unlit ripple tint from the slot colour, with a lower hue and increased HSL lightness at the same strength. Uncoloured bulbs keep mint ripples, and lit bulbs keep warm yellow ripples.
 

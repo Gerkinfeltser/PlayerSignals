@@ -74,7 +74,7 @@ The entries below use UIExtensions' navigation markers. Magelight shows the same
 
 | Wheel | Entries |
 |---|---|
-| Main | 0 Yes, 1 Social >, 2 Dashboard (F6 hotkey), 3 Greet, 4 Signals >, 6 No, 7 Attitude >, 9 Farewell, 10 Actions > |
+| Main | 0 Yes, 1 Social >, 2 Middle mouse (hotkey), 3 Greet, 4 Signals >, 6 No, 7 Attitude >, 9 Farewell, 10 Actions > |
 | Attitude | 0 Approve, 2 Understood, 3 Challenge, 4 Unsure, 5 Let me think, 6 Disapprove, 8 Not understood, 9 Surrender, 10 Back < |
 | Social | 0 Offer, 2 Well done, 3 Thank you, 4 Welcome, 6 Request, 7 Show respect, 8 Comfort, 9 Sorry, 10 Back < |
 | Signals | 0 Ready, 1 Come here, 3 Get attention, 4 Watch out, 6 Not ready, 7 Calm down, 9 Quiet, 10 Back <, 11 Give space |
@@ -110,10 +110,10 @@ You can change labels, reorder entries, move supported intents between wheels, m
 
 ### Hotkey slots
 
-A hotkey slot presses its DirectX scan code after the wheel has fully closed; it needs no captured target, ignores Shift, and does not narrate or notify. For example, add this entry to a wheel to press **F6** (scan code `64`), SkyrimNet's dashboard key:
+A hotkey slot presses its DirectX scan code after the wheel has fully closed; it needs no captured target, ignores Shift, and does not narrate or notify. For example, add this entry to a wheel to click the **middle mouse button** (SKSE code `258`):
 
 ```json
-{ "label": "Dashboard", "hotkey": 64, "delayMs": 100, "holdMs": 50 }
+{ "label": "Middle mouse", "hotkey": 258, "delayMs": 100, "holdMs": 50 }
 ```
 
 `hotkey` must be a strict integer from 1–263 (1–255 keyboard scan codes; 256–263 SKSE mouse buttons, e.g. 258 = middle mouse) and cannot equal the configured `input.openKeyCode`. `delayMs` is optional (default `100`, integer 0–2000); `holdMs` is optional (default `50`, integer 1–2000). These timing fields are hotkey-only. A hotkey is exclusive with `intent`, `submenu`, `control`, and `action`. Dispatch occurs only after the browsing session and Magelight view have fully released. Injected keys reach only mods that read Skyrim's input; mods polling Windows key state directly (e.g. the SkyrimNet and IntelEngine dashboard hotkeys) do not see them.

@@ -11,13 +11,13 @@
       { "label": "Middle mouse", "hotkey": 258 },
       { "label": "Greet", "intent": "greet" },
       { "label": "Signals", "submenu": "signals" },
-      null,
+      { "label": "Stop following", "action": { "name": "StopAccompanying", "args": {} } },
       { "label": "No", "intent": "deny" },
       { "label": "Attitude", "submenu": "attitude" },
       null,
       { "label": "Farewell", "intent": "farewell" },
-      { "label": "Actions", "submenu": "actions" },
-      null
+      { "label": "Wait here", "action": { "name": "WaitHere", "args": {} } },
+      { "label": "Follow / resume", "action": { "name": "AccompanyTarget", "args": {} } }
     ],
     "attitude": [
       { "label": "Approve", "intent": "approve" },
@@ -60,20 +60,6 @@
       { "label": "Quiet", "intent": "quiet" },
       { "label": "Back", "control": "back" },
       { "label": "Give space", "intent": "give_space" }
-    ],
-    "actions": [
-      { "label": "Follow / resume", "action": { "name": "AccompanyTarget", "args": {} } },
-      { "label": "Drink alcohol", "action": { "name": "drink_alcohol", "args": { "drinkName": "" } } },
-      null,
-      { "label": "Wait here", "action": { "name": "WaitHere", "args": {} } },
-      null,
-      null,
-      { "label": "Stop following", "action": { "name": "StopAccompanying", "args": {} } },
-      null,
-      null,
-      null,
-      { "label": "Back", "control": "back" },
-      null
     ]
   }
 }

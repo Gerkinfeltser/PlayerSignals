@@ -148,17 +148,16 @@ class ConfigValidation(unittest.TestCase):
     def test_shipped_layout_matches_owner_positions_and_preserves_unused_catalog(self):
         layout = json.loads(CATALOG.with_name('layout.json').read_text(encoding='utf-8'))
         self.parse(layout)
+        self.assertEqual(set(layout['wheels']), {'main', 'attitude', 'social', 'signals'})
         expected = {
-            'main': ['confirm', 'social', 'hotkey:258', 'greet', 'signals', None,
-                     'deny', 'attitude', None, 'farewell', 'actions', None],
+            'main': ['confirm', 'social', 'hotkey:258', 'greet', 'signals', 'StopAccompanying',
+                     'deny', 'attitude', None, 'farewell', 'WaitHere', 'AccompanyTarget'],
             'attitude': ['approve', None, 'understood', 'challenge', 'unsure', 'think',
                          'disapprove', None, 'not_understood', 'yield', 'back', None],
             'social': ['offer', None, 'congratulate', 'thanks', 'welcome', None,
                        'ask', 'respect', 'comfort', 'sorry', 'back', None],
             'signals': ['ready', 'come_here', None, 'attention', 'warn', None,
                         'not_ready', 'calm_down', None, 'quiet', 'back', 'give_space'],
-            'actions': ['AccompanyTarget', 'drink_alcohol', None, 'WaitHere', None, None,
-                        'StopAccompanying', None, None, None, 'back', None],
         }
         homes = []
         for name, identities in expected.items():
@@ -170,12 +169,16 @@ class ConfigValidation(unittest.TestCase):
             self.assertEqual(actual, identities, name)
             homes.extend(identity for identity in actual if identity and identity != 'back')
         self.assertEqual(len(homes), len(set(homes)), 'Each entry has one home')
-        for index, action in ((0, 'AccompanyTarget'), (3, 'WaitHere'), (6, 'StopAccompanying')):
-            slot = layout['wheels']['actions'][index]
+        for index, label, action in (
+            (5, 'Stop following', 'StopAccompanying'),
+            (10, 'Wait here', 'WaitHere'),
+            (11, 'Follow / resume', 'AccompanyTarget'),
+        ):
+            slot = layout['wheels']['main'][index]
+            self.assertEqual(slot['label'], label)
             self.assertEqual(slot['action'], {'name': action, 'args': {}})
             self.assertNotIn('event', slot)
             self.assertNotIn('intent', slot)
-        self.assertEqual(layout['wheels']['actions'][1]['action']['args'], {'drinkName': ''})
         for intent in ('understood', 'comfort', 'not_ready', 'give_space'):
             self.assertIn(intent, self.catalog['intents'])
         self.assertTrue({'follow_me', 'wait_here'} <= self.catalog['intents'].keys())
@@ -183,32 +186,31 @@ class ConfigValidation(unittest.TestCase):
     def test_action_slots_validate_metadata_and_event_pair(self):
         config = minimal()
         config['wheels']['main'] = [
-            {'label': 'Drink', 'action': {'name': 'drink_alcohol', 'args': {'drinkName': ''}}}
+            {'label': 'Custom action', 'action': {'name': 'custom_registered_action', 'args': {'mode': 'test'}}}
         ]
         self.parse(config)
-        config['wheels']['main'][0].update(event='both', intent='offer_drink')
+        config['wheels']['main'][0].update(event='both', intent='custom_context')
         catalog = copy.deepcopy(self.catalog)
-        catalog['intents']['offer_drink'] = copy.deepcopy(catalog['intents']['offer'])
+        catalog['intents']['custom_context'] = copy.deepcopy(catalog['intents']['offer'])
         self.parse(config, json.dumps(catalog))
-
         for invalid in (
-            {'label': 'Drink', 'action': {'args': {}}},
-            {'label': 'Drink', 'action': {'name': 'x'}},
-            {'label': 'Drink', 'action': {'name': '', 'args': {}}},
-            {'label': 'Drink', 'action': {'name': 3, 'args': {}}},
-            {'label': 'Drink', 'action': 'x'},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': []}},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': {}, 'extra': True}},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'intent': 'confirm'},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'control': 'close'},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'submenu': 'main'},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'event': 'both', 'intent': 'confirm', 'control': 'close'},
+            {'label': 'Action', 'action': {'args': {}}},
+            {'label': 'Action', 'action': {'name': 'x'}},
+            {'label': 'Action', 'action': {'name': '', 'args': {}}},
+            {'label': 'Action', 'action': {'name': 3, 'args': {}}},
+            {'label': 'Action', 'action': 'x'},
+            {'label': 'Action', 'action': {'name': 'x', 'args': []}},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}, 'extra': True}},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'intent': 'confirm'},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'control': 'close'},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'submenu': 'main'},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'event': 'both', 'intent': 'confirm', 'control': 'close'},
             {'label': 'Gesture', 'intent': 'confirm', 'event': 'both'},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'event': 'both'},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'event': 'bad', 'intent': 'confirm'},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'event': 'both', 'intent': 'missing'},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'args': {}},
-            {'label': 'Drink', 'action': {'name': 'x', 'args': {}}, 'unknown': True},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'event': 'both'},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'event': 'bad', 'intent': 'confirm'},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'event': 'both', 'intent': 'missing'},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'args': {}},
+            {'label': 'Action', 'action': {'name': 'x', 'args': {}}, 'unknown': True},
         ):
             with self.subTest(slot=invalid):
                 config = minimal()

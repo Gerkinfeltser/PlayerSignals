@@ -2,7 +2,7 @@
 
 Want to agree, say thanks, or give someone a puzzled look without typing a sentence? PlayerSignals gives you a small communication wheel with 28 reachable shipped gesture defaults; the JSON catalog contains 30 defaults, including the older Follow me and Wait here gestures, which are not in a shipped wheel, and can add more intents. SkyrimNet receives an authored direct narration describing what your character means.
 
-Gesture entries submit narration and show a local receipt only when SkyrimNet's API accepts it. Group feedback omits a recipient; targeted feedback names the NPC captured before the wheel opened. Gestures do not visibly animate your character or force NPC compliance. The experimental Actions category is different: it directly requests a registered SkyrimNet action on that NPC, without guaranteeing completion.
+Gesture entries submit narration and show a local receipt only when SkyrimNet's API accepts it. Group feedback omits a recipient; targeted feedback names the NPC captured before the wheel opened. Gestures do not visibly animate your character or force NPC compliance. Target-NPC action entries instead request a registered SkyrimNet action on that NPC, without guaranteeing completion.
 
 ## Test release status
 
@@ -19,7 +19,7 @@ You'll need:
 - JContainers with its Lua support files (API 4 / feature 2).
 - SkyrimNet, with `SkyrimNet.esp` loaded and its native API available.
 - Magelight host 0.31.2+ and its matching runtime when using the enabled experimental radial backend.
-- For action entries, SkyrimNet with `IsActionRegistered`, `ExecuteAction`, the built-in `SkyrimNetInternal` eligibility functions, and optional persistent/short-lived event APIs. The example `drink_alcohol` action additionally needs separately installed iActions to register it; iActions is not required for gestures or unrelated registered actions.
+- For action entries, SkyrimNet with `IsActionRegistered`, `ExecuteAction`, the built-in `SkyrimNetInternal` eligibility functions, and optional persistent/short-lived event APIs.
 
 Back up your save and matching SKSE cosave before installing or updating. The startup quest and player-alias save-load handling are designed to initialize PlayerSignals on existing saves. The limited removal test below does not establish installation/update compatibility with every existing save.
 
@@ -74,11 +74,10 @@ The entries below use UIExtensions' navigation markers. Magelight shows the same
 
 | Wheel | Entries |
 |---|---|
-| Main | 0 Yes, 1 Social >, 2 Middle mouse (hotkey), 3 Greet, 4 Signals >, 6 No, 7 Attitude >, 9 Farewell, 10 Actions > |
+| Main | 0 Yes, 1 Social >, 2 Middle mouse (hotkey), 3 Greet, 4 Signals >, 5 Stop following (`StopAccompanying`, `{}`), 6 No, 7 Attitude >, 8 null, 9 Farewell, 10 Wait here (`WaitHere`, `{}`), 11 Follow / resume (`AccompanyTarget`, `{}`) |
 | Attitude | 0 Approve, 2 Understood, 3 Challenge, 4 Unsure, 5 Let me think, 6 Disapprove, 8 Not understood, 9 Surrender, 10 Back < |
 | Social | 0 Offer, 2 Well done, 3 Thank you, 4 Welcome, 6 Request, 7 Show respect, 8 Comfort, 9 Sorry, 10 Back < |
 | Signals | 0 Ready, 1 Come here, 3 Get attention, 4 Watch out, 6 Not ready, 7 Calm down, 9 Quiet, 10 Back <, 11 Give space |
-| Actions | 0 Follow / resume, 1 Drink alcohol (requires iActions registration), 3 Wait here, 6 Stop following, 10 Back < |
 
 Positions are zero-based and unlisted positions are null.
 
@@ -91,7 +90,7 @@ A few distinctions are worth keeping:
 - **Comfort** offers reassurance; **Well done** congratulates.
 - **Offer** and **Request** suggest giving or asking for something. They don't move items or name a particular object.
 
-Quiet and the other gestures are requests, not remote controls for NPCs. The Actions wheel instead calls registered SkyrimNet actions on the captured NPC. Follow / resume, Wait here and Stop following use the existing built-in eligibility checks; runtime acceptance remains unverified. The older `follow_me` and `wait_here` gesture records remain in the catalog for custom layouts but have no shipped shortcut.
+Quiet and the other gestures are requests, not remote controls for NPCs. The main wheel also calls registered SkyrimNet actions on the captured NPC. Follow / resume, Wait here and Stop following use the existing built-in eligibility checks; runtime acceptance remains unverified. The older `follow_me` and `wait_here` gesture records remain in the catalog for custom layouts but have no shipped shortcut.
 
 ## Make the wheel your own
 
@@ -156,7 +155,7 @@ This opens the wheel named `social`; that destination must exist under `wheels`.
 
 This displays **Return** in Magelight and **Return <** in UIExtensions. Back returns to the wheel you came from; at the root, it closes the menu. Use `"control": "close"` for a Close entry.
 
-**Leave the navigation arrows out of your JSON labels.** Lua adds them for UIExtensions; Magelight strips exactly one generated terminal ` >` from submenu entries and ` <` from Back entries. Authored text and other entry kinds are unchanged. The shipped root ends with Actions, with no shipped Close entry; custom layouts may still put Close anywhere, without the special darker Submenu/Back idle fill. A `null` entry disables that position without shifting the later entries. Inline glyphs can be typed directly into labels.
+**Leave the navigation arrows out of your JSON labels.** Lua adds them for UIExtensions; Magelight strips exactly one generated terminal ` >` from submenu entries and ` <` from Back entries. Authored text and other entry kinds are unchanged. The shipped root has no Close entry; custom layouts may still put Close anywhere, without the special darker Submenu/Back idle fill. A `null` entry disables that position without shifting the later entries. Inline glyphs can be typed directly into labels.
 
 Each wheel supports **1–12 positions**. Magelight uses 12 slices of 30°; UIExtensions supports at most 8 positions and fails closed above that limit. Each non-null entry needs a label plus one primary kind: `intent`, `action`, `submenu`, or `control`. An action may additionally carry the paired `event` and catalog `intent` fields described below. Don't link submenus into a loop. Reusing the same supported intent in more than one slot is fine.
 
@@ -168,12 +167,12 @@ Configure an action directly in `layout.json`; it is not a narration ID in `inte
 
 ```json
 {
-  "label": "Drink alcohol",
-  "action": { "name": "drink_alcohol", "args": { "drinkName": "" } }
+  "label": "Follow / resume",
+  "action": { "name": "AccompanyTarget", "args": {} }
 }
 ```
 
-The shipped example requires iActions to register `drink_alcohol`. Without it, selection reports that the action is not registered and makes no execution request. Action names and argument fields must match the registering mod's contract; PlayerSignals does not invent argument defaults. Nested argument values, booleans, Unicode and number tokens are preserved.
+This example uses a built-in action on the shipped main wheel. For another registered action, its name and argument fields must match that registering mod's contract; PlayerSignals does not invent argument defaults. Nested argument values, booleans, Unicode and number tokens are preserved.
 
 PlayerSignals checks registration and the captured target. It also checks SkyrimNet's own eligibility functions for `AccompanyTarget`, `StopAccompanying` and `WaitHere`. **Other registered actions run without an eligibility check, and PlayerSignals does not enforce action cooldowns.** Direct execution can therefore differ from ordinary AI-selected behavior. Configure only actions whose effects and prerequisites you understand.
 
@@ -183,14 +182,14 @@ Optionally, record context after the action API returns success by adding **both
 
 ```json
 {
-  "label": "Drink alcohol",
-  "action": { "name": "drink_alcohol", "args": { "drinkName": "" } },
+  "label": "Follow / resume",
+  "action": { "name": "AccompanyTarget", "args": {} },
   "event": "both",
-  "intent": "offer"
+  "intent": "follow_me"
 }
 ```
 
-Modes are `persistent`, `shortLived` or `both`. The intent's narration phrase supplies the text, rendered with your character as actor and the captured NPC addressed; choose or author a phrase that actually matches the interaction. A short-lived event stores that exact phrase as both its description and its data, not action/FormID JSON, so SkyrimNet's no-schema formatter can display the phrase. It lasts 60 seconds and repeat use of the same action on the same NPC replaces the previous event. Persistent events remain in SkyrimNet's history. No pair means no event; failed action requests register none. Event-registration failure is reported without retrying the action. Events do not use direct narration, but short-lived events can be observed by matching SkyrimNet triggers; this is not a guarantee of passive processing. An action such as iActions drinking may already record its own context.
+Modes are `persistent`, `shortLived` or `both`. The intent's narration phrase supplies the text, rendered with your character as actor and the captured NPC addressed; choose or author a phrase that actually matches the interaction. A short-lived event stores that exact phrase as both its description and its data, not action/FormID JSON, so SkyrimNet's no-schema formatter can display the phrase. It lasts 60 seconds and repeat use of the same action on the same NPC replaces the previous event. Persistent events remain in SkyrimNet's history. No pair means no event; failed action requests register none. Event-registration failure is reported without retrying the action. Events do not use direct narration, but short-lived events can be observed by matching SkyrimNet triggers; this is not a guarantee of passive processing. A registered action may already record its own context.
 
 Historical offline verification counts and results are not current evidence for this 12-slice change. Do not treat browser checks, build results or prior test counts as proof of in-game Magelight, action acceptance, SkyrimNet delivery or NPC effects.
 
@@ -254,7 +253,7 @@ Use these exact IDs in your entries:
 | Attitude | `unsure`, `think`, `understood`, `not_understood`, `approve`, `disapprove`, `challenge`, `yield` |
 | Unplaced | `follow_me`, `wait_here` |
 
-These 30 IDs are shipped catalog defaults. The shipped wheels reach 28 of them; `follow_me` and `wait_here` remain valid for custom layouts but are not placed, because the Actions wheel covers following and waiting. The JSON registry is dynamic, so you can add a valid new ID in `intents.json` and reference it in `layout.json`.
+These 30 IDs are shipped catalog defaults. The shipped wheels reach 28 of them; `follow_me` and `wait_here` remain valid for custom layouts but are not placed, because the main wheel covers following and waiting with actions. The JSON registry is dynamic, so you can add a valid new ID in `intents.json` and reference it in `layout.json`.
 `calm_down` uses narration `slowly lowers both open hands, palms down, asking for calm`, notification `gestures for calm`, and targeted notification `gestures to {target} for calm`.
 
 ### Change phrases or add an intent

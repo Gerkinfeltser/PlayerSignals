@@ -74,10 +74,10 @@ The entries below use UIExtensions' navigation markers. Magelight shows the same
 
 | Wheel | Entries |
 |---|---|
-| Main | 0 Yes, 1 Social >, 2 null, 3 Greet, 4 Signals >, 5 Stop following (`StopAccompanying`, `{}`), 6 No, 7 Attitude >, 8 null, 9 Farewell, 10 Wait here (`WaitHere`, `{}`), 11 Follow / resume (`AccompanyTarget`, `{}`) |
+| Main | 0 Yes, 1 No, 2 Thank you, 3 Greet, 4 Social >, 5 Signals >, 6 Attitude >, 7 Sorry, 8 Wait here, 9 Farewell, 10 Follow me, 11 Come here |
 | Attitude | 0 Approve, 2 Understood, 3 Challenge, 4 Unsure, 5 Let me think, 6 Disapprove, 8 Not understood, 9 Surrender, 10 Back < |
-| Social | 0 Offer, 2 Well done, 3 Thank you, 4 Welcome, 6 Request, 7 Show respect, 8 Comfort, 9 Sorry, 10 Back < |
-| Signals | 0 Ready, 1 Come here, 3 Get attention, 4 Watch out, 6 Not ready, 7 Calm down, 9 Quiet, 10 Back <, 11 Give space |
+| Social | 0 Offer, 2 Well done, 4 Welcome, 6 Request, 7 Show respect, 8 Comfort, 10 Back < |
+| Signals | 0 Ready, 3 Get attention, 4 Watch out, 6 Not ready, 7 Calm down, 9 Quiet, 10 Back <, 11 Give space |
 
 Positions are zero-based and unlisted positions are null.
 
@@ -90,7 +90,7 @@ A few distinctions are worth keeping:
 - **Comfort** offers reassurance; **Well done** congratulates.
 - **Offer** and **Request** suggest giving or asking for something. They don't move items or name a particular object.
 
-Quiet and the other gestures are requests, not remote controls for NPCs. The main wheel also calls registered SkyrimNet actions on the captured NPC. Follow / resume, Wait here and Stop following use the existing built-in eligibility checks; runtime acceptance remains unverified. The older `follow_me` and `wait_here` gesture records remain in the catalog for custom layouts but have no shipped shortcut.
+Quiet and the other gestures are requests, not remote controls for NPCs. **Follow me** and **Wait here** are gestures too: the NPC may react, but nothing forces them to follow or wait. The shipped layout has no action slots; to call registered SkyrimNet actions such as `AccompanyTarget`, add them to a custom layout (see below).
 
 ## Make the wheel your own
 

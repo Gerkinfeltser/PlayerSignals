@@ -150,13 +150,13 @@ class ConfigValidation(unittest.TestCase):
         self.parse(layout)
         self.assertEqual(set(layout['wheels']), {'main', 'attitude', 'social', 'signals'})
         expected = {
-            'main': ['confirm', 'social', None, 'greet', 'signals', 'StopAccompanying',
-                     'deny', 'attitude', None, 'farewell', 'WaitHere', 'AccompanyTarget'],
+            'main': ['confirm', 'deny', 'thanks', 'greet', 'social', 'signals',
+                     'attitude', 'sorry', 'wait_here', 'farewell', 'follow_me', 'come_here'],
             'attitude': ['approve', None, 'understood', 'challenge', 'unsure', 'think',
                          'disapprove', None, 'not_understood', 'yield', 'back', None],
-            'social': ['offer', None, 'congratulate', 'thanks', 'welcome', None,
-                       'ask', 'respect', 'comfort', 'sorry', 'back', None],
-            'signals': ['ready', 'come_here', None, 'attention', 'warn', None,
+            'social': ['offer', None, 'congratulate', None, 'welcome', None,
+                       'ask', 'respect', 'comfort', None, 'back', None],
+            'signals': ['ready', None, None, 'attention', 'warn', None,
                         'not_ready', 'calm_down', None, 'quiet', 'back', 'give_space'],
         }
         homes = []
@@ -169,16 +169,6 @@ class ConfigValidation(unittest.TestCase):
             self.assertEqual(actual, identities, name)
             homes.extend(identity for identity in actual if identity and identity != 'back')
         self.assertEqual(len(homes), len(set(homes)), 'Each entry has one home')
-        for index, label, action in (
-            (5, 'Stop following', 'StopAccompanying'),
-            (10, 'Wait here', 'WaitHere'),
-            (11, 'Follow / resume', 'AccompanyTarget'),
-        ):
-            slot = layout['wheels']['main'][index]
-            self.assertEqual(slot['label'], label)
-            self.assertEqual(slot['action'], {'name': action, 'args': {}})
-            self.assertNotIn('event', slot)
-            self.assertNotIn('intent', slot)
         for intent in ('understood', 'comfort', 'not_ready', 'give_space'):
             self.assertIn(intent, self.catalog['intents'])
         self.assertTrue({'follow_me', 'wait_here'} <= self.catalog['intents'].keys())

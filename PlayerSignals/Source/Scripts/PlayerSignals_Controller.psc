@@ -102,6 +102,16 @@ Event OnMagelightWheelChoice(string eventName, string strArg, float numArg, Form
         _mlResult = strArg
         Return
     EndIf
+    If _mlResult == "" && (strArg == request + "|-1|rejected|cancel" || strArg == request + "|-1|build_error|cancel")
+        ; Normalize page failures to the existing cancel/release path before reporting.
+        _mlResult = request + "|-1||cancel"
+        If strArg == request + "|-1|rejected|cancel"
+            Report("wheel data rejected by the page (JSON/schema validation); check layout.json", token)
+        Else
+            Report("wheel page build/arm exception; check layout.json and the Magelight page log", token)
+        EndIf
+        Return
+    EndIf
     Int count = JArray.count(_mlSlots)
     If count > 12
         count = 12

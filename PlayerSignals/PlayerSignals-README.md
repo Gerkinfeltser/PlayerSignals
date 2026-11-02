@@ -324,6 +324,8 @@ These “actions” are narration requests, not executable NPC commands. Adding 
 
 Check that you launched through SKSE, enabled PlayerSignals.esp, and installed UIExtensions and JContainers—including its Lua files. Confirm SkyrimNet.esp is enabled and its native API is available. Try again in normal gameplay with other menus closed. If you changed the key, load a save first and check for a conflicting binding. Invalid configuration fails closed; restore your backed-up JSON and reload if the problem started after an edit.
 
+If Magelight rejects the wheel data or throws while building/arming it, PlayerSignals cancels that request, releases UI mode, and reports one local error plus a `[PlayerSignals]` trace. Check `layout.json`; for a build/arm exception, also check the Magelight page log. No gesture or hotkey is submitted. This release path is browser/build-verified only; in-game confirmation is pending and requires a game restart for the updated Papyrus script.
+
 ### Why does the wheel look wrong?
 
 Another mod may replace UIExtensions' wheel script or menu. Check which files win in your mod manager; PlayerSignals needs a stock-compatible pair. If only a label is clipped, try shorter wording.

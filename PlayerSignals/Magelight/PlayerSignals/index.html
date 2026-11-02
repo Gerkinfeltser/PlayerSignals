@@ -511,81 +511,91 @@
         sectors.forEach(({ group, target, content, nearby, actionBadge }) => { delete group.dataset.kind; target.classList.remove("navigation", "gesture", "action", "empty"); content.textContent = ""; nearby.classList.remove("signal"); actionBadge.style.display = "none"; });
         if (window.magelight) window.magelight.send("__escapecapture", "0");
     }
+    function rejectBegin(token, reason) {
+        completedRequest = token;
+        try { failClosed(token); }
+        catch (_) {}
+        finally { window.psWheelChoice(token + "|-1|" + reason + "|cancel"); }
+    }
     window.psWheelBegin = payload => {
-        surface.dataset.armed = "false";
-        if (typeof payload !== "string") { failClosed(); return; }
+        if (typeof payload !== "string") return;
         const divider = payload.indexOf("|");
-        if (divider < 1) { failClosed(); return; }
+        if (divider < 1) return;
         const nextRequest = payload.slice(0, divider);
-        if (completedRequest === nextRequest) { failClosed(); return; }
+        if ((request && !finished) || completedRequest === nextRequest) return;
         let data;
-        try { data = JSON.parse(payload.slice(divider + 1)); } catch (_) { failClosed(nextRequest); return; }
-        if (!data || !Number.isInteger(data.openKey) || data.openKey < 1 || data.openKey > 255 || !["slate", "moss", "ember"].includes(data.theme) || !Array.isArray(data.slots) || data.slots.length !== 12 || (data.target !== undefined && typeof data.target !== "string") || data.slots.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back", "hotkey"].includes(item[2]) || (item[2] === "hotkey" && (!/^[1-9]\d*$/.test(item[1]) || Number(item[1]) > 263 || Number(item[1]) === data.openKey))))) { failClosed(nextRequest); return; }
-        failClosed(nextRequest); finished = false; targetName = data.target || "";
-        openKeyBrowserCode = DX_KEY_CODES[data.openKey] || "";
-        const openKeyName = keyName(data.openKey);
-        document.getElementById("openKeyHelp").textContent = openKeyName ? openKeyName + " / " : "";
-        if (!openKeyBrowserCode && !warnedOpenKeys.has(data.openKey)) {
-            warnedOpenKeys.add(data.openKey);
-            console.warn(`[PlayerSignals] Open key ${data.openKey} has no standard browser code; use Tab/Escape or center to cancel.`);
-        }
-        document.documentElement.classList.replace("slate", data.theme);
-        data.slots.forEach((item, index) => {
-            // Lua keeps the appended markers for UIExtensions; remove one typed suffix in this view only.
-            if (item?.[2] === "submenu" && item[0].endsWith(" >")) item[0] = item[0].slice(0, -2);
-            if (item?.[2] === "back" && item[0].endsWith(" <")) item[0] = item[0].slice(0, -2);
-            entries[index] = item;
-            const { group, pop, target, nearby, content, actionBadge, knot } = sectors[index];
-            content.textContent = item ? item[0] : ""; fit(content, 80);
-            const kind = item?.[2], disabled = !item || (kind === "action" && !targetName);
-            group.dataset.kind = kind || "";
-            const navigation = ["navigation", "submenu", "back"].includes(kind);
-            const merged = disabled || (kind !== "intent" && kind !== "hotkey");
-            target.classList.toggle("empty", !item);
-            target.classList.toggle("navigation", navigation || kind === "hotkey");
-            target.classList.toggle("gesture", kind === "intent");
-            target.classList.toggle("action", kind === "action");
-            nearby.style.display = merged ? "none" : "";
-            pop.appendChild(knot);
-            for (const region of [target, nearby]) {
-                for (const path of region.querySelectorAll(".hit-area,.edge-line,.selected-band,.selected-band-clip"))
-                    path.setAttribute("d", path.getAttribute(!disabled && kind === "hotkey" ? "data-hotkey-d" : region === target && merged ? "data-nav-d" : "data-core-d"));
+        try { data = JSON.parse(payload.slice(divider + 1)); }
+        catch (_) { rejectBegin(nextRequest, "rejected"); return; }
+        if (!data || !Number.isInteger(data.openKey) || data.openKey < 1 || data.openKey > 255 || !["slate", "moss", "ember"].includes(data.theme) || !Array.isArray(data.slots) || data.slots.length !== 12 || (data.target !== undefined && typeof data.target !== "string") || data.slots.some(item => item !== null && (!Array.isArray(item) || item.length !== 3 || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back", "hotkey"].includes(item[2]) || (item[2] === "hotkey" && (!/^[1-9]\d*$/.test(item[1]) || Number(item[1]) > 263 || Number(item[1]) === data.openKey))))) { rejectBegin(nextRequest, "rejected"); return; }
+        try {
+            failClosed(nextRequest); finished = false; targetName = data.target || "";
+            openKeyBrowserCode = DX_KEY_CODES[data.openKey] || "";
+            const openKeyName = keyName(data.openKey);
+            document.getElementById("openKeyHelp").textContent = openKeyName ? openKeyName + " / " : "";
+            if (!openKeyBrowserCode && !warnedOpenKeys.has(data.openKey)) {
+                warnedOpenKeys.add(data.openKey);
+                console.warn(`[PlayerSignals] Open key ${data.openKey} has no standard browser code; use Tab/Escape or center to cancel.`);
             }
-            target.setAttribute("aria-label", !item ? "Empty slot" : kind === "hotkey" ? `${item[0]} — Hotkey ${keyName(Number(item[1])) || item[1]}` : kind === "action" ? `${item[0]} — Action, ${targetName || "Target NPC"}${disabled ? ", disabled: no target" : ""}` : kind === "intent" ? `${item[0]} — ${targetName || "No target"}${targetName ? "" : " · Openly"}` : `${item[0]} — Navigation`);
-            nearby.setAttribute("aria-label", kind === "intent" ? `${item[0]} — Openly` : target.getAttribute("aria-label"));
-            nearby.classList.toggle("signal", kind === "intent");
-            actionBadge.textContent = kind === "hotkey" ? "KEY" : "ACTION";
-            const badged = kind === "action" || kind === "hotkey";
-            actionBadge.style.display = item && badged ? "" : "none";
-            if (badged) {
-                // Position actual text ink in the label's upright SVG frame, including wrapped labels.
-                const range = document.createRange(); range.selectNodeContents(content);
-                const rect = range.getBoundingClientRect();
-                const point = new DOMPoint((rect.left + rect.right) / 2, rect.bottom).matrixTransform(actionBadge.parentElement.getScreenCTM().inverse());
-                actionBadge.setAttribute("x", "0"); actionBadge.setAttribute("y", "0");
-                const box = actionBadge.getBBox();
-                actionBadge.setAttribute("x", point.x - box.x - box.width / 2);
-                actionBadge.setAttribute("y", point.y + 12 - box.y);
-            }
-            group.setAttribute("aria-disabled", String(disabled));
-            for (const [region, mode] of [[target, "target"], [nearby, "nearby"]]) {
-                const enabled = available(index, mode); region.setAttribute("aria-disabled", String(!enabled)); region.setAttribute("tabindex", "-1");
-            }
-        });
+            document.documentElement.classList.replace("slate", data.theme);
+            data.slots.forEach((item, index) => {
+                // Lua keeps the appended markers for UIExtensions; remove one typed suffix in this view only.
+                if (item?.[2] === "submenu" && item[0].endsWith(" >")) item[0] = item[0].slice(0, -2);
+                if (item?.[2] === "back" && item[0].endsWith(" <")) item[0] = item[0].slice(0, -2);
+                entries[index] = item;
+                const { group, pop, target, nearby, content, actionBadge, knot } = sectors[index];
+                content.textContent = item ? item[0] : ""; fit(content, 80);
+                const kind = item?.[2], disabled = !item || (kind === "action" && !targetName);
+                group.dataset.kind = kind || "";
+                const navigation = ["navigation", "submenu", "back"].includes(kind);
+                const merged = disabled || (kind !== "intent" && kind !== "hotkey");
+                target.classList.toggle("empty", !item);
+                target.classList.toggle("navigation", navigation || kind === "hotkey");
+                target.classList.toggle("gesture", kind === "intent");
+                target.classList.toggle("action", kind === "action");
+                nearby.style.display = merged ? "none" : "";
+                pop.appendChild(knot);
+                for (const region of [target, nearby]) {
+                    for (const path of region.querySelectorAll(".hit-area,.edge-line,.selected-band,.selected-band-clip"))
+                        path.setAttribute("d", path.getAttribute(!disabled && kind === "hotkey" ? "data-hotkey-d" : region === target && merged ? "data-nav-d" : "data-core-d"));
+                }
+                target.setAttribute("aria-label", !item ? "Empty slot" : kind === "hotkey" ? `${item[0]} — Hotkey ${keyName(Number(item[1])) || item[1]}` : kind === "action" ? `${item[0]} — Action, ${targetName || "Target NPC"}${disabled ? ", disabled: no target" : ""}` : kind === "intent" ? `${item[0]} — ${targetName || "No target"}${targetName ? "" : " · Openly"}` : `${item[0]} — Navigation`);
+                nearby.setAttribute("aria-label", kind === "intent" ? `${item[0]} — Openly` : target.getAttribute("aria-label"));
+                nearby.classList.toggle("signal", kind === "intent");
+                actionBadge.textContent = kind === "hotkey" ? "KEY" : "ACTION";
+                const badged = kind === "action" || kind === "hotkey";
+                actionBadge.style.display = item && badged ? "" : "none";
+                if (badged) {
+                    // Position actual text ink in the label's upright SVG frame, including wrapped labels.
+                    const range = document.createRange(); range.selectNodeContents(content);
+                    const rect = range.getBoundingClientRect();
+                    const point = new DOMPoint((rect.left + rect.right) / 2, rect.bottom).matrixTransform(actionBadge.parentElement.getScreenCTM().inverse());
+                    actionBadge.setAttribute("x", "0"); actionBadge.setAttribute("y", "0");
+                    const box = actionBadge.getBBox();
+                    actionBadge.setAttribute("x", point.x - box.x - box.width / 2);
+                    actionBadge.setAttribute("y", point.y + 12 - box.y);
+                }
+                group.setAttribute("aria-disabled", String(disabled));
+                for (const [region, mode] of [[target, "target"], [nearby, "nearby"]]) {
+                    const enabled = available(index, mode); region.setAttribute("aria-disabled", String(!enabled)); region.setAttribute("tabindex", "-1");
+                }
+            });
+        } catch (_) { rejectBegin(nextRequest, "build_error"); }
     };
     window.psWheelArm = token => {
         if (token !== request || finished || !request) return;
-        armed = true; surface.dataset.armed = "true";
-        if (window.magelight) window.magelight.send("__escapecapture", "1");
-        sectors.forEach(({ group, target, nearby }, index) => {
-            group.setAttribute("aria-disabled", String(!entries[index] || (entries[index][2] === "action" && !targetName)));
-            for (const [region, mode] of [[target, "target"], [nearby, "nearby"]]) {
-                const enabled = available(index, mode); region.setAttribute("aria-disabled", String(!enabled)); region.setAttribute("tabindex", enabled ? "0" : "-1");
-            }
-        });
-        cancel.setAttribute("tabindex", "0");
-        const first = firstAvailable(-1, 1);
-        if (first >= 0) focusRegion(first, "target"); else if (document.activeElement === cancel) showCancel(); else cancel.focus();
+        try {
+            armed = true; surface.dataset.armed = "true";
+            if (window.magelight) window.magelight.send("__escapecapture", "1");
+            sectors.forEach(({ group, target, nearby }, index) => {
+                group.setAttribute("aria-disabled", String(!entries[index] || (entries[index][2] === "action" && !targetName)));
+                for (const [region, mode] of [[target, "target"], [nearby, "nearby"]]) {
+                    const enabled = available(index, mode); region.setAttribute("aria-disabled", String(!enabled)); region.setAttribute("tabindex", enabled ? "0" : "-1");
+                }
+            });
+            cancel.setAttribute("tabindex", "0");
+            const first = firstAvailable(-1, 1);
+            if (first >= 0) focusRegion(first, "target"); else if (document.activeElement === cancel) showCancel(); else cancel.focus();
+        } catch (_) { rejectBegin(token, "build_error"); }
     };
     document.addEventListener("keydown", event => {
         if (openKeyBrowserCode && event.code === openKeyBrowserCode) {

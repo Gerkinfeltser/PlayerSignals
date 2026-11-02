@@ -27,6 +27,7 @@ frame.addEventListener("load", async () => {
         const payload = (slots, target = "Lydia", theme = "slate", openKey = 184) => ({theme, target, openKey, slots:Array.from({length:12}, (_, i) => entry(slots[i]))});
         const begin = (token, data) => view.psWheelBegin(token + "|" + JSON.stringify(data));
         const arm = (token, slots, target = "Lydia", theme = "slate", openKey = 184) => {
+            view.hostMode("0");
             begin(token, payload(slots, target, theme, openKey));
             assert(!visible(), "Page appeared before arm");
             view.psWheelArm("stale"); assert(!visible(), "Stale request armed the page");
@@ -303,10 +304,18 @@ frame.addEventListener("load", async () => {
         region(0,"nearby").focus(); assert(region(0).classList.contains("hot")&&region(0,"nearby").classList.contains("hot"),"Hotkey cap focus did not unify visual state");
         click(cap); assert(replies.pop()==="hotkey-cap|0|64|hotkey"&&!visible(),"Hotkey cap did not dispatch the same typed choice");
         for (const [i,invalid] of [0,"0","264","64.0","064","184","F6",null].entries()) {
-            const data=payload([{label:"Dashboard",hotkey:64}]);
-            data.slots[0][1]=invalid; begin("hotkey-invalid-"+i,data); view.psWheelArm("hotkey-invalid-"+i);
-            assert(!visible() && !replies.length, "Malformed or opening-key hotkey payload did not fail closed");
+            const token="hotkey-invalid-"+i,data=payload([{label:"Dashboard",hotkey:64}]);
+            data.slots[0][1]=invalid; begin(token,data); view.psWheelArm(token);
+            assert(!visible()&&replies.length===1&&replies.pop()===`${token}|-1|rejected|cancel`,"Invalid hotkey did not report exactly one matching rejection");
         }
+        const rejected = (token, raw) => {
+            view.psWheelBegin(token+"|"+raw);
+            assert(!visible()&&replies.length===1&&replies.pop()===`${token}|-1|rejected|cancel`,`${token} did not report exactly one matching rejection`);
+            view.psWheelBegin(token+"|"+raw); view.psWheelArm(token);
+            assert(!visible()&&!replies.length,`${token} duplicate rejection or arm produced a reply or opened the wheel`);
+        };
+        rejected("invalid-theme",JSON.stringify(payload([],"Lydia","invalid")));
+        rejected("malformed-json","{");
         arm("edge-alpha-reference", [{label:"Probe",intent:"greet"}]);
         const enabledEdgeAlpha = Number(view.getComputedStyle(region(0).querySelector(".edge-line")).stroke.match(/rgba?\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)/)?.[1] ?? 1);
         key("Escape"); assert(replies.pop() === "edge-alpha-reference|-1||cancel", "Edge-alpha reference failed to cancel");
@@ -356,6 +365,32 @@ frame.addEventListener("load", async () => {
                 }
             }
         }
+        const completedToken="completed-duplicate",liveToken="live-after-stale";
+        begin(completedToken,payload([{label:"Done",intent:"greet"}])); view.psWheelArm(completedToken); click(region(0));
+        assert(replies.pop()===`${completedToken}|0|greet|target`,"Duplicate setup did not complete");
+        begin(liveToken,payload([{label:"Still live",intent:"greet"}])); view.psWheelArm(liveToken);
+        const otherPayload=JSON.stringify(payload([{label:"Other",intent:"greet"}]));
+        view.psWheelBegin(completedToken+"|"+otherPayload);
+        view.psWheelBegin("stale-session|"+otherPayload);
+        view.psWheelBegin("|"+otherPayload);
+        view.psWheelArm("stale-session");
+        assert(visible()&&!replies.length&&doc.getElementById("caption").textContent==="Still live","Duplicate, stale or tokenless request disrupted a different live session");
+        click(region(0));
+        assert(replies.length===1&&replies.pop()===`${liveToken}|0|greet|target`,"Live session stopped selecting after ignored requests");
+        const createRange=doc.createRange;
+        try {
+            doc.createRange=function(){doc.createRange=createRange;throw Error("one-shot build failure");};
+            const token="build-exception";
+            view.psWheelBegin(token+"|"+JSON.stringify(payload([{label:"Key",hotkey:64}])));
+            assert(!visible()&&replies.length===1&&replies.pop()===`${token}|-1|build_error|cancel`,"Build exception did not report exactly one matching build_error");
+        } finally { doc.createRange=createRange; }
+        const centerFocus=doc.getElementById("center").focus;
+        try {
+            doc.getElementById("center").focus=function(){doc.getElementById("center").focus=centerFocus;throw Error("one-shot arm failure");};
+            const token="arm-exception";
+            begin(token,payload([])); view.psWheelArm(token);
+            assert(!visible()&&replies.length===1&&replies.pop()===`${token}|-1|build_error|cancel`,"Arm exception did not report exactly one matching build_error");
+        } finally { doc.getElementById("center").focus=centerFocus; }
         const literal = 'Lydia "雪" \\ <img src=x onerror=alert(1)>';
         const sparse = [null, {label:"Hello <b>friend</b>", intent:"greet"}, null, null, null, null, null, null, null, null, null, {label:"Wait", intent:"wait_here"}];
         arm("literal", sparse, literal);
@@ -508,9 +543,10 @@ frame.addEventListener("load", async () => {
         doc.getElementById("center").focus(); region(0).focus();
         assert(!region(0,"nearby").classList.contains("hot"), "Disarm retained held Shift preview");
         key("Escape"); assert(replies.pop() === "shift-cleared|-1||cancel", "Shift clear setup failed to cancel");
-        for (const bad of [payload([],"Lydia","invalid"), {...payload([]), slots:Array(13).fill(null)}, {...payload([]), target:12}]) {
-            begin("invalid-" + JSON.stringify(bad), bad); view.psWheelArm("invalid-" + JSON.stringify(bad)); click(region(0));
-            assert(!visible() && !replies.length, "Malformed payload enabled a choice");
+        for (const [i,bad] of [payload([],"Lydia","invalid"), {...payload([]), slots:Array(13).fill(null)}, {...payload([]), target:12}].entries()) {
+            const token="invalid-payload-"+i;
+            begin(token,bad); view.psWheelArm(token); click(region(0));
+            assert(!visible()&&replies.length===1&&replies.pop()===`${token}|-1|rejected|cancel`,"Malformed payload did not report exactly one rejection");
         }
         for (const mode of ["0", "1"]) {
             arm("host-" + mode, sparse); view.hostMode(mode); key("Enter");
@@ -570,7 +606,7 @@ frame.addEventListener("load", async () => {
             if (openKey === undefined) delete data.openKey;
             else data.openKey = openKey;
             begin(token, data); view.psWheelArm(token); keyEvent("keydown","Alt","AltRight",2);
-            assert(!visible() && !replies.length, `Malformed openKey ${String(openKey)} did not fail closed`);
+            assert(!visible()&&replies.length===1&&replies.pop()===`${token}|-1|rejected|cancel`,`Malformed openKey ${String(openKey)} did not report exactly one rejection`);
         }
         const staleToken = "stale-open-key";
         begin(staleToken, payload(openKeySlots));

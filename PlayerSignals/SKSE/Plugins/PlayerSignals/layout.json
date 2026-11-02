@@ -6,8 +6,8 @@
   },
   "wheels": {
     "main": [
-      { "label": "Yes", "intent": "confirm" },
-      { "label": "No", "intent": "deny" },
+      { "label": "Yes", "intent": "confirm", "color": "#4a6b4c" },
+      { "label": "No", "intent": "deny", "color": "#6b4040" },
       { "label": "Thank you", "intent": "thanks" },
       { "label": "Greet", "intent": "greet" },
       { "label": "Social", "submenu": "social" },

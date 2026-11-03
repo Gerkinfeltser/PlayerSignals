@@ -751,7 +751,14 @@ Function Submit(String narration, String feedbackPrefix, String feedbackSuffix, 
         Debug.Trace("[PlayerSignals] " + failure, 1)
         Return
     EndIf
-    Int result = SkyrimNetApi.DirectNarration(narration, player, targetActor)
+    ; EXPERIMENT: targeted signals make the captured NPC the speaker so that NPC answers;
+    ; Openly keeps the player as originator with no target.
+    Int result
+    If targetActor
+        result = SkyrimNetApi.DirectNarration(narration, targetActor, player)
+    Else
+        result = SkyrimNetApi.DirectNarration(narration, player, None)
+    EndIf
     If token != _generation || !_ready
         Return
     EndIf

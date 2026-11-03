@@ -45,7 +45,11 @@
     @media (prefers-reduced-motion: reduce) { :root { --ps-tween: 0ms; } }
     #wheelSvg .region.hot .hit-area { fill: var(--selection-outline) !important; fill-opacity: 1 !important; }
     #wheelSvg .nearby-region.hot .hit-area { fill: url(#cap-lit-gradient) !important; }
-    #wheelSvg .nearby-region.hybrid.hot .hit-area { fill: url(#cap-lit-hybrid-gradient) !important; }
+    #wheelSvg .nearby-region.hybrid.hot:not(.round) .hit-area { fill: url(#cap-lit-hybrid-gradient) !important; }
+    #wheelSvg .hybrid-hit { display: none; }
+    #wheelSvg .nearby-region.hybrid .hybrid-hit { display: initial; fill: transparent; stroke: none; pointer-events: fill; cursor: pointer; }
+    #wheelSvg .nearby-region.hybrid .hit-area { pointer-events: none; }
+    #wheelSvg .nearby-region[aria-disabled="true"] .hybrid-hit { pointer-events: none; }
     .selected-band { display: none; fill: none; stroke: var(--selection-band); stroke-width: 30; pointer-events: none; }
     .region.hot .selected-band { display: initial; }
     .nearby-region.hot .selected-band { stroke: var(--cap-lit-band); }
@@ -300,6 +304,11 @@
         symbol.setAttribute("width", "122.4"); symbol.setAttribute("height", "122.4"); symbol.setAttribute("aria-hidden", "true");
         symbol.setAttribute("transform", `rotate(${-index * 30} ${decorationX} ${decorationY})`);
         nearby.appendChild(symbol);
+        // Keep the pointed hit footprint even when Openly rounds the visible bulb.
+        const hybridHit = nearby.querySelector(".hit-area").cloneNode(false);
+        hybridHit.removeAttribute("id"); hybridHit.setAttribute("class", "hybrid-hit");
+        hybridHit.setAttribute("d", hybridHit.getAttribute("data-hybrid-d"));
+        nearby.appendChild(hybridHit);
         for (const [region, mode] of [[target, "target"], [nearby, "nearby"]]) {
             region.setAttribute("role", "button"); region.setAttribute("tabindex", "-1"); region.setAttribute("aria-disabled", "true");
             region.addEventListener("click", () => choose(index, mode));
@@ -539,6 +548,11 @@
             if (!entries[index]?.[3]?.hybrid) return;
             const text = openlyHeld() || !targetName || (focused === index && focusedMode === "nearby") ? "SIGNAL" : "SIGNAL · ACTION";
             sector.group.classList.toggle("hybrid-openly", text === "SIGNAL");
+            const round = text === "SIGNAL";
+            sector.nearby.classList.toggle("round", round);
+            for (const path of sector.nearby.querySelectorAll(".hit-area,.edge-line,.selected-band,.selected-band-clip"))
+                path.setAttribute("d", path.getAttribute(round ? "data-core-d" : "data-hybrid-d"));
+            if (flowIndex === index) flowOutline.setAttribute("d", sector.nearby.querySelector(".hit-area").getAttribute("d"));
             if (sector.actionBadge.textContent === text) return;
             sector.actionBadge.textContent = text;
             sector.actionBadge.setAttribute("x", "0"); sector.actionBadge.setAttribute("y", "0");
@@ -626,7 +640,7 @@
         document.documentElement.classList.remove("slate", "moss", "ember");
         document.documentElement.classList.add("slate");
         surface.dataset.armed = "false"; entries.fill(null); disable(); clearHighlight();
-        sectors.forEach(({ group, target, content, nearby, actionBadge }) => { delete group.dataset.kind; group.classList.remove("slot-colored", "hybrid-openly"); group.style.removeProperty("--slot-idle-fill"); group.style.removeProperty("--slot-openly-fill"); target.classList.remove("navigation", "gesture", "action", "empty"); content.textContent = ""; nearby.classList.remove("signal", "hybrid"); actionBadge.style.display = "none"; });
+        sectors.forEach(({ group, target, content, nearby, actionBadge }) => { delete group.dataset.kind; group.classList.remove("slot-colored", "hybrid-openly"); group.style.removeProperty("--slot-idle-fill"); group.style.removeProperty("--slot-openly-fill"); target.classList.remove("navigation", "gesture", "action", "empty"); content.textContent = ""; nearby.classList.remove("signal", "hybrid", "round"); actionBadge.style.display = "none"; });
         updateHubAction();
         if (window.magelight) window.magelight.send("__escapecapture", "0");
     }

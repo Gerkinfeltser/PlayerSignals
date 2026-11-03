@@ -881,7 +881,7 @@ frame.addEventListener("load", async () => {
             region(0,"nearby").focus();
             assert(hybridColorGroup.classList.contains("hybrid-openly") && view.getComputedStyle(hybridColorGroup).getPropertyValue("--slot-idle-fill").replace(/\s/g,"")===mixed.replace(/\s/g,""), "Own tip did not set the hybrid idle palette to its 50% Openly mix");
             assertHybridIdle(1,"rgb(92, 74, 114)");
-            assert(hybridFill(0)==="rgb(255, 220, 140)" && hybridFill(0,"nearby").includes("cap-lit-hybrid-gradient"), "Openly changed hot core/bulb appearance");
+            assert(hybridFill(0)==="rgb(255, 220, 140)" && hybridFill(0,"nearby").includes("cap-lit-gradient"), "Openly changed hot core/plain round bulb appearance");
             center.focus(); assertHybridIdle(0,idle);
             keyEvent("keydown","Shift","ShiftLeft",1);
             assertHybridIdle(0,mixed);
@@ -953,6 +953,16 @@ frame.addEventListener("load", async () => {
             const nearby=region(i,"nearby");
             return [nearby.querySelector(".hit-area"),nearby.querySelector(".edge-line"),nearby.querySelector(".selected-band"),doc.getElementById(`slot-${i}-nearby-selected-band-clip`)?.firstElementChild];
         };
+        const assertHybridRound = (i, round) => {
+            for (const node of hybridShapeNodes(i))
+                assert(node.getAttribute("d") === node.getAttribute(round ? "data-core-d" : "data-hybrid-d"), `Hybrid ${i} visible outline is not ${round ? "round" : "pointed"}`);
+            const nearby = region(i,"nearby"), hit = nearby.querySelector(".hybrid-hit");
+            assert(hit.getAttribute("d") === hit.getAttribute("data-hybrid-d"), `Hybrid ${i} hit footprint shrank`);
+            if (nearby.classList.contains("hot") && round)
+                assert(view.getComputedStyle(nearby.querySelector(".hit-area")).fill.includes("cap-lit-gradient"), "Round hybrid does not use plain signal white fill");
+            const flow = nearby.querySelector(".signal-flow");
+            if (flow) assert(doc.getElementById("signal-flow-clip").firstElementChild.getAttribute("d") === nearby.querySelector(".hit-area").getAttribute("d"), "Ripple clip differs from visible bulb");
+        };
         const pathTop=node=>{
             const length=node.getTotalLength();let top=Infinity;
             for(let n=0;n<=128;n++)top=Math.min(top,node.getPointAtLength(length*n/128).y);
@@ -1009,15 +1019,19 @@ frame.addEventListener("load", async () => {
             assertHybridShapes(i);
             assert(view.getComputedStyle(hit).fill==="rgb(99, 164, 232)",`Hybrid ${i} custom color is not applied to its idle bulb`);
             region(i,"nearby").focus();
-            assertHybridShapes(i);
+            assertHybridRound(i,true);
             region(i).focus();
             keyEvent("keydown","Shift","ShiftLeft",1);
+            assertHybridRound(i,true);
             await assertHybridApexPaint(i);
             keyEvent("keyup","Shift","ShiftLeft",1);
+            assertHybridRound(i,false);
             region(i,"nearby").focus();
             await assertHybridApexPaint(i);
+            assertHybridRound(i,true);
             assert(doc.getElementById("destination").textContent==="Openly"&&!replies.length,`Hybrid ${i} Openly preview changed replies`);
             doc.getElementById("center").focus();
+            assertHybridRound(i,false);
         }
         key("Escape");assert(replies.pop()==="hybrid-pointed-all|-1||cancel","Pointed hybrid setup failed to cancel");
         arm("hybrid-pointed-reuse-plain",Array.from({length:12},()=>({label:"Plain",intent:"greet"})));
@@ -1030,11 +1044,32 @@ frame.addEventListener("load", async () => {
         arm("hybrid-pointed-no-target",pointedHybrid,"");
         for(let i=0;i<12;i++){
             region(i).focus();
+            assertHybridRound(i,true);
             await assertHybridApexPaint(i);
             assert(doc.getElementById("destination").textContent==="No target · Openly",`No-target hybrid ${i} lost its Openly destination`);
             doc.getElementById("center").focus();
         }
         key("Escape");replies.pop();
+        arm("hybrid-round-hover", [hybrids[0],hybrids[1]]);
+        center.focus();
+        const hoverTip = region(0,"nearby"), hoverHit = hoverTip.querySelector(".hybrid-hit");
+        const pointedOnly = new view.DOMPoint(1800,160);
+        const hoverAt = () => {
+            const point = pointedOnly.matrixTransform(hoverHit.getScreenCTM());
+            return doc.elementFromPoint(point.x,point.y);
+        };
+        assert(hoverHit.isPointInFill(pointedOnly), "Hover probe is outside the pointed hit region");
+        hoverTip.dispatchEvent(new view.MouseEvent("mouseenter"));
+        assert(!hoverTip.querySelector(".hit-area").isPointInFill(pointedOnly), "Hover probe is not beyond the visible semicircle");
+        for (let n=0;n<12;n++) {
+            await raf.nextFrame();
+            assert(hoverAt() === hoverHit && doc.activeElement === hoverTip, "Pointed-only hover lost its hit or tip focus across frames");
+            assertHybridRound(0,true); assertHybridRound(1,false);
+        }
+        region(0).focus(); assertHybridRound(0,false);
+        key("ArrowUp"); assert(doc.activeElement === hoverTip,"Keyboard tip focus changed"); assertHybridRound(0,true);
+        key("ArrowDown"); assertHybridRound(0,false);
+        key("Escape"); replies.pop();
         for (const [i,badEntry] of [
             ["Signal","greet","intent",{hybrid:false}], ["Signal","greet","intent",{hybrid:1}],
             ["Action","WaitHere","action",{hybrid:true}], ["Key","64","hotkey",{hybrid:true}],
@@ -1680,11 +1715,13 @@ frame.addEventListener("load", async () => {
             const hybrid = doc.getElementById("slot-11"), badge = hybrid.querySelector(".actionLabel");
             pad("west");
             assert(badge.textContent === "SIGNAL" && hybrid.classList.contains("hybrid-openly") && hybrid.classList.contains("full") && doc.getElementById("destination").textContent === "Openly", "X failed hybrid badge/tint/preview");
+            assertHybridRound(11,true);
             checkHelp(doc, true);
             key("Unidentified");
             checkHelp(doc, true);
             pad("west","release");
             assert(badge.textContent === "SIGNAL · ACTION" && !hybrid.classList.contains("hybrid-openly"), "X release failed to restore hybrid");
+            assertHybridRound(11,false);
             doc.dispatchEvent(new view.MouseEvent("mousemove",{bubbles:true}));
             checkHelp(doc, true);
             pad("dpadRight");
@@ -1826,7 +1863,7 @@ frame.addEventListener("load", async () => {
         report.textContent += " Radial labels and badges: all 12 readable angles, wrapped line order, viewport and slice containment, chord/artwork clearance, and shared lift checked across all four shipped wheels.";
         report.textContent += " Quadrants: two transformed 45°-from-vertical diameters, visible white at 90% opacity, behind all slots/hub, pointer-transparent at slice/hub/exposed probes, fixed across all shipped wheels, themes and slice lifts.";
         report.textContent += " Shift hub Back: existing typed Back replies across shipped submenus/custom indices; held-before-arm modifiers, dual-Shift release, click/Enter/Space, no-Back Cancel, keyboard cancellation and lifecycle resets.";
-        report.textContent += " Hybrids: generated pointed bulbs at all 12 positions, pointed-only hits, inset/band/clip and straight-chord checks, neighbor/quadrant clearance, custom colour, opaque near-white apex raster samples for tip/Shift/no-target, and semicircle restoration on plain reuse; unchanged pie and flow; SIGNAL · ACTION only for target/core, SIGNAL for Shift/no-target/own-tip with swap-back, per-slot isolation and stable badge/chord geometry; one existing intent reply.";
+        report.textContent += " Hybrids: pointed idle/core bulbs at all 12 positions; round visible fill/inset/band/clip during Shift, X, no-target and own-tip Openly; plain-signal white gradient and active ripple clipping; fixed pointed hit footprints with 12-frame pointed-only hover focus stability; keyboard swap-back, per-slot isolation, plain reuse and lifecycle reset; unchanged core and one existing intent reply.";
         report.textContent += " Hybrid Openly palette: idle core/bulb purple or explicit colour, 50% signal-fill mix resolved at arm time across slate/moss/ember, real sampled Shift fill transition (reduced motion snaps), release restoration, no-target mix, own-tip isolation, plain-slot palette reset and unchanged hot fills.";
         report.textContent += " Gamepad: all twelve stick angles; 100ms first-neutral grace, retained immediate A selection and X+hub Back, nonextended timeout, re-deflection and disarm/rearm cancellation; D-pad focus persists through neutral vectors; hybrid X badge/tint/preview and release; A core/Openly, B cancel, hub Back, disabled slots, reset, detection, persistent keycaps, disconnect behavior and compact action-grouped help without overlap at 700px and smaller viewports; optional opening-button pre-arm/repeat/press cancellation and malformed payload rejection across all three themes.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }

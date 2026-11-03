@@ -70,7 +70,7 @@
     .sectorLabel, .hubContent { width: 100%; height: 100%; display: grid; align-content: center; overflow-wrap: anywhere; text-align: center; }
     .sectorLabel { font: 600 80px/1.12 Georgia, serif; color: #fff3d9; }
     .sector[data-kind="submenu"]:not(.lit) .sectorLabel, .sector[data-kind="back"]:not(.lit) .sectorLabel { color: var(--subnav-label); }
-    .actionLabel { fill: #f0ce89; font: 700 58px Georgia, serif; text-anchor: middle; dominant-baseline: middle; }
+    .actionLabel { fill: #f0ce89; font: 700 58px Georgia, serif; text-anchor: middle; dominant-baseline: middle; text-rendering: geometricPrecision; }
     .hubContent { font: 100px/1.15 Georgia, serif; }
     #caption, #destination { margin: 12px 0; }
     #destination { color: #f0ce89; font-size: .78em; }
@@ -382,7 +382,7 @@
         const palette = getComputedStyle(document.documentElement);
         flowOpacity = Number(palette.getPropertyValue(flowBulb ? flowLit ? "--flow-lit-signal-opacity" : "--flow-opacity" : "--flow-lit-opacity"));
         let color = palette.getPropertyValue(flowLit ? flowPreset.litTint : flowPreset.tint).trim();
-        if (flowBulb && !flowLit && entries[index][3]) color = slotRippleTint(entries[index][3].color);
+        if (flowBulb && !flowLit && entries[index][3]?.color) color = slotRippleTint(entries[index][3].color);
         flow.style.mixBlendMode = flowAdditive ? "plus-lighter" : "normal";
         if (!flowAdditive) {
             // Resolve terminal palette colors, never an intermediate hover-tween fill.
@@ -586,8 +586,9 @@
             const extra = item[3];
             if (!extra || typeof extra !== "object" || Array.isArray(extra)) return false;
             const keys = Object.keys(extra);
-            if (!keys.length || keys.some(key => key !== "color" && key !== "raw")) return false;
+            if (!keys.length || keys.some(key => !["color", "raw", "hybrid"].includes(key))) return false;
             if ("color" in extra && (typeof extra.color !== "string" || extra.color.length !== 7 || !/^#[0-9A-Fa-f]{6}$/.test(extra.color))) return false;
+            if ("hybrid" in extra && (item[2] !== "intent" || extra.hybrid !== true)) return false;
             return !("raw" in extra) || (item[2] === "hotkey" && extra.raw === true && /^[1-9]\d*$/.test(item[1]) && Number(item[1]) <= 255);
         };
         if (!data || !Number.isInteger(data.openKey) || data.openKey < 1 || data.openKey > 255 || !["slate", "moss", "ember"].includes(data.theme) || !Array.isArray(data.slots) || data.slots.length !== 12 || (data.target !== undefined && typeof data.target !== "string") || data.slots.some(item => item !== null && (!Array.isArray(item) || (item.length !== 3 && item.length !== 4) || !validExtra(item) || typeof item[0] !== "string" || typeof item[1] !== "string" || !["intent", "action", "navigation", "submenu", "back", "hotkey"].includes(item[2]) || (item[2] === "hotkey" && (!/^[1-9]\d*$/.test(item[1]) || Number(item[1]) > 263 || Number(item[1]) === data.openKey))))) { rejectBegin(nextRequest, "rejected"); return; }
@@ -609,7 +610,7 @@
                 const { group, pop, target, nearby, content, labelBox, labelRadius, actionBadge, frame, knot } = sectors[index];
                 const kind = item?.[2], disabled = !item || (kind === "action" && !targetName);
                 const subback = !disabled && (kind === "submenu" || kind === "back");
-                actionBadge.textContent = kind === "hotkey" ? "KEY" : kind === "intent" ? "SIGNAL" : "ACTION";
+                actionBadge.textContent = kind === "hotkey" ? "KEY" : kind === "intent" ? item?.[3]?.hybrid ? "SIGNAL · ACTION" : "SIGNAL" : "ACTION";
                 const badged = ["action", "hotkey", "intent"].includes(kind);
                 actionBadge.style.display = item && badged ? "" : "none";
                 content.textContent = item ? item[0] : "";
@@ -629,6 +630,8 @@
                 const boxWidth = horizontal ? 2 * (radius - boxHeight / 2 - tip * labelScale) * slope - 48 : outer - inner;
                 const labelX = 1800 + radius * Math.sin(angle), labelY = 1800 - radius * Math.cos(angle);
                 frame.removeAttribute("transform");
+                actionBadge.style.fontSize = "58px";
+                if (badged) actionBadge.style.fontSize = Math.min(58, 58 * boxWidth / Math.max(1, actionBadge.getBBox().width)) + "px";
                 const badgeHeight = badged ? actionBadge.getBBox().height + 12 : 0;
                 labelBox.setAttribute("x", labelX - boxWidth / 2); labelBox.setAttribute("y", labelY - boxHeight / 2);
                 labelBox.setAttribute("width", boxWidth); labelBox.setAttribute("height", boxHeight - badgeHeight);

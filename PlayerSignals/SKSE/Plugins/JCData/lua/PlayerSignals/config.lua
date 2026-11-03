@@ -134,6 +134,25 @@ end
 local function nonempty(v, path)
     assert(type(v) == 'string' and #v > 0, path .. ': expected nonempty string')
 end
+local function validateComplianceTemplate(template, path)
+    nonempty(template, path)
+    assert(not string.match(template, '%.%s*$'), path .. ': omit the final period')
+    local targets, pos = 0, 1
+    while pos <= #template do
+        local opening = string.find(template, '[{}]', pos)
+        if not opening then break end
+        if string.sub(template, opening, opening) == '}' then error(path .. ': malformed marker', 0) end
+        local closing = string.find(template, '}', opening + 1, true)
+        local nested = string.find(template, '{', opening + 1, true)
+        assert(closing and (not nested or nested > closing), path .. ': malformed marker')
+        local name = string.sub(template, opening + 1, closing - 1)
+        assert(name == 'target' or name == 'player', path .. ': unknown or malformed marker')
+        if name == 'target' then targets = targets + 1 end
+        pos = closing + 1
+    end
+    assert(targets >= 1, path .. ': expected at least one {target}')
+end
+
 local function validateCatalog(root)
     local r = object(root, 'root', {schemaVersion=true, intents=true})
     assert(type(r.schemaVersion) == 'number' and r.schemaVersion == 1, 'schemaVersion: expected integer 1')
@@ -143,7 +162,7 @@ local function validateCatalog(root)
     for id, record in pairs(intents) do
         local path = 'intents.' .. id
         assert(string.match(id, '^[a-z][a-z0-9_]*$'), path .. ': expected lowercase ASCII ID')
-        local entry = object(record, path, {narration=true, notification=true, targetedNotification=true})
+        local entry = object(record, path, {narration=true, notification=true, targetedNotification=true, complianceNarration=true})
         nonempty(entry.narration, path .. '.narration')
         nonempty(entry.notification, path .. '.notification')
         nonempty(entry.targetedNotification, path .. '.targetedNotification')
@@ -158,6 +177,9 @@ local function validateCatalog(root)
         assert(first, path .. '.targetedNotification: expected exactly one {target}')
         assert(not string.find(entry.targetedNotification, marker, first + #marker, true),
             path .. '.targetedNotification: expected exactly one {target}')
+        if entry.complianceNarration ~= nil then
+            validateComplianceTemplate(entry.complianceNarration, path .. '.complianceNarration')
+        end
     end
     return r
 end
@@ -199,11 +221,14 @@ local function validate(root, intents)
                     if e[kind] ~= nil then kinds = kinds + 1 end
                 end
                 local eventIntent = e.action ~= nil and e.intent ~= nil and e.event ~= nil
-                assert(kinds == 1 or (kinds == 2 and eventIntent), path .. ': expected exactly one of intent, submenu, control, action or hotkey (with paired event intent)')
-                if e.intent ~= nil then nonempty(e.intent, path .. '.intent') end
+                local hybrid = e.action ~= nil and e.intent ~= nil and e.event == nil
+                assert(kinds == 1 or (kinds == 2 and (eventIntent or hybrid)), path .. ': expected exactly one kind, or action with an intent (optionally paired with event)')
+                if e.intent ~= nil then
+                    nonempty(e.intent, path .. '.intent')
+                    assert(intents[e.intent], path .. '.intent: unknown ID ' .. tostring(e.intent))
+                end
                 if e.submenu ~= nil then nonempty(e.submenu, path .. '.submenu') end
                 if e.control ~= nil then nonempty(e.control, path .. '.control') end
-                if e.intent ~= nil and e.action == nil then assert(intents[e.intent], path .. '.intent: unknown ID ' .. tostring(e.intent)) end
                 if e.submenu ~= nil then assert(wheels[e.submenu], path .. '.submenu: unknown wheel ' .. tostring(e.submenu)) end
                 if e.control ~= nil then assert(e.control == 'back' or e.control == 'close', path .. '.control: expected back or close') end
                 if e.hotkey ~= nil then
@@ -222,10 +247,12 @@ local function validate(root, intents)
                     nonempty(action.name, path .. '.action.name')
                     assert(type(action.args) == 'table' and action.args.kind == 'object', path .. '.action.args: expected object')
                     assert(action.args.raw, path .. '.action.args: missing raw JSON')
-                    assert((e.event == nil) == (e.intent == nil), path .. ': event and intent must be provided together')
                     if e.event ~= nil then
+                        assert(e.intent ~= nil, path .. ': event and intent must be provided together')
                         assert(e.event == 'persistent' or e.event == 'shortLived' or e.event == 'both', path .. '.event: expected persistent, shortLived or both')
-                        assert(type(e.intent) == 'string' and intents[e.intent], path .. '.intent: unknown ID ' .. tostring(e.intent))
+                    elseif e.intent ~= nil then
+                        assert(intents[e.intent].data.complianceNarration ~= nil,
+                            path .. '.intent: complianceNarration is required for hybrid actions')
                     end
                 else
                     assert(e.event == nil, path .. '.event: only valid for action entries')
@@ -289,24 +316,26 @@ function M.wheelPayload(slots, theme, target, openKey)
                 if slot.kind == 'hotkey' then
                     assert(type(slot.hotkey) == 'number' and slot.hotkey == math.floor(slot.hotkey), 'hotkey: expected integer')
                     kind, identity = 'hotkey', tostring(slot.hotkey)
-                elseif slot.kind == 'action' or slot.actionName ~= nil then
-                    kind, identity = 'action', slot.actionName
                 elseif slot.kind == 'intent' then
                     kind, identity = 'intent', slot.intent
+                elseif slot.kind == 'action' or slot.actionName ~= nil then
+                    kind, identity = 'action', slot.actionName
                 elseif slot.kind == 'submenu' then
                     kind = 'submenu'
                 elseif slot.kind == 'control' and slot.control == 'back' then
                     kind = 'back'
                 end
                 local extras = ''
+                local hybrid = slot.kind == 'intent' and slot.actionName ~= nil
                 if slot.color ~= nil then
                     assert(type(slot.color) == 'string' and string.match(slot.color, '^#[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]$'), 'color: expected #rrggbb')
                 end
-                if slot.color ~= nil or raw == true then
+                if slot.color ~= nil or raw == true or hybrid then
                     extras = ',{'
                     if slot.color ~= nil then extras = extras .. '"color":' .. jsonString(slot.color) end
-                    if slot.color ~= nil and raw == true then extras = extras .. ',' end
+                    if slot.color ~= nil and (raw == true or hybrid) then extras = extras .. ',' end
                     if raw == true then extras = extras .. '"raw":true' end
+                    if hybrid then extras = extras .. '"hybrid":true' end
                     extras = extras .. '}'
                 end
                 entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. extras .. ']'
@@ -350,6 +379,7 @@ function M.load(args)
         local narrations = JMap.object(); root.narrations = narrations
         local targetNotificationPrefixes = JMap.object(); root.targetNotificationPrefixes = targetNotificationPrefixes
         local targetNotificationSuffixes = JMap.object(); root.targetNotificationSuffixes = targetNotificationSuffixes
+        local complianceNarrations = JMap.object(); root.complianceNarrations = complianceNarrations
         local marker = '{target}'
         for id, intent in pairs(catalog.intents.data) do
             notifications[id] = intent.data.notification
@@ -358,6 +388,9 @@ function M.load(args)
             local markerStart = string.find(template, marker, 1, true)
             targetNotificationPrefixes[id] = string.sub(template, 1, markerStart - 1)
             targetNotificationSuffixes[id] = string.sub(template, markerStart + #marker)
+            if intent.data.complianceNarration ~= nil then
+                complianceNarrations[id] = intent.data.complianceNarration
+            end
         end
         -- Canonical internal wheel keys preserve case-distinct and metadata-like JSON names.
         local names, ordinal = {}, 0
@@ -376,10 +409,10 @@ function M.load(args)
                     end
                     slots[i] = entry
                     if slot.data.action then
-                        entry.kind = 'action'
+                        entry.kind = slot.data.intent ~= nil and slot.data.event == nil and 'intent' or 'action'
                         entry.actionName = slot.data.action.data.name
                         entry.argsJson = slot.data.action.data.args.raw
-                        if slot.data.event then entry.event = slot.data.event; entry.intent = slot.data.intent end
+                        if slot.data.event then entry.event = slot.data.event end
                     elseif slot.data.hotkey then
                         -- Integer fields are supplied by the native JSON integer decoder above.
                     elseif slot.data.intent then

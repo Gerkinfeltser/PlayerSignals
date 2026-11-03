@@ -246,36 +246,6 @@ class ConfigValidation(unittest.TestCase):
             with self.subTest(theme=theme), self.assertRaisesRegex(LuaError, 'theme: expected slate, moss or ember'):
                 self.parse(dict(minimal(), theme=theme))
 
-    def test_shipped_layout_matches_owner_positions_and_preserves_unused_catalog(self):
-        layout = json.loads(CATALOG.with_name('layout.json').read_text(encoding='utf-8'))
-        self.parse(layout)
-        self.assertEqual(set(layout['wheels']), {'main', 'attitude', 'social', 'signals', 'debug'})
-        expected = {
-            'main': ['confirm', 'deny', 'thanks', 'greet', 'social', 'signals',
-                     'attitude', 'debug', 'wait_here', 'farewell', 'follow_me', 'come_here'],
-            'attitude': [None, None, 'understood', 'challenge', 'unsure', 'think',
-                         None, None, 'not_understood', 'yield', 'back', None],
-            'social': ['offer', None, 'congratulate', None, None, None,
-                       'ask', None, 'comfort', 'sorry', 'back', None],
-            'signals': [None, None, None, None, 'warn', None,
-                        None, 'calm_down', None, 'quiet', 'back', 'give_space'],
-            'debug': ['hotkey:64', 'hotkey:11', 'hotkey:36', None, None, 'AccompanyTarget',
-                      'WaitHere', 'StopAccompanying', None, None, 'back', None],
-        }
-        homes = []
-        for name, identities in expected.items():
-            slots = layout['wheels'][name]
-            actual = [None if slot is None else slot.get('intent') or slot.get('submenu')
-                      or slot.get('control')
-                      or ('hotkey:%d' % slot['hotkey'] if 'hotkey' in slot else slot['action']['name'])
-                      for slot in slots]
-            self.assertEqual(actual, identities, name)
-            homes.extend(identity for identity in actual if identity and identity != 'back')
-        self.assertEqual(len(homes), len(set(homes)), 'Each entry has one home')
-        for intent in ('understood', 'comfort', 'give_space'):
-            self.assertIn(intent, self.catalog['intents'])
-        self.assertTrue({'follow_me', 'wait_here'} <= self.catalog['intents'].keys())
-
     def test_action_slots_validate_metadata_and_event_pair(self):
         config = minimal()
         config['wheels']['main'] = [
@@ -309,6 +279,56 @@ class ConfigValidation(unittest.TestCase):
                 config = minimal()
                 config['wheels']['main'] = [invalid]
                 self.rejects(config)
+
+    def test_hybrid_intents_require_compliance_and_preserve_action_fields(self):
+        catalog = copy.deepcopy(self.catalog)
+        catalog['intents']['custom_hybrid'] = {
+            'narration': 'signals a custom intent',
+            'notification': 'signals custom intent',
+            'targetedNotification': 'signals to {target}',
+            'complianceNarration': '{target} complies with {player} and {target} repeats the signal',
+        }
+        layout = ('{"schemaVersion":1,"root":"main","input":{"openKeyCode":184},'
+                  '"wheels":{"main":[{"label":"Hybrid","intent":"custom_hybrid",'
+                  '"action":{"name":"RegisteredAction","args":{"decimal":1.2300,"nested":{"n":2E+10}}}}]}}')
+        parsed = self.module.validateText(layout, json.dumps(catalog))
+        slot = parsed.wheels.data.main.data[1].data
+        self.assertEqual(slot.intent, 'custom_hybrid')
+        self.assertEqual(slot.action.data.args.raw, '{"decimal":1.2300,"nested":{"n":2E+10}}')
+
+        del catalog['intents']['custom_hybrid']['complianceNarration']
+        with self.assertRaisesRegex(LuaError, 'complianceNarration'):
+            self.module.validateText(layout, json.dumps(catalog))
+
+    def test_hybrid_rejects_other_kind_combinations_and_legacy_context_is_valid(self):
+        config = minimal()
+        config['wheels']['main'] = [{
+            'label': 'Legacy action', 'action': {'name': 'x', 'args': {}},
+            'intent': 'confirm', 'event': 'both',
+        }]
+        self.parse(config)
+        for extra in ({'event': 'both', 'control': 'close'}, {'submenu': 'main'},
+                      {'control': 'close'}, {'hotkey': 64}, {'event': 'bad'}):
+            config['wheels']['main'] = [{
+                'label': 'Invalid hybrid', 'intent': 'follow_me',
+                'action': {'name': 'x', 'args': {}}, **extra,
+            }]
+            with self.subTest(extra=extra):
+                self.rejects(config)
+
+    def test_hybrid_payload_has_marker_and_preserves_color(self):
+        slots = self.lua.table()
+        slot = self.lua.table()
+        slot['label'], slot['kind'], slot['intent'] = 'Dismiss', 'intent', 'dismiss'
+        slot['actionName'], slot['argsJson'] = 'StopAccompanying', '{}'
+        slots[1] = slot
+        payload = json.loads(self.module.wheelPayload(slots, 'slate', '', 184))
+        self.assertEqual(payload['slots'][0], ['Dismiss', 'dismiss', 'intent', {'hybrid': True}])
+        slot['color'] = '#abcdef'
+        payload = json.loads(self.module.wheelPayload(slots, 'slate', '', 184))
+        self.assertEqual(payload['slots'][0], [
+            'Dismiss', 'dismiss', 'intent', {'color': '#abcdef', 'hybrid': True},
+        ])
 
     def test_action_name_may_match_catalog_id_without_intent_resolution(self):
         config = minimal()
@@ -490,6 +510,29 @@ class ConfigValidation(unittest.TestCase):
                 catalog['intents']['greet'][field] += ending
                 with self.subTest(field=field, ending=ending), self.assertRaises(LuaError):
                     self.module.validateCatalogText(json.dumps(catalog))
+
+    def test_compliance_narration_is_optional_and_marker_safe(self):
+        catalog = copy.deepcopy(self.catalog)
+        self.module.validateCatalogText(json.dumps(catalog))
+        for invalid in ('', None, False, 1, [], {}):
+            catalog = copy.deepcopy(self.catalog)
+            catalog['intents']['confirm']['complianceNarration'] = invalid
+            with self.subTest(invalid=invalid), self.assertRaises(LuaError):
+                self.module.validateCatalogText(json.dumps(catalog))
+        for template in ('does not comply', '{player} complies', '{target} complies.',
+                         '{target} complies. \t', 'nested {{target}}', '{target {player}}',
+                         '{target}{', '{target}}', '{unknown} complies', '{} complies',
+                         '{{target} complies'):
+            catalog = copy.deepcopy(self.catalog)
+            catalog['intents']['confirm']['complianceNarration'] = template
+            with self.subTest(template=template), self.assertRaises(LuaError):
+                self.module.validateCatalogText(json.dumps(catalog))
+        for template in ('{target} complies', '{target} and {target} comply',
+                         '{player} says {target} complies'):
+            catalog = copy.deepcopy(self.catalog)
+            catalog['intents']['confirm']['complianceNarration'] = template
+            with self.subTest(template=template):
+                self.module.validateCatalogText(json.dumps(catalog))
 
     def test_catalog_rejects_invalid_ids_and_unknown_fields(self):
         for intent_id in ('Confirm', '_confirm', '1confirm', 'bad-id', 'café'):

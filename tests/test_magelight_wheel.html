@@ -23,7 +23,7 @@ frame.addEventListener("load", async () => {
         const key = key => keyEvent("keydown", key);
         const visible = () => view.getComputedStyle(doc.querySelector("main")).visibility === "visible";
         const layout = await (await fetch("../PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json")).json();
-        const entry = s => !s ? null : [s.label + (s.submenu ? " >" : s.control === "back" ? " <" : ""), s.hotkey !== undefined ? String(s.hotkey) : s.action?.name || s.intent || "", s.hotkey !== undefined ? "hotkey" : s.action ? "action" : s.intent ? "intent" : s.submenu ? "submenu" : s.control === "back" ? "back" : "navigation", ...(s.color || s.raw === true ? [{...(s.color ? {color:s.color} : {}), ...(s.raw === true ? {raw:true} : {})}] : [])];
+        const entry = s => !s ? null : [s.label + (s.submenu ? " >" : s.control === "back" ? " <" : ""), s.hotkey !== undefined ? String(s.hotkey) : s.intent && !s.event ? s.intent : s.action?.name || s.intent || "", s.hotkey !== undefined ? "hotkey" : s.intent && !s.event ? "intent" : s.action ? "action" : s.submenu ? "submenu" : s.control === "back" ? "back" : "navigation", ...(s.color || s.raw === true || (s.intent && s.action && !s.event) ? [{...(s.color ? {color:s.color} : {}), ...(s.raw === true ? {raw:true} : {}), ...(s.intent && s.action && !s.event ? {hybrid:true} : {})}] : [])];
         const payload = (slots, target = "Lydia", theme = "slate", openKey = 184) => ({theme, target, openKey, slots:Array.from({length:12}, (_, i) => entry(slots[i]))});
         const begin = (token, data) => view.psWheelBegin(token + "|" + JSON.stringify(data));
         const arm = (token, slots, target = "Lydia", theme = "slate", openKey = 184) => {
@@ -725,6 +725,7 @@ frame.addEventListener("load", async () => {
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const badgeKinds = [
             ["intent", {label:"Greet",intent:"greet"}, "SIGNAL", "--gesture-fill"],
+            ["hybrid", {label:"Dismiss",intent:"dismiss",action:{name:"StopAccompanying",args:{}}}, "SIGNAL · ACTION", "--gesture-fill"],
             ["action", {label:"Wait here",action:{name:"WaitHere"}}, "ACTION", "--action-fill"],
             ["hotkey", {label:"Dashboard",hotkey:64}, "KEY", "--hotkey-fill"]
         ];
@@ -804,6 +805,37 @@ frame.addEventListener("load", async () => {
         const disabledBadge=doc.querySelector("#slot-0 .actionLabel"),disabledSector=doc.getElementById("slot-0");
         assert(disabledSector.getAttribute("aria-disabled")==="true"&&view.getComputedStyle(disabledBadge).display!=="none"&&disabledBadge.textContent==="ACTION"&&Number(view.getComputedStyle(disabledSector).opacity)===.5,"Disabled ACTION badge is hidden or not dimmed with its sector");
         key("Escape"); assert(replies.pop()==="badge-disabled-action|-1||cancel","Disabled badge setup failed to cancel");
+        const hybrids = [
+            {label:"Follow me",intent:"follow_me",action:{name:"AccompanyTarget",args:{}}},
+            {label:"Wait here",intent:"wait_here",action:{name:"WaitHere",args:{}}},
+            {label:"Dismiss",intent:"dismiss",action:{name:"StopAccompanying",args:{}}}
+        ];
+        for (const slot of hybrids) for (const [mode,target,shift] of [
+            ["target","Lydia",false], ["nearby","Lydia",false],
+            ["target","Lydia",true], ["target","",false]
+        ]) {
+            const token=`hybrid-${slot.intent}-${mode}-${target || "none"}-${shift}`;
+            arm(token,[slot],target); center.focus();
+            const group=doc.getElementById("slot-0"), badge=group.querySelector(".actionLabel");
+            assert(group.dataset.kind==="intent"&&group.getAttribute("aria-disabled")!=="true"&&badge.textContent==="SIGNAL · ACTION","Hybrid rendered as a disabled or target-only action, or lost its sole badge marker");
+            assert(region(0).classList.contains("gesture")&&view.getComputedStyle(region(0).querySelector(".hit-area")).fill==="rgb(69, 87, 102)"&&view.getComputedStyle(region(0,"nearby")).display!=="none","Hybrid lost the blue signal core or Openly bulb");
+            region(0,mode).focus();
+            if (shift) keyEvent("keydown","Shift","ShiftLeft",1);
+            assert(doc.getElementById("destination").textContent===(!target?"No target · Openly":mode==="nearby"||shift?"Openly":target),"Hybrid target/Shift/Openly preview differs from a signal");
+            assert(doc.querySelectorAll(".signal-flow").length===1&&doc.querySelectorAll(".signal-flow .flow-mark").length===2&&doc.querySelector(".signal-flow").parentElement===region(0,"nearby"),"Hybrid changed or interrupted the existing two-band bulb-only signal flow");
+            assert(replies.length===0,"Hybrid preview dispatched a choice");
+            click(region(0,mode));
+            assert(replies.length===1&&replies.pop()===`${token}|0|${slot.intent}|${mode}`&&!visible(),"Hybrid did not emit exactly one existing intent reply");
+        }
+        for (const [i,badEntry] of [
+            ["Signal","greet","intent",{hybrid:false}], ["Signal","greet","intent",{hybrid:1}],
+            ["Action","WaitHere","action",{hybrid:true}], ["Key","64","hotkey",{hybrid:true}],
+            ["Back","","back",{hybrid:true}]
+        ].entries()) {
+            const token=`hybrid-invalid-${i}`, data=payload([]); data.slots[0]=badEntry;
+            begin(token,data); view.psWheelArm(token);
+            assert(!visible()&&replies.length===1&&replies.pop()===`${token}|-1|rejected|cancel`,"Malformed hybrid badge metadata did not fail closed");
+        }
         arm("shift-preview", [{label:"Gesture",intent:"greet"},{label:"Action",action:{name:"WaitHere"}},{label:"Menu",submenu:"social"}]);
         doc.getElementById("center").focus(); region(0).focus();
         assert(region(0).classList.contains("hot") && !region(0,"nearby").classList.contains("hot") && doc.getElementById("destination").textContent === "Lydia", "Gesture starts in the wrong preview state");
@@ -1430,9 +1462,10 @@ frame.addEventListener("load", async () => {
         report.textContent = "PASS: 12-slot choices; straight shared gesture-core/bulb chord with strict side routing, unified selection and dispatch; hotkey cap/pie with unified selection and dispatch; 30-unit selected bands; submenu/back-only knots and utility arcs; muted navigation labels and theme-specific fills; SIGNAL/ACTION/KEY badges; upright broadcast icons centered in their half-disc bulbs; null slots and no-target actions share the pointed disabled outline; vignettes, Shift preview, palettes, configured-key cancellation, lifecycle and idle rAF. Browser-only, not Ultralight/native/game proof.";
         report.textContent += " Hotkeys: no target required, F6 hub and KEY badge, Up/Down stays on one slice, either hit region dispatches the typed hotkey, malformed/conflicting payloads fail closed. Utility arcs remain slice-owned, clipped and noninteractive at radii 560/610; hub motion, boundary routing, reduced-motion/0ms behavior and open-key help remain covered.";
         report.textContent += " Flow: geometry-scaled signal/trail/padding; lit non-bulb chevrons use additive warm-white #fff6e0 at peak 0.35 (clamped-addition normal fallback); bulb ripples stay at 0.12 (warm yellow when lit, exact mint when uncoloured, slot-derived lower hue/lightness lift when coloured); HOLD/power-fade profile, exclusions, one shared rAF, 2400ms travel and reduced-motion/0ms behavior. Colours: strict extras, all six kinds/three themes, both idle parts, standard selected fills/bands/caps, lit label/badge colours, disabled actions, malformed extras and reuse cleanup.";
-        report.textContent += " Radial labels and badges: all 12 readable angles, wrapped line order, viewport and slice containment, chord/artwork clearance, and shared lift checked across all five shipped wheels.";
+        report.textContent += " Radial labels and badges: all 12 readable angles, wrapped line order, viewport and slice containment, chord/artwork clearance, and shared lift checked across all four shipped wheels.";
         report.textContent += " Quadrants: two transformed 45°-from-vertical diameters, visible white at 90% opacity, behind all slots/hub, pointer-transparent at slice/hub/exposed probes, fixed across all shipped wheels, themes and slice lifts.";
         report.textContent += " Shift hub Back: existing typed Back replies across shipped submenus/custom indices; held-before-arm modifiers, dual-Shift release, click/Enter/Space, no-Back Cancel, keyboard cancellation and lifecycle resets.";
+        report.textContent += " Hybrids: Follow/Wait/Dismiss retain unchanged blue signal cores, Openly bulbs and flow; sole SIGNAL · ACTION marker passes all-angle badge/chord checks, stays enabled without a target and preserves one intent reply for target/tip/Shift.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

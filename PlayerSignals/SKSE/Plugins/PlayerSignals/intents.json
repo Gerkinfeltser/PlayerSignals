@@ -59,12 +59,20 @@
     "follow_me": {
       "narration": "gestures for others to follow them",
       "notification": "asks others to follow",
-      "targetedNotification": "asks {target} to follow"
+      "targetedNotification": "asks {target} to follow",
+      "complianceNarration": "{target} complies and falls in behind {player}"
     },
     "wait_here": {
       "narration": "gestures for others to wait here",
       "notification": "asks others to wait",
-      "targetedNotification": "asks {target} to wait"
+      "targetedNotification": "asks {target} to wait",
+      "complianceNarration": "{target} complies and stays put"
+    },
+    "dismiss": {
+      "narration": "waves others off, releasing them from following",
+      "notification": "dismisses others",
+      "targetedNotification": "dismisses {target}",
+      "complianceNarration": "{target} complies and stops following {player}"
     },
     "quiet": {
       "narration": "gestures for quiet",

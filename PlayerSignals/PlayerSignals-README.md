@@ -1,8 +1,8 @@
 # PlayerSignals: a little less talking, a little more nodding
 
-Want to agree, say thanks, or give someone a puzzled look without typing a sentence? PlayerSignals gives you a small communication wheel with 23 shipped gesture defaults, all reachable from the shipped wheels; the JSON catalog can add more intents. SkyrimNet receives an authored direct narration describing what your character means.
+Want to agree, say thanks, or give someone a puzzled look without typing a sentence? PlayerSignals gives you a small communication wheel with 24 shipped intent defaults; the JSON catalog can add more intents. SkyrimNet receives authored direct narration describing what your character means.
 
-Gesture entries submit narration and show a local receipt only when SkyrimNet's API accepts it. Group feedback omits a recipient; targeted feedback names the NPC captured before the wheel opened. Gestures do not visibly animate your character or force NPC compliance. Target-NPC action entries instead request a registered SkyrimNet action on that NPC, without guaranteeing completion.
+Most signals are requests, not forced compliance. Two shipped hybrid signals—Follow me and Wait here—also request a target-NPC action. On eligible targeted selections, the action runs first; if SkyrimNet's `ExecuteAction` returns `0`, one direct narration includes a compliance sentence. This API acceptance does not prove an in-game effect or NPC response.
 
 ## Test release status
 
@@ -62,9 +62,9 @@ If no NPC was captured, the Magelight hub shows **No target · Openly** and gest
 
 With no captured NPC, selecting either part of a gesture lights both the core and its bright white Openly bulb without Shift. With a captured NPC, core selection leaves the bulb unlit unless Shift is held; selecting the bulb still shows Openly.
 
-Action entries require a captured NPC; without one they are disabled before selection. Actions do not have an Openly destination, and Shift does not convert them to group mode. The existing submission-time validity checks are unchanged.
+Action-only entries require a captured NPC and have no Openly destination; without a target they are disabled before selection, and Shift does not convert them to group mode. Hybrid signal+action entries are different: they stay selectable without a target because they still work as ordinary signals. In Magelight hybrids keep the signal's exact pie-and-bulb shape and flow; the only visual change is badge text `SIGNAL · ACTION` instead of `SIGNAL`. There is no extra cue or flow. With a valid captured target and no Shift, the controller applies registration and built-in eligibility checks, runs the action once, then sends exactly one `DirectNarration`. Only an `ExecuteAction` result of `0` adds the `complianceNarration` sentence. If the action is refused or fails, narration is exactly the ordinary targeted signal, with no compliance sentence and no extra notification. For hybrids in Openly mode (no target or either Shift held), the action is skipped and only the group signal is narrated. The local player-named receipt remains governed by `DirectNarration` returning `0`; failures, stale targets/sessions and cancellation do not create a second narration or notification.
 
-Group narration explicitly says the gesture is addressed to everyone nearby. Nearby witnesses may join, but no one is guaranteed to speak or comply. The group wording does not force every nearby NPC to reply.
+The shipped hybrid signals are Main slot 8 **Wait here** (`WaitHere`) and Main slot 10 **Follow me** (`AccompanyTarget`). The catalog also includes `dismiss` and its compliance phrase, but Dismiss is unplaced and has no action attached in the shipped layout; the owner checklist below covers it only for a custom hybrid placement. Extras has one action-only entry, Stop following (`StopAccompanying`), at slot 3.
 
 ### A note about Recent Events
 
@@ -81,11 +81,10 @@ The entries below use UIExtensions' navigation markers. Magelight shows the same
 
 | Wheel | Entries |
 |---|---|
-| Main | 0 Yes, 1 No, 2 Thank you, 3 Greet, 4 Social >, 5 Signals >, 6 Attitude >, 7 Debug >, 8 Wait here, 9 Farewell, 10 Follow me, 11 Come here |
-| Attitude | 2 Understood, 3 Challenge, 4 Unsure, 5 Let me think, 8 Not understood, 9 Surrender, 10 Back < |
-| Social | 0 Offer, 2 Well done, 6 Request, 8 Comfort, 9 Sorry, 10 Back < |
-| Signals | 4 Watch out, 7 Calm down, 9 Quiet, 10 Back <, 11 Give space |
-| Debug | 0 SN Dashboard (raw key 64), 1 IE Dashboard (raw key 11), 2 Journal (key 36, J), 5 Follow / resume (`AccompanyTarget`), 6 Wait here (`WaitHere`), 7 Stop following (`StopAccompanying`), 10 Back < |
+| Main | 0 Greet, 1 Thank you, 2 Sorry, 3 No, 4 Social >, 5 Attitude >, 6 Farewell, 7 Extras >, 8 Wait here, 9 Yes, 10 Follow me, 11 Come here |
+| Attitude | 0 Challenge, 2 Quiet, 3 Not understood, 4 Unsure, 6 Surrender, 8 Let me think, 9 Understood, 10 Back < |
+| Social | 0 Offer, 2 Comfort, 3 Watch out, 4 Calm down, 6 Request, 8 Well done, 9 Give space, 10 Back < |
+| Extras | 0 SN Dashboard (raw key 64), 1 Journal (key 36, J), 3 Stop following (`StopAccompanying`), 10 Back < |
 
 Positions are zero-based and unlisted positions are null.
 
@@ -97,7 +96,7 @@ A few distinctions are worth keeping:
 - **Comfort** offers reassurance; **Well done** congratulates.
 - **Offer** and **Request** suggest giving or asking for something. They don't move items or name a particular object.
 
-Quiet and the other gestures are requests, not remote controls for NPCs. **Follow me** and **Wait here** are gestures too: the NPC may react, but nothing forces them to follow or wait. The **Debug** submenu holds demo slots: the SkyrimNet and IntelEngine dashboard raw keys (these need `PlayerSignals.dll`; the IntelEngine one does nothing without IntelEngine) and three registered SkyrimNet actions that act on the captured NPC (Follow / resume, Wait here, Stop following).
+Quiet and the other gestures are requests, not remote controls for NPCs. Follow me and Wait here are the shipped hybrids: they narrate as signals in every mode, and request the corresponding action only for an eligible captured target without Shift. Compliance wording is included only after action API success. `dismiss` is available in the catalog but unplaced; adding it to a custom hybrid slot requires its matching action and compliance phrase. The Extras submenu has one action-only slot, Stop following.
 
 ## Make the wheel your own
 
@@ -126,20 +125,17 @@ A hotkey slot normally presses its DirectX scan code after the wheel has fully c
 
 For keyboard hotkeys, optional `"raw": true` sends a Windows scan-code key press for mods that poll Windows key state. It is allowed only for hotkeys with scan codes 1–255; `raw: false` is allowed and leaves ordinary hotkey behavior unchanged. Raw presses are sent only after an accepted wheel choice closes and only while Skyrim is the foreground process. If focus has moved elsewhere, dispatch fails closed; there is no `HoldKey` fallback. A raw layout with a missing DLL gets one warning per load at maintenance; a missing or incompatible DLL also fails raw selection closed with a notification and sends nothing. The badge remains **KEY**. Raw slots require `PlayerSignals.dll` and Address Library for SKSE Plugins (the VR Address Library for Skyrim VR), but these dependencies are needed only when a layout has a `raw: true` slot. Layouts without raw slots continue to use normal Skyrim input; mods polling Windows key state directly do not receive those ordinary injected keys.
 
-Add either example to a wheel position. The authored `raw` flag is flat beside `hotkey`; the page payload carries it in its fourth extras object as `{ "raw": true }`, combined with an optional color as `{ "color": "#aabbcc", "raw": true }`. `raw: false` is omitted from page extras.
+Add the example to a wheel position. The authored `raw` flag is flat beside `hotkey`; the page payload carries it in its fourth extras object as `{ "raw": true }`, combined with an optional color as `{ "color": "#aabbcc", "raw": true }`. `raw: false` is omitted from page extras.
 
 ```json
-[
-  { "label": "SN Dashboard", "hotkey": 64, "raw": true, "delayMs": 0 },
-  { "label": "IE Dashboard", "hotkey": 11, "raw": true, "delayMs": 0 }
-]
+{ "label": "SN Dashboard", "hotkey": 64, "raw": true, "delayMs": 0 }
 ```
 
-The owner verified the two dashboards in the spike, not this production DLL:
+The owner verified the dashboard raw-key example in the spike, not this production DLL:
 
 | Skyrim runtime | Current evidence |
 |---|---|
-| AE 1.6.1170 | Dashboards owner-verified in the spike; this production DLL still needs in-game testing. |
+| AE 1.6.1170 | Dashboard owner-verified in the spike; this production DLL still needs in-game testing. |
 | AE 1.7.104 | Production in-game testing still required. |
 | SE 1.5.97 | Build-only support; in-game untested. |
 | VR | Build-only support; in-game untested. |
@@ -198,7 +194,7 @@ This displays **Return** in Magelight and **Return <** in UIExtensions. Back ret
 
 **Leave the navigation arrows out of your JSON labels.** Lua adds them for UIExtensions; Magelight strips exactly one generated terminal ` >` from submenu entries and ` <` from Back entries. Authored text and other entry kinds are unchanged. The shipped root has no Close entry; custom layouts may still put Close anywhere, without the special darker Submenu/Back idle fill. A `null` entry disables that position without shifting the later entries. Inline glyphs can be typed directly into labels.
 
-Each wheel supports **1–12 positions**. Magelight uses 12 slices of 30°; UIExtensions supports at most 8 positions and fails closed above that limit. Each non-null entry needs a label plus one primary kind: `intent`, `action`, `submenu`, or `control`. An action may additionally carry the paired `event` and catalog `intent` fields described below. Don't link submenus into a loop. Reusing the same supported intent in more than one slot is fine.
+Each wheel supports **1–12 positions**. Magelight uses 12 slices of 30°; UIExtensions supports at most 8 positions and fails closed above that limit. Each non-null entry needs a label plus one primary kind: `intent`, `action`, `submenu`, `control`, or `hotkey`. An intent slot may additionally carry an `action` object to form a hybrid; it cannot also carry `event`. An action slot may carry paired `event` and `intent` fields for legacy action context; that remains a pure action, not a hybrid. Don't link submenus into a loop. Reusing the same supported intent in more than one slot is fine.
 
 ### Target-NPC actions (experimental; runtime-unverified)
 
@@ -215,11 +211,11 @@ Configure an action directly in `layout.json`; it is not a narration ID in `inte
 
 This example uses a built-in action on the shipped main wheel. For another registered action, its name and argument fields must match that registering mod's contract; PlayerSignals does not invent argument defaults. Nested argument values, booleans, Unicode and number tokens are preserved.
 
-PlayerSignals checks registration and the captured target. It also checks SkyrimNet's own eligibility functions for `AccompanyTarget`, `StopAccompanying` and `WaitHere`. **Other registered actions run without an eligibility check, and PlayerSignals does not enforce action cooldowns.** Direct execution can therefore differ from ordinary AI-selected behavior. Configure only actions whose effects and prerequisites you understand.
+PlayerSignals checks registration and SkyrimNet's own eligibility functions for `AccompanyTarget`, `StopAccompanying` and `WaitHere`. **Other registered actions run without an eligibility check, and PlayerSignals does not enforce action cooldowns.** Direct execution can therefore differ from ordinary AI-selected behavior. Configure only actions whose effects and prerequisites you understand.
 
-Accepted action failures show one local notification and one `[PlayerSignals]` trace naming the action and reason. A successful API request is not proof that the NPC completed the action. Navigation, cancellation and stale sessions remain silent. PlayerSignals does not call direct narration for action entries.
+Accepted action-only failures show one local notification and one `[PlayerSignals]` trace naming the action and reason. A successful API request is not proof that the NPC completed the action. Hybrid dispatch is distinct and follows the signal semantics above. Navigation, cancellation and stale sessions remain silent.
 
-Optionally, record context after the action API returns success by adding **both** an `event` mode and an existing catalog `intent`:
+Legacy action/event/intent example:
 
 ```json
 {
@@ -230,7 +226,7 @@ Optionally, record context after the action API returns success by adding **both
 }
 ```
 
-Modes are `persistent`, `shortLived` or `both`. The intent's narration phrase supplies the text, rendered with your character as actor and the captured NPC addressed; choose or author a phrase that actually matches the interaction. A short-lived event stores that exact phrase as both its description and its data, not action/FormID JSON, so SkyrimNet's no-schema formatter can display the phrase. It lasts 60 seconds and repeat use of the same action on the same NPC replaces the previous event. Persistent events remain in SkyrimNet's history. No pair means no event; failed action requests register none. Event-registration failure is reported without retrying the action. Events do not use direct narration, but short-lived events can be observed by matching SkyrimNet triggers; this is not a guarantee of passive processing. A registered action may already record its own context.
+This is a legacy pure action slot, not a hybrid: its intent supplies event context only after action API success and it does not send direct narration. Modes are `persistent`, `shortLived` or `both`. A short-lived event stores the intent phrase as its description and data; it lasts 60 seconds and repeat use of the same action on the same NPC replaces the previous event. Persistent events remain in SkyrimNet's history. No pair means no event; failed action requests register none. Event-registration failure is reported without retrying the action. Events do not use direct narration and do not guarantee passive processing. A registered action may already record its own context. Never add `event` to an intent+action hybrid.
 
 Historical offline verification counts and results are not current evidence for this 12-slice change. Do not treat browser checks, build results or prior test counts as proof of in-game Magelight, action acceptance, SkyrimNet delivery or NPC effects.
 
@@ -288,12 +284,12 @@ Use these exact IDs in your entries:
 
 | Group | IDs |
 |---|---|
-| Main gestures | `confirm`, `deny`, `greet`, `farewell`, `thanks`, `come_here`, `follow_me`, `wait_here` |
-| Social | `sorry`, `congratulate`, `offer`, `ask`, `comfort` |
-| Signals | `quiet`, `warn`, `calm_down`, `give_space` |
-| Attitude | `unsure`, `think`, `understood`, `not_understood`, `challenge`, `yield` |
+| Main | `confirm`, `deny`, `greet`, `sorry`, `farewell`, `thanks`, `come_here`, `follow_me`, `wait_here` |
+| Social | `congratulate`, `offer`, `ask`, `comfort`, `warn`, `calm_down`, `give_space` |
+| Attitude | `quiet`, `unsure`, `think`, `understood`, `not_understood`, `challenge`, `yield` |
+| Unplaced | `dismiss` |
 
-These 30 IDs are shipped catalog defaults. The shipped wheels reach 28 of them; `follow_me` and `wait_here` remain valid for custom layouts but are not placed, because the main wheel covers following and waiting with actions. The JSON registry is dynamic, so you can add a valid new ID in `intents.json` and reference it in `layout.json`.
+These 24 IDs are shipped catalog defaults; the four shipped wheels reference 23, leaving `dismiss` unplaced. `follow_me` and `wait_here` are shipped hybrid signals with target-only actions; `dismiss` retains a compliance template but has no attached action until you place it in a custom layout. The JSON registry is dynamic, so you can add a valid new ID in `intents.json` and reference it in `layout.json`.
 `calm_down` uses narration `slowly lowers both open hands, palms down, asking for calm`, notification `gestures for calm`, and targeted notification `gestures to {target} for calm`.
 
 ### Change phrases or add an intent
@@ -304,9 +300,19 @@ Edit the intent catalog here:
 SKSE/Plugins/PlayerSignals/intents.json
 ```
 
-The file is plain JSON with root `schemaVersion: 1` and an `intents` object. Each lowercase ID maps to exactly three required, nonempty strings: `narration`, `notification`, and `targetedNotification`. All three phrase values omit your character's name and final period. `targetedNotification` contains exactly one literal `{target}` marker; neither of the other fields may contain it. Comments and trailing commas are invalid.
+The file is plain JSON with root `schemaVersion: 1` and an `intents` object. Each ID maps to exactly three required, nonempty strings: `narration`, `notification`, and `targetedNotification`. An optional fourth string, `complianceNarration`, is required if the ID appears on a hybrid slot with an action. All phrases omit your character's name and final period. `targetedNotification` contains exactly one literal `{target}` marker; neither of the other required fields may contain it.
 
-The validator rejects any field ending in a period, even when only trailing ASCII whitespace follows; it also rejects `{target}` outside `targetedNotification`. Malformed phrase templates fail closed rather than passing a literal marker through or adding doubled punctuation.
+`complianceNarration` has no terminal period (including before trailing whitespace), contains one or more exact `{target}` markers and optional exact `{player}` markers. Unknown, malformed, nested, or unbalanced brace markers are rejected. Templates substitute once from the original phrase so names containing braces remain literal. Comments and trailing commas are invalid.
+
+### In-game hybrid dispatch checklist (owner)
+
+Check the two shipped hybrid actions, **Follow me** (`AccompanyTarget`) and **Wait here** (`WaitHere`). Test **Dismiss** (`StopAccompanying`) only after adding it as a hybrid in a custom layout; it is not placed in the shipped layout:
+
+- [ ] Eligible captured target, no Shift: action runs once before exactly one targeted `DirectNarration`; compliance sentence appears only when `ExecuteAction` returns `0`.
+- [ ] Refused/ineligible target and action failure: one ordinary targeted signal narration; no compliance sentence and no extra notification. Confirm the local receipt still follows only the `DirectNarration` return-`0` rule.
+- [ ] Openly with no target and with either Shift held: no action; one group signal narration only.
+- [ ] Invalid captured target without Shift (dead, disabled, unloaded): fail closed; no redirection/action/narration. Also check stale session and cancellation remain silent. Shift may intentionally override to Openly.
+- [ ] No path produces more than one action or one narration per selection. API return `0` is not proof of runtime effect or NPC compliance.
 
 This is a **complete one-entry catalog** that works only with a layout that references `greet` and no other IDs. It is not a partial replacement for the shipped catalog: if the layout still uses other IDs, keep those records in the file when editing it.
 
@@ -352,8 +358,8 @@ There is no MCM hotkey setting. Avoid Tab and either Shift key; they already ser
 
 - To rename, reorder, move, hide, or place an entry in a submenu, edit `layout.json`. The visible `label` does not change the narration; the `intent` ID chooses the catalog record. Use `null` to disable a slot without shifting later entries.
 - To change what a gesture means or what its notification says, edit its record in `intents.json`.
-- To add a new gesture, add a new lowercase intent ID with all three phrase fields—`narration`, `notification`, and `targetedNotification`—then add a layout slot with a `label` and that same `intent` ID. Merge these into your existing files; do not discard unrelated entries.
-- Keep your character's name and final period out of the three phrase values. Only `targetedNotification` contains the literal `{target}`, exactly once.
+- To add a new gesture, add a lowercase intent ID with all three required phrase fields—`narration`, `notification`, and `targetedNotification`—then add a layout slot with a `label` and that same `intent` ID. If the intent/action hybrid is requested, also add `action` to the intent slot and `complianceNarration` to its catalog record; do not add `event`. Merge into your existing files; do not discard unrelated entries.
+- Keep your character's name and final period out of the required phrases. Only `targetedNotification` contains exactly one literal `{target}`. `complianceNarration` (when used) also omits the final period and must contain one or more `{target}` markers; `{player}` is optional.
 
 Back up both files, save valid JSON without comments or trailing commas, then **load a save**. No recompilation is needed. See [Change phrases or add an intent](#change-phrases-or-add-an-intent) for an example.
 

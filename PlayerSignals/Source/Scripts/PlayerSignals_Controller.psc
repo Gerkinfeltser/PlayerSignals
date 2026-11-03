@@ -335,7 +335,7 @@ Bool Function ValidateNative(Int config)
     If JMap.valueType(config, "notifications") != 5 || JMap.valueType(config, "narrations") != 5
         Return False
     EndIf
-    If JMap.valueType(config, "targetNotificationPrefixes") != 5 || JMap.valueType(config, "targetNotificationSuffixes") != 5
+    If JMap.valueType(config, "targetNotificationPrefixes") != 5 || JMap.valueType(config, "targetNotificationSuffixes") != 5 || JMap.valueType(config, "complianceNarrations") != 5
         Return False
     EndIf
     If JMap.valueType(config, "hasRawSlots") != 2
@@ -350,10 +350,8 @@ Bool Function ValidateNative(Int config)
     Int narrations = JMap.getObj(config, "narrations")
     Int targetPrefixes = JMap.getObj(config, "targetNotificationPrefixes")
     Int targetSuffixes = JMap.getObj(config, "targetNotificationSuffixes")
-    If !JValue.isMap(notifications) || !JValue.isMap(narrations)
-        Return False
-    EndIf
-    If !JValue.isMap(targetPrefixes) || !JValue.isMap(targetSuffixes)
+    Int complianceNarrations = JMap.getObj(config, "complianceNarrations")
+    If !JValue.isMap(notifications) || !JValue.isMap(narrations) || !JValue.isMap(targetPrefixes) || !JValue.isMap(targetSuffixes) || !JValue.isMap(complianceNarrations)
         Return False
     EndIf
     Int inputConfig = JMap.getObj(config, "input")
@@ -419,7 +417,7 @@ Bool Function ValidateNative(Int config)
                         foundRaw = True
                     EndIf
                 ElseIf entryKind == "intent"
-                    If JMap.valueType(entry, "intent") != 6
+                    If JMap.valueType(entry, "intent") != 6 || JMap.hasKey(entry, "event")
                         Return False
                     EndIf
                 ElseIf entryKind == "submenu"
@@ -446,6 +444,11 @@ Bool Function ValidateNative(Int config)
                     EndIf
                     If JMap.valueType(targetPrefixes, intent) != 6 || JMap.valueType(targetSuffixes, intent) != 6
                         Return False
+                    EndIf
+                    If entryKind == "intent" && (JMap.hasKey(entry, "actionName") || JMap.hasKey(entry, "argsJson"))
+                        If JMap.valueType(entry, "actionName") != 6 || JMap.getStr(entry, "actionName") == "" || JMap.valueType(entry, "argsJson") != 6 || JMap.getStr(entry, "argsJson") == "" || JMap.valueType(complianceNarrations, intent) != 6 || JMap.getStr(complianceNarrations, intent) == "" || JMap.hasKey(entry, "event")
+                            Return False
+                        EndIf
                     EndIf
                 EndIf
             EndIf
@@ -516,6 +519,8 @@ Event OnKeyDown(Int keyCode)
     String argsJson = ""
     String eventMode = ""
     String eventIntent = ""
+    String complianceTemplate = ""
+    Bool hybrid = False
     Int hotkey = 0
     Int delayMs = 0
     Int holdMs = 0
@@ -536,6 +541,12 @@ Event OnKeyDown(Int keyCode)
                 feedbackPrefix = name + " " + JMap.getStr(JMap.getObj(session, "notifications"), pending)
             EndIf
             narration = name + " " + JMap.getStr(JMap.getObj(session, "narrations"), pending) + "."
+            If JMap.hasKey(selection, "actionName")
+                actionName = JMap.getStr(selection, "actionName")
+                argsJson = JMap.getStr(selection, "argsJson")
+                complianceTemplate = JMap.getStr(JMap.getObj(session, "complianceNarrations"), pending)
+                hybrid = True
+            EndIf
         ElseIf kind == "action"
             actionName = JMap.getStr(selection, "actionName")
             argsJson = JMap.getStr(selection, "argsJson")
@@ -558,7 +569,11 @@ Event OnKeyDown(Int keyCode)
         If kind == "action"
             DispatchAction(actionName, argsJson, eventMode, narration, player, recipient, token)
         ElseIf kind == "intent"
-            Submit(narration, feedbackPrefix, feedbackSuffix, player, recipient, targeted, token)
+            Bool complied = False
+            If hybrid && targeted
+                complied = DispatchAction(actionName, argsJson, "", "", player, recipient, token, True)
+            EndIf
+            Submit(narration, feedbackPrefix, feedbackSuffix, player, recipient, targeted, token, complianceTemplate, complied)
         EndIf
     EndIf
     If selection != 0
@@ -627,7 +642,7 @@ Function DispatchHotkey(Int code, Int delayMs, Int holdMs, Bool rawHotkey, Int t
     Debug.Trace("[PlayerSignals] Hotkey " + code + " dispatched.")
 EndFunction
 
-Function Submit(String narration, String feedbackPrefix, String feedbackSuffix, Actor player, Actor recipient, Bool targeted, Int token)
+Function Submit(String narration, String feedbackPrefix, String feedbackSuffix, Actor player, Actor recipient, Bool targeted, Int token, String complianceTemplate = "", Bool complied = False)
     Actor targetActor = None
     String failure = ""
     If targeted
@@ -636,6 +651,24 @@ Function Submit(String narration, String feedbackPrefix, String feedbackSuffix, 
             String recipientName = recipient.GetDisplayName()
             narration += " This gesture is addressed to " + recipientName + "."
             feedbackPrefix += recipientName
+            If complied
+                String playerName = player.GetDisplayName()
+                String expanded = ""
+                Int i = 0
+                While i < StringUtil.GetLength(complianceTemplate)
+                    If StringUtil.Substring(complianceTemplate, i, 8) == "{target}"
+                        expanded += recipientName
+                        i += 8
+                    ElseIf StringUtil.Substring(complianceTemplate, i, 8) == "{player}"
+                        expanded += playerName
+                        i += 8
+                    Else
+                        expanded += StringUtil.Substring(complianceTemplate, i, 1)
+                        i += 1
+                    EndIf
+                EndWhile
+                narration += " " + expanded + "."
+            EndIf
         EndIf
         ; Validate after resolving text: the display-name lookup may yield.
         If !recipient || recipient.IsDead() || recipient.IsDisabled() || !recipient.Is3DLoaded()
@@ -662,7 +695,7 @@ Function Submit(String narration, String feedbackPrefix, String feedbackSuffix, 
         Debug.Trace("[PlayerSignals] DirectNarration failed: " + result + "; no success notification.", 1)
     EndIf
 EndFunction
-Function DispatchAction(String actionName, String argsJson, String eventMode, String eventText, Actor player, Actor recipient, Int token)
+Bool Function DispatchAction(String actionName, String argsJson, String eventMode, String eventText, Actor player, Actor recipient, Int token, Bool silent = False)
     String failure = ""
     If !recipient
         failure = "no captured NPC"
@@ -670,12 +703,12 @@ Function DispatchAction(String actionName, String argsJson, String eventMode, St
         failure = "captured NPC is no longer available"
     EndIf
     If token != _generation || !_ready
-        Return
+        Return False
     EndIf
     If failure == ""
         Bool registered = SkyrimNetApi.IsActionRegistered(actionName)
         If token != _generation || !_ready
-            Return
+            Return False
         EndIf
         If !registered
             failure = "action is not registered"
@@ -684,7 +717,7 @@ Function DispatchAction(String actionName, String argsJson, String eventMode, St
     If failure == "" && actionName == "AccompanyTarget"
         Bool eligibleStart = SkyrimNetInternal.StartFollow_IsEligible(recipient, "{}", argsJson)
         If token != _generation || !_ready
-            Return
+            Return False
         EndIf
         If !eligibleStart
             failure = "captured NPC is not eligible"
@@ -692,7 +725,7 @@ Function DispatchAction(String actionName, String argsJson, String eventMode, St
     ElseIf failure == "" && actionName == "StopAccompanying"
         Bool eligibleStop = SkyrimNetInternal.StopFollow_IsEligible(recipient, "{}", argsJson)
         If token != _generation || !_ready
-            Return
+            Return False
         EndIf
         If !eligibleStop
             failure = "captured NPC is not eligible"
@@ -700,45 +733,49 @@ Function DispatchAction(String actionName, String argsJson, String eventMode, St
     ElseIf failure == "" && actionName == "WaitHere"
         Bool eligiblePause = SkyrimNetInternal.PauseFollow_IsEligible(recipient, "{}", argsJson)
         If token != _generation || !_ready
-            Return
+            Return False
         EndIf
         If !eligiblePause
             failure = "captured NPC is not eligible"
         EndIf
     EndIf
     If failure != ""
-        If token == _generation && _ready
+        If token == _generation && _ready && !silent
             Report("Action " + actionName + " not dispatched: " + failure + ".", token)
         EndIf
-        Return
+        Return False
     EndIf
     ; Revalidate immediately before the final generation guard and single API call.
     If !recipient || recipient.IsDead() || recipient.IsDisabled() || !recipient.Is3DLoaded()
         failure = "captured NPC is no longer available"
     EndIf
     If token != _generation || !_ready
-        Return
+        Return False
     EndIf
     If failure != ""
-        Report("Action " + actionName + " not dispatched: " + failure + ".", token)
-        Return
+        If !silent
+            Report("Action " + actionName + " not dispatched: " + failure + ".", token)
+        EndIf
+        Return False
     EndIf
     Int result = SkyrimNetApi.ExecuteAction(actionName, recipient, argsJson)
     If token != _generation || !_ready
-        Return
+        Return False
     EndIf
     If result != 0
-        Report("Action " + actionName + " request rejected (" + result + ").", token)
-        Return
+        If !silent
+            Report("Action " + actionName + " request rejected (" + result + ").", token)
+        EndIf
+        Return False
     EndIf
     If eventMode == ""
-        Return
+        Return True
     EndIf
     Bool eventFailed = False
     If eventMode == "persistent" || eventMode == "both"
         Int persistentResult = SkyrimNetApi.RegisterPersistentEvent(eventText, player, recipient)
         If token != _generation || !_ready
-            Return
+            Return False
         EndIf
         If persistentResult != 0
             eventFailed = True
@@ -747,12 +784,12 @@ Function DispatchAction(String actionName, String argsJson, String eventMode, St
     If eventMode == "shortLived" || eventMode == "both"
         Int targetFormID = recipient.GetFormID()
         If token != _generation || !_ready
-            Return
+            Return False
         EndIf
         String eventId = "playersignals_" + actionName + "_" + targetFormID
         Int shortResult = SkyrimNetApi.RegisterShortLivedEvent(eventId, "playersignals_action", eventText, eventText, 60000, player, recipient)
         If token != _generation || !_ready
-            Return
+            Return False
         EndIf
         If shortResult != 0
             eventFailed = True
@@ -761,6 +798,7 @@ Function DispatchAction(String actionName, String argsJson, String eventMode, St
     If eventFailed && token == _generation && _ready
         Report("Action " + actionName + " was dispatched, but its event was not recorded.", token)
     EndIf
+    Return token == _generation && _ready
 EndFunction
 
 Event OnKeyUp(Int keyCode, Float holdTime)
@@ -849,6 +887,10 @@ Int Function BrowseWheels(Int config, Int history, Int token, Actor player)
             JMap.setStr(selection, "kind", kind)
             If kind == "intent"
                 JMap.setStr(selection, "identity", JMap.getStr(choice, "intent"))
+                If JMap.hasKey(choice, "actionName")
+                    JMap.setStr(selection, "actionName", JMap.getStr(choice, "actionName"))
+                    JMap.setStr(selection, "argsJson", JMap.getStr(choice, "argsJson"))
+                EndIf
             ElseIf kind == "hotkey"
                 JMap.setInt(selection, "hotkey", JMap.getInt(choice, "hotkey"))
                 JMap.setInt(selection, "delayMs", JMap.getInt(choice, "delayMs"))

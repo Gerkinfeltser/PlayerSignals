@@ -40,7 +40,7 @@ Start the game and load a save, or begin a new game. PlayerSignals checks for Sk
 2. Press **Right Alt** to open the wheel. PlayerSignals captures the crosshair NPC before showing it.
 3. Choose a communication entry, such as **Yes** or **Greet**.
 
-If the captured NPC is still alive, enabled, and loaded when you choose, SkyrimNet receives a targeted narration with your character as the originator (`From`) and the captured NPC as the explicit target. The text describes your character making the gesture and addresses that NPC by name. Moving the crosshair while the wheel is open does not change the submitted target. SkyrimNet still chooses who responds; the captured NPC is not guaranteed to be the responder, and Recent Events may show the selected responder under `To`. Magelight's hub displays the captured NPC's display name, or **Target NPC** if that name is empty.
+If the captured NPC is still alive, enabled, and loaded when you choose, the text describes your character making the gesture and addresses that NPC by name. Moving the crosshair while the wheel is open does not change the submitted target. To make the NPC you aimed at the one chosen to answer, a targeted signal is sent as coming from that NPC, so SkyrimNet's event history may show it as from them, to you. Magelight's hub displays the captured NPC's display name, or **Target NPC** if that name is empty.
 
 You'll see a small notification with your character's name when SkyrimNet receives the narration. For **Greet**, group feedback looks like `Bill greets.`; targeting Ted looks like `Bill greets Ted.` The NPC may still choose not to answer.
 
@@ -76,11 +76,9 @@ The shipped hybrid signals are Main slot 8 **Wait here** (`WaitHere`) and Main s
 
 ### A note about Recent Events
 
-PlayerSignals now always supplies your character as the narration originator (**From**), including gestures addressed to a captured NPC. An NPC can still appear under **From** on their own dialogue reply; that is a separate event, not the NPC performing your gesture.
+For targeted gestures, SkyrimNet's history can show **From: the NPC, To: you**, even though the text describes your character acting. This workaround helps the NPC you aimed at answer instead of a bystander, but may make later recollections read oddly.
 
-The remaining limitation is **To**: SkyrimNet selects a responder and can put that NPC in the event's target field. A group gesture may therefore appear as Bill → Ted even though the narration explicitly addresses everyone nearby. If nobody is in earshot and no responder is selected, there may be no **To** value and no reply.
-
-Read the narration for the intended audience; it names your character and explicitly addresses the captured NPC or **everyone nearby**. The local notification also distinguishes targeted and group submissions. This version corrects the player-originator arguments, but it does not separate intended audience from selected responder inside SkyrimNet's event metadata.
+**Openly** is unchanged: the gesture comes from your character and addresses everyone nearby. SkyrimNet may show the NPC chosen to answer under **To**. Read the narration for who acted and who was addressed; a reply is never guaranteed.
 
 
 ## What's on the wheel?

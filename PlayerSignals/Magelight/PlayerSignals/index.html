@@ -78,6 +78,7 @@
     #destination { color: #f0ce89; font-size: .78em; }
     .hubHint { margin-top: 24px; font-size: 64px; color: #c5c1b5; }
     #help { position: relative; z-index: 1; margin: 12px auto 4px; max-width: 800px; font-size: 1.12em; line-height: 1.4; text-shadow: 0 1px 3px #000; }
+    #help > span:not([hidden]) { display: block; }
     #help > span > span { white-space: nowrap; }
     @media (max-height: 650px) { :root { font-size: 15px; } h1 { margin: 0; } #help { margin: 0; } }
 </style>
@@ -173,12 +174,16 @@
     const shiftKeys = new Set();
     let hubShiftHeld = false, padOpenly = false;
     function openlyHeld() { return padOpenly || hubShiftHeld || shiftKeys.size > 0; }
-    function inputHelp(pad) {
-        document.getElementById("keyboardHelp").hidden = pad;
-        document.getElementById("padHelp").hidden = !pad;
+    let keyboardSeen = false, padAvailable = false, stickAimed = false, stickReleaseTimer = 0;
+    function resetStick() {
+        clearTimeout(stickReleaseTimer); stickReleaseTimer = 0; stickAimed = false;
     }
-    for (const type of ["mousemove", "mousedown", "keydown"])
-        document.addEventListener(type, () => inputHelp(false));
+    function inputHelp() {
+        document.getElementById("keyboardHelp").hidden = !keyboardSeen && padAvailable;
+        document.getElementById("padHelp").hidden = !padAvailable;
+    }
+    for (const type of ["mousemove", "mousedown", "mouseup", "wheel", "keydown", "keyup"])
+        document.addEventListener(type, () => { keyboardSeen = true; inputHelp(); resetStick(); });
     // DirectInput DIK offsets -> standard physical KeyboardEvent.code values (not localized key text).
     // https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ee418641(v=vs.85)
     // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values
@@ -531,7 +536,7 @@
         if (focused < 0) { caption.textContent = label; fit(hub, 100); }
         updateHybridBadges();
     }
-    function showHub() { stopFlow(); focused = -1; clearHighlight(); liftTo(12); destination.textContent = targetName || "No target · Openly"; updateHubAction(); }
+    function showHub() { resetStick(); stopFlow(); focused = -1; clearHighlight(); liftTo(12); destination.textContent = targetName || "No target · Openly"; updateHubAction(); }
     cancel.addEventListener("focus", showHub);
     function available(index, mode) {
         const kind = entries[index]?.[2];
@@ -560,6 +565,7 @@
         fit(hub, 100);
     }
     function focusRegion(index, mode) {
+        resetStick();
         if (index < 0) return;
         mode = available(index, mode) ? mode : "target";
         const region = sectors[index][mode];
@@ -580,6 +586,7 @@
         if (!armed || finished || (index >= 0 && !available(index, mode))) return;
         if (index >= 0 && entries[index]?.[2] === "intent" && padOpenly) mode = "nearby";
         finished = true; armed = false;
+        resetStick();
         shiftKeys.clear(); hubShiftHeld = false; padOpenly = false;
         updateHubAction();
         surface.dataset.armed = "false"; stopFlow(); stopLift();
@@ -590,6 +597,7 @@
         window.psWheelChoice(choice);
     }
     function failClosed(token = "") {
+        resetStick();
         request = token; armed = false; finished = true; focused = -1; focusedMode = "target"; targetName = "";
         shiftKeys.clear(); hubShiftHeld = false; padOpenly = false;
         openKeyBrowserCode = ""; openPadControl = "";
@@ -768,6 +776,7 @@
         if (armed) { hubShiftHeld = shiftKeys.size > 0 || event.shiftKey; if (focused >= 0) highlight(focused, focusedMode); updateHubAction(); }
     });
     window.addEventListener("blur", () => {
+        resetStick();
         shiftKeys.clear(); hubShiftHeld = false; padOpenly = false;
         if (armed && focused >= 0) highlight(focused, focusedMode);
         else if (armed) liftTo(-1);
@@ -777,7 +786,8 @@
     const gamepad = window.magelight?.gamepad;
     if (gamepad) {
         const padState = state => {
-            inputHelp(state.device === "gamepad" || (state.connected && !state.active));
+            padAvailable = Boolean(state.connected); inputHelp();
+            if (!padAvailable) resetStick();
             if (!state.active && padOpenly) {
                 padOpenly = false;
                 if (armed && focused >= 0) highlight(focused, focusedMode);
@@ -789,10 +799,11 @@
         // Magelight 1.7.1's embedded bridge delivers vectors only in navigation style.
         // Handle raw controls here; no attachNavigation scope or synthesized arrow keys.
         gamepad.onAction(event => {
+            padAvailable = true; inputHelp();
             if (!armed) return false;
-            inputHelp(true);
             if (event.control === openPadControl && event.phase === "press") { choose(-1); return true; }
             if (event.phase === "cancel") {
+                resetStick();
                 padOpenly = false;
                 if (focused >= 0) highlight(focused, focusedMode);
                 updateHubAction();
@@ -807,9 +818,18 @@
                 return true;
             }
             if (event.control === "leftStick") {
-                if (event.phase === "change" && Math.hypot(event.x, event.y) > .35) {
-                    const index = (Math.round(Math.atan2(event.x, event.y) * 6 / Math.PI) + 12) % 12;
-                    if (available(index, "target")) focusRegion(index, "target");
+                if (event.phase === "change") {
+                    if (Math.hypot(event.x, event.y) > .35) {
+                        resetStick();
+                        const index = (Math.round(Math.atan2(event.x, event.y) * 6 / Math.PI) + 12) % 12;
+                        if (available(index, "target")) { focusRegion(index, "target"); stickAimed = true; }
+                    } else if (stickAimed && !stickReleaseTimer) {
+                        // Allow a fast A press during spring-back; neutral repeats never extend grace.
+                        stickReleaseTimer = setTimeout(() => {
+                            resetStick();
+                            if (armed) { if (document.activeElement === cancel) showHub(); else cancel.focus(); }
+                        }, 100);
+                    }
                 }
                 return true;
             }

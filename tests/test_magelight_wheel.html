@@ -1655,21 +1655,23 @@ frame.addEventListener("load", async () => {
                 stick(i);
                 assert(doc.activeElement === region(i) && region(i).classList.contains("hot"), `Stick missed slot ${i} in ${theme}`);
                 assert(doc.getElementById("caption").textContent === "Pad " + i, "Stick bypassed shared hub focus");
-                pad("leftStick","change",0,0); pad("leftStick","change",.2,.2);
-                assert(doc.activeElement === region(i), "Deadzone lost stick focus");
+                pad("dpadRight"); pad("leftStick","change",0,0); pad("leftStick","change",0,0);
+                assert(doc.activeElement === region((i + 1) % 12), "Neutral stick vectors displaced D-pad focus");
+                pad("leftStick","change",Math.sin(i * Math.PI / 6),Math.cos(i * Math.PI / 6));
+                assert(doc.activeElement === region(i), "Stick re-deflection did not restore aimed slot");
             }
             const hybrid = doc.getElementById("slot-11"), badge = hybrid.querySelector(".actionLabel");
             pad("west");
             assert(badge.textContent === "SIGNAL" && hybrid.classList.contains("hybrid-openly") && hybrid.classList.contains("full") && doc.getElementById("destination").textContent === "Openly", "X failed hybrid badge/tint/preview");
-            assert(!doc.getElementById("padHelp").hidden && doc.getElementById("keyboardHelp").hidden, "Pad input did not show pad help");
+            assert(!doc.getElementById("padHelp").hidden && !doc.getElementById("keyboardHelp").hidden, "Pad action did not preserve independent keyboard help evidence");
             const padLines = [...doc.querySelectorAll("#padHelp > span")];
             assert(padLines.length === 2 && padLines[0].getBoundingClientRect().top < padLines[1].getBoundingClientRect().top, "Pad help is not two lines");
             key("Unidentified");
-            assert(doc.getElementById("padHelp").hidden, "Keyboard did not restore help");
+            assert(!doc.getElementById("padHelp").hidden && !doc.getElementById("keyboardHelp").hidden, "Keyboard evidence did not coexist with pad help");
             pad("west","release");
             assert(badge.textContent === "SIGNAL · ACTION" && !hybrid.classList.contains("hybrid-openly"), "X release failed to restore hybrid");
             doc.dispatchEvent(new view.MouseEvent("mousemove",{bubbles:true}));
-            assert(doc.getElementById("padHelp").hidden && !doc.getElementById("keyboardHelp").hidden, "Mouse did not restore help");
+            assert(!doc.getElementById("padHelp").hidden && !doc.getElementById("keyboardHelp").hidden, "Mouse evidence did not coexist with connected-pad help");
             pad("dpadRight");
             assert(doc.activeElement === region(0), "D-pad next failed");
             pad("dpadLeft");
@@ -1695,6 +1697,89 @@ frame.addEventListener("load", async () => {
             assert(!doc.getElementById("slot-0").classList.contains("hybrid-openly"), "Disarm leaked X");
             key("Escape"); replies.pop();
         }
+        arm("pad-neutral-grace",padSlots);
+        stick(4);
+        pad("leftStick","change",0,0);
+        assert(doc.activeElement === region(4) && region(4).classList.contains("hot") && doc.getElementById("caption").textContent === "Pad 4", "Neutral grace cleared the immediate stick selection");
+        await new Promise(resolve=>setTimeout(resolve,60));
+        pad("leftStick","change",0,0);
+        await new Promise(resolve=>setTimeout(resolve,60));
+        assert(doc.activeElement === doc.getElementById("center") && !doc.querySelector(".region.hot") && doc.getElementById("caption").textContent === "Cancel" && doc.getElementById("destination").textContent === "Lydia" && doc.getElementById("slot-4").querySelector(".actionLabel").textContent === "SIGNAL · ACTION", "Repeated neutral vectors extended grace or bypassed shared hub UI");
+        assert(!replies.length, "Neutral-grace expiry unexpectedly dispatched a choice");
+        pad("south","press",0,0,"accept");
+        assert(replies.pop() === "pad-neutral-grace|-1||cancel", "A at the released hub did not cancel");
+        arm("pad-neutral-accept",padSlots);
+        stick(4); pad("leftStick","change",0,0); pad("south","press",0,0,"accept");
+        assert(replies.pop() === "pad-neutral-accept|4|greet|target", "A did not accept the retained selection during neutral grace");
+        arm("pad-neutral-back",[{label:"Back",control:"back"}]);
+        stick(0); pad("leftStick","change",0,0);
+        await new Promise(resolve=>setTimeout(resolve,120));
+        pad("west");
+        assert(doc.activeElement === doc.getElementById("center") && doc.getElementById("center").getAttribute("aria-label") === "Back", "X failed to show released hub Back");
+        pad("south","press",0,0,"accept");
+        assert(replies.pop() === "pad-neutral-back|0||navigate", "X plus A did not navigate Back during neutral grace");
+        arm("pad-neutral-redeflect",padSlots);
+        stick(4); pad("leftStick","change",0,0);
+        await new Promise(resolve=>setTimeout(resolve,60));
+        stick(7);
+        await new Promise(resolve=>setTimeout(resolve,60));
+        assert(doc.activeElement === region(7) && region(7).classList.contains("hot"), "Re-deflection did not cancel the pending neutral expiry");
+        key("Escape"); replies.pop();
+        arm("pad-neutral-disarm",padSlots);
+        stick(4); pad("leftStick","change",0,0); view.hostMode("0");
+        arm("pad-neutral-rearm",padSlots);
+        stick(2);
+        await new Promise(resolve=>setTimeout(resolve,120));
+        assert(visible() && doc.activeElement === region(2) && region(2).classList.contains("hot"), "Disarm/rearm allowed a stale neutral timer to act on the new wheel");
+        stick(4); pad("leftStick","change",0,0); pad("dpadRight");
+        pad("leftStick","change",0,0);
+        await new Promise(resolve=>setTimeout(resolve,120));
+        assert(doc.activeElement === region(5) && region(5).classList.contains("hot"), "D-pad focus was stolen by pending release grace or neutral stick input");
+        key("Escape"); replies.pop();
+
+        const fresh = document.createElement("iframe");
+        fresh.width = "960"; fresh.height = "1000"; fresh.style.cssText = "position:absolute;left:-1200px;top:0";
+        const freshReady = new Promise(resolve=>fresh.addEventListener("load",resolve,{once:true}));
+        const freshMarkup = await (await fetch("../PlayerSignals/Magelight/PlayerSignals/index.html")).text();
+        fresh.srcdoc = freshMarkup.replace(/<html[^>]*>/i, tag => tag + "<script>" + doc.scripts[0].textContent + "<\/script>");
+        document.body.append(fresh);
+        await freshReady;
+        const freshDoc=fresh.contentDocument, freshView=fresh.contentWindow, freshPadHelp=freshDoc.getElementById("padHelp"), freshKeyboardHelp=freshDoc.getElementById("keyboardHelp");
+        const freshArm=token=>{freshView.psWheelBegin(token+"|"+JSON.stringify(payload(padSlots)));freshView.psWheelArm(token);};
+        const helpState=()=>({pad:!freshPadHelp.hidden,keyboard:!freshKeyboardHelp.hidden});
+        freshArm("help-neither");
+        assert(JSON.stringify(helpState())===JSON.stringify({pad:false,keyboard:true}), "Fresh page without input did not show keyboard fallback");
+        freshView.qaPadState({connected:true,active:false,device:"gamepad"});
+        assert(JSON.stringify(helpState())===JSON.stringify({pad:true,keyboard:false}), "Connected-pad-only fresh page did not show pad help");
+        freshView.qaPadState({connected:false,active:false,device:"keyboardMouse"});
+        assert(JSON.stringify(helpState())===JSON.stringify({pad:false,keyboard:true}), "Disconnect did not restore keyboard fallback");
+        freshView.hostMode("0");
+        freshView.qaPad({control:"north",phase:"press",x:0,y:0,action:"none",value:1});
+        assert(!freshPadHelp.hidden, "Pad action while unarmed did not show pad help");
+        freshArm("help-after-action");
+        freshDoc.dispatchEvent(new freshView.KeyboardEvent("keydown",{key:"Unidentified",bubbles:true}));
+        assert(JSON.stringify(helpState())===JSON.stringify({pad:true,keyboard:true}), "Keyboard evidence did not coexist with pad-action help");
+        freshView.qaPadState({connected:false,active:false,device:"keyboardMouse"});
+        assert(JSON.stringify(helpState())===JSON.stringify({pad:false,keyboard:true}), "Disconnect cleared persistent keyboard evidence");
+        freshView.hostMode("0"); freshView.psWheelBegin("help-reopen|"+JSON.stringify(payload(padSlots))); freshView.psWheelArm("help-reopen");
+        assert(JSON.stringify(helpState())===JSON.stringify({pad:false,keyboard:true}), "Keyboard evidence did not persist across wheel opens");
+        freshView.hostMode("0"); freshView.qaPadState({connected:true,active:false,device:"gamepad"});
+        freshView.psWheelBegin("help-both|"+JSON.stringify(payload(padSlots))); freshView.psWheelArm("help-both");
+        assert(JSON.stringify(helpState())===JSON.stringify({pad:true,keyboard:true}), "Both help blocks did not persist across wheel opens");
+        const helpFrameSize=[frame.width,frame.height];
+        frame.width=960; frame.height=1000;
+        arm("help-stacking",padSlots);
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        const padBox=doc.getElementById("padHelp").getBoundingClientRect(), keyboardBox=doc.getElementById("keyboardHelp").getBoundingClientRect();
+        const wheelBox=doc.getElementById("wheelSvg").getBoundingClientRect();
+        assert(Math.abs(wheelBox.width-700)<1 && !doc.getElementById("padHelp").hidden && !doc.getElementById("keyboardHelp").hidden && keyboardBox.bottom<=padBox.top && padBox.bottom<=frame.clientHeight && keyboardBox.top>=wheelBox.bottom, "At 700px both help blocks do not stack below the wheel without overlap");
+        for(const help of [doc.getElementById("padHelp"),doc.getElementById("keyboardHelp")]) {
+            const lines=[...help.querySelectorAll(":scope > span")];
+            assert(lines.length===2&&lines[0].getBoundingClientRect().top<lines[1].getBoundingClientRect().top, "A help block exceeds two stacked lines");
+        }
+        key("Escape"); replies.pop();
+        frame.width=helpFrameSize[0]; frame.height=helpFrameSize[1];
+        fresh.remove();
         for (const [code,control] of [[266,"dpadUp"],[276,"south"],[278,"west"],[279,"north"],[280,"leftTrigger"],[281,"rightTrigger"]]) {
             view.hostMode("0");
             const token = "pad-open-" + code, data = payload(padSlots);
@@ -1710,7 +1795,7 @@ frame.addEventListener("load", async () => {
         view.qaPadState({connected:true,active:false,device:"keyboardMouse"});
         assert(!doc.getElementById("padHelp").hidden, "Connected pad detection did not show help");
         doc.dispatchEvent(new view.MouseEvent("mousedown",{bubbles:true}));
-        assert(doc.getElementById("padHelp").hidden, "Mouse failed after pad detection");
+        assert(!doc.getElementById("padHelp").hidden && !doc.getElementById("keyboardHelp").hidden, "Mouse evidence did not coexist with connected-pad help");
         for (const button of [null,265,282,266.5,"266",true]) {
             const token = "pad-invalid-" + String(button), data = payload(padSlots);
             data.openGamepadButton = button; begin(token,data); view.psWheelArm(token);
@@ -1729,7 +1814,7 @@ frame.addEventListener("load", async () => {
         report.textContent += " Shift hub Back: existing typed Back replies across shipped submenus/custom indices; held-before-arm modifiers, dual-Shift release, click/Enter/Space, no-Back Cancel, keyboard cancellation and lifecycle resets.";
         report.textContent += " Hybrids: generated pointed bulbs at all 12 positions, pointed-only hits, inset/band/clip and straight-chord checks, neighbor/quadrant clearance, custom colour, opaque near-white apex raster samples for tip/Shift/no-target, and semicircle restoration on plain reuse; unchanged pie and flow; SIGNAL · ACTION only for target/core, SIGNAL for Shift/no-target/own-tip with swap-back, per-slot isolation and stable badge/chord geometry; one existing intent reply.";
         report.textContent += " Hybrid Openly palette: idle core/bulb purple or explicit colour, 50% signal-fill mix resolved at arm time across slate/moss/ember, real sampled Shift fill transition (reduced motion snaps), release restoration, no-target mix, own-tip isolation, plain-slot palette reset and unchanged hot fills.";
-        report.textContent += " Gamepad: all twelve stick angles and deadzone hold; hybrid X badge/tint/preview and release; A core/Openly, B cancel, D-pad, hub Back, disabled slots, reset, detection and two-way help; optional opening-button pre-arm/repeat/press cancellation and malformed payload rejection across all three themes.";
+        report.textContent += " Gamepad: all twelve stick angles; 100ms first-neutral grace, retained immediate A selection and X+hub Back, nonextended timeout, re-deflection and disarm/rearm cancellation; D-pad focus persists through neutral vectors; hybrid X badge/tint/preview and release; A core/Openly, B cancel, hub Back, disabled slots, reset, detection, persistent keyboard evidence, disconnect behavior and stacked two-line help at 700px; optional opening-button pre-arm/repeat/press cancellation and malformed payload rejection across all three themes.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

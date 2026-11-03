@@ -2,7 +2,7 @@
 
 ## Project overview
 
-PlayerSignals is a JSON-configurable, nonverbal communication wheel for SkyrimNet. Its 30 shipped default intent descriptions are direct narration, not animation playback or forced NPC compliance; the validated JSON registry can define additional IDs. Read [README.md](README.md) first; [docs/specs/player-signals.md](docs/specs/player-signals.md) is authoritative for behavior/interfaces, and [docs/plans/player-signals.md](docs/plans/player-signals.md) separates active work from historical evidence. Do not treat planned behavior, old logs, or generated artifacts as current runtime proof.
+PlayerSignals is a JSON-configurable, nonverbal communication wheel for SkyrimNet. Its 23 shipped default intent descriptions are direct narration, not animation playback or forced NPC compliance; the validated JSON registry can define additional IDs. Read [README.md](README.md) first; [docs/specs/player-signals.md](docs/specs/player-signals.md) is authoritative for behavior/interfaces, and [docs/plans/player-signals.md](docs/plans/player-signals.md) separates active work from historical evidence. Do not treat planned behavior, old logs, or generated artifacts as current runtime proof.
 
 ## Architecture and data flow
 

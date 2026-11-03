@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "intents": {
     "confirm": {
-      "narration": "nods in agreement",
+      "narration": "nods in agreement and approval",
       "notification": "nods in agreement",
       "targetedNotification": "nods in agreement with {target}"
     },
     "deny": {
-      "narration": "shakes their head in disagreement",
+      "narration": "shakes their head in disagreement and disapproval",
       "notification": "shakes their head in disagreement",
       "targetedNotification": "shakes their head at {target} in disagreement"
     },
@@ -35,16 +35,6 @@
       "narration": "makes an apologetic gesture",
       "notification": "apologizes",
       "targetedNotification": "apologizes to {target}"
-    },
-    "respect": {
-      "narration": "bows respectfully",
-      "notification": "shows respect",
-      "targetedNotification": "shows respect to {target}"
-    },
-    "welcome": {
-      "narration": "opens their arms in welcome",
-      "notification": "welcomes",
-      "targetedNotification": "welcomes {target}"
     },
     "congratulate": {
       "narration": "applauds in congratulations",
@@ -81,20 +71,10 @@
       "notification": "asks for quiet",
       "targetedNotification": "asks {target} for quiet"
     },
-    "ready": {
-      "narration": "signals that they are ready",
-      "notification": "signals readiness",
-      "targetedNotification": "signals to {target} that they are ready"
-    },
     "warn": {
       "narration": "makes an urgent warning gesture",
       "notification": "gives a warning",
       "targetedNotification": "gives {target} a warning"
-    },
-    "attention": {
-      "narration": "waves to get attention",
-      "notification": "seeks attention",
-      "targetedNotification": "seeks {target}'s attention"
     },
     "unsure": {
       "narration": "shrugs, indicating uncertainty",
@@ -110,16 +90,6 @@
       "narration": "gives a puzzled look, indicating they do not understand",
       "notification": "does not understand",
       "targetedNotification": "gives {target} a puzzled look, indicating they do not understand"
-    },
-    "approve": {
-      "narration": "gestures approval",
-      "notification": "approves",
-      "targetedNotification": "gestures approval toward {target}"
-    },
-    "disapprove": {
-      "narration": "gestures disapproval",
-      "notification": "disapproves",
-      "targetedNotification": "gestures disapproval toward {target}"
     },
     "challenge": {
       "narration": "makes a challenging gesture",
@@ -140,11 +110,6 @@
       "narration": "offers a gentle, reassuring gesture",
       "notification": "offers comfort",
       "targetedNotification": "offers {target} a gentle, reassuring gesture"
-    },
-    "not_ready": {
-      "narration": "holds up a hand, signaling that they are not ready yet",
-      "notification": "signals not ready",
-      "targetedNotification": "holds up a hand to {target}, signaling that they are not ready yet"
     },
     "give_space": {
       "narration": "motions for others to step back and give them some space",

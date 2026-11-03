@@ -253,12 +253,12 @@ class ConfigValidation(unittest.TestCase):
         expected = {
             'main': ['confirm', 'deny', 'thanks', 'greet', 'social', 'signals',
                      'attitude', 'debug', 'wait_here', 'farewell', 'follow_me', 'come_here'],
-            'attitude': ['approve', None, 'understood', 'challenge', 'unsure', 'think',
-                         'disapprove', None, 'not_understood', 'yield', 'back', None],
-            'social': ['offer', None, 'congratulate', None, 'welcome', None,
-                       'ask', 'respect', 'comfort', 'sorry', 'back', None],
-            'signals': ['ready', None, None, 'attention', 'warn', None,
-                        'not_ready', 'calm_down', None, 'quiet', 'back', 'give_space'],
+            'attitude': [None, None, 'understood', 'challenge', 'unsure', 'think',
+                         None, None, 'not_understood', 'yield', 'back', None],
+            'social': ['offer', None, 'congratulate', None, None, None,
+                       'ask', None, 'comfort', 'sorry', 'back', None],
+            'signals': [None, None, None, None, 'warn', None,
+                        None, 'calm_down', None, 'quiet', 'back', 'give_space'],
             'debug': ['hotkey:64', 'hotkey:11', 'hotkey:36', None, None, 'AccompanyTarget',
                       'WaitHere', 'StopAccompanying', None, None, 'back', None],
         }
@@ -272,7 +272,7 @@ class ConfigValidation(unittest.TestCase):
             self.assertEqual(actual, identities, name)
             homes.extend(identity for identity in actual if identity and identity != 'back')
         self.assertEqual(len(homes), len(set(homes)), 'Each entry has one home')
-        for intent in ('understood', 'comfort', 'not_ready', 'give_space'):
+        for intent in ('understood', 'comfort', 'give_space'):
             self.assertIn(intent, self.catalog['intents'])
         self.assertTrue({'follow_me', 'wait_here'} <= self.catalog['intents'].keys())
 

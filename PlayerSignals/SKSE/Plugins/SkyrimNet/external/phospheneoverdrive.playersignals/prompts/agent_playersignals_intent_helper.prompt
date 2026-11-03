@@ -40,7 +40,7 @@
     ```
     The controller adds the current player name and final period. With Bill as player and Ted as the captured recipient, this produces "Bill greets Ted."; with no captured NPC or either Shift key held at final selection, it produces "Bill greets.". A target name may appear anywhere in the targeted template, including its start or end.
     Narration also receives a separate addressed-to-NPC or addressed-to-everyone sentence. Do not bake names, recipient sentences, Shift behavior, or guaranteed NPC reactions into catalog phrases. Magelight calls the everyone-nearby destination "Openly"; the group narration still explicitly addresses everyone nearby.
-    The shipped catalog contains 30 defaults, but the registry comes from the JSON file, not a fixed whitelist. Preserve the user's existing IDs and wording unless they explicitly request changes. Do not reconstruct the full default catalog from memory.
+    The shipped catalog contains 23 defaults, but the registry comes from the JSON file, not a fixed whitelist. Preserve the user's existing IDs and wording unless they explicitly request changes. Do not reconstruct the full default catalog from memory.
 
     ## Layout references
     An ID becomes selectable only when a wheel slot references it through intent. Changing a label does not rename an intent. Every referenced ID must exist in the catalog; unused catalog records are allowed.

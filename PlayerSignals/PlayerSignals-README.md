@@ -1,6 +1,6 @@
 # PlayerSignals: a little less talking, a little more nodding
 
-Want to agree, say thanks, or give someone a puzzled look without typing a sentence? PlayerSignals gives you a small communication wheel with 28 reachable shipped gesture defaults; the JSON catalog contains 30 defaults, including the older Follow me and Wait here gestures, which are not in a shipped wheel, and can add more intents. SkyrimNet receives an authored direct narration describing what your character means.
+Want to agree, say thanks, or give someone a puzzled look without typing a sentence? PlayerSignals gives you a small communication wheel with 23 shipped gesture defaults, all reachable from the shipped wheels; the JSON catalog can add more intents. SkyrimNet receives an authored direct narration describing what your character means.
 
 Gesture entries submit narration and show a local receipt only when SkyrimNet's API accepts it. Group feedback omits a recipient; targeted feedback names the NPC captured before the wheel opened. Gestures do not visibly animate your character or force NPC compliance. Target-NPC action entries instead request a registered SkyrimNet action on that NPC, without guaranteeing completion.
 
@@ -80,19 +80,18 @@ The entries below use UIExtensions' navigation markers. Magelight shows the same
 | Wheel | Entries |
 |---|---|
 | Main | 0 Yes, 1 No, 2 Thank you, 3 Greet, 4 Social >, 5 Signals >, 6 Attitude >, 7 Debug >, 8 Wait here, 9 Farewell, 10 Follow me, 11 Come here |
-| Attitude | 0 Approve, 2 Understood, 3 Challenge, 4 Unsure, 5 Let me think, 6 Disapprove, 8 Not understood, 9 Surrender, 10 Back < |
-| Social | 0 Offer, 2 Well done, 4 Welcome, 6 Request, 7 Show respect, 8 Comfort, 9 Sorry, 10 Back < |
-| Signals | 0 Ready, 3 Get attention, 4 Watch out, 6 Not ready, 7 Calm down, 9 Quiet, 10 Back <, 11 Give space |
+| Attitude | 2 Understood, 3 Challenge, 4 Unsure, 5 Let me think, 8 Not understood, 9 Surrender, 10 Back < |
+| Social | 0 Offer, 2 Well done, 6 Request, 8 Comfort, 9 Sorry, 10 Back < |
+| Signals | 4 Watch out, 7 Calm down, 9 Quiet, 10 Back <, 11 Give space |
 | Debug | 0 SN Dashboard (raw key 64), 1 IE Dashboard (raw key 11), 2 Journal (key 36, J), 5 Follow / resume (`AccompanyTarget`), 6 Wait here (`WaitHere`), 7 Stop following (`StopAccompanying`), 10 Back < |
 
 Positions are zero-based and unlisted positions are null.
 
 A few distinctions are worth keeping:
 
-- **Confirm** means agreement; **Approve** expresses approval.
-- **Deny** means disagreement; **Disapprove** expresses disapproval.
+- **Yes** (`confirm`) covers both agreement and approval; **No** (`deny`) covers disagreement and disapproval.
 - **Unsure** means you're uncertain; **Understood** and **Not understood** say whether you followed.
-- **Ready** and **Not ready** say whether you're prepared to go; **Give space** asks for distance, the opposite of **Come here**.
+- **Give space** asks for distance, the opposite of **Come here**.
 - **Comfort** offers reassurance; **Well done** congratulates.
 - **Offer** and **Request** suggest giving or asking for something. They don't move items or name a particular object.
 
@@ -287,11 +286,10 @@ Use these exact IDs in your entries:
 
 | Group | IDs |
 |---|---|
-| Main gestures | `confirm`, `deny`, `greet`, `farewell` |
-| Social | `thanks`, `sorry`, `respect`, `welcome`, `congratulate`, `offer`, `ask`, `comfort` |
-| Signals | `come_here`, `quiet`, `ready`, `not_ready`, `warn`, `attention`, `calm_down`, `give_space` |
-| Attitude | `unsure`, `think`, `understood`, `not_understood`, `approve`, `disapprove`, `challenge`, `yield` |
-| Unplaced | `follow_me`, `wait_here` |
+| Main gestures | `confirm`, `deny`, `greet`, `farewell`, `thanks`, `come_here`, `follow_me`, `wait_here` |
+| Social | `sorry`, `congratulate`, `offer`, `ask`, `comfort` |
+| Signals | `quiet`, `warn`, `calm_down`, `give_space` |
+| Attitude | `unsure`, `think`, `understood`, `not_understood`, `challenge`, `yield` |
 
 These 30 IDs are shipped catalog defaults. The shipped wheels reach 28 of them; `follow_me` and `wait_here` remain valid for custom layouts but are not placed, because the main wheel covers following and waiting with actions. The JSON registry is dynamic, so you can add a valid new ID in `intents.json` and reference it in `layout.json`.
 `calm_down` uses narration `slowly lowers both open hands, palms down, asking for calm`, notification `gestures for calm`, and targeted notification `gestures to {target} for calm`.

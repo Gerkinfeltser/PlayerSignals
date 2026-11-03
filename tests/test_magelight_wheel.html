@@ -862,6 +862,92 @@ frame.addEventListener("load", async () => {
         region(0).focus(); region(0,"nearby").focus(); region(0).focus();
         assert(hybridBadge(0).textContent==="SIGNAL"&&hybridBadge(1).textContent==="SIGNAL","No-target hybrid badge changed on core/tip focus");
         key("Escape"); replies.pop();
+        const hybridShapeNodes=i=>{
+            const nearby=region(i,"nearby");
+            return [nearby.querySelector(".hit-area"),nearby.querySelector(".edge-line"),nearby.querySelector(".selected-band"),doc.getElementById(`slot-${i}-nearby-selected-band-clip`)?.firstElementChild];
+        };
+        const pathTop=node=>{
+            const length=node.getTotalLength();let top=Infinity;
+            for(let n=0;n<=128;n++)top=Math.min(top,node.getPointAtLength(length*n/128).y);
+            return top;
+        };
+        const assertHybridShapes=i=>{
+            const nodes=hybridShapeNodes(i),hit=nodes[0],box=hit.getBBox(),sector=hit.closest(".sector"),cx=Number(sector.dataset.bulbX),chord=Number(sector.dataset.bulbY),roundTop=chord-Number(sector.dataset.bulbRadius);
+            assert(nodes.every(node=>pathTop(node)<roundTop-40),`Hybrid ${i} hit/inset/band/clip does not reach into the pointed extension`);
+            const tip=new view.DOMPoint(cx,box.y+40);
+            assert(tip.y<roundTop&&hit.isPointInFill(tip),`Hybrid ${i} pointed-only interior is not hit above the semicircle`);
+            assert(hit.isPointInFill(new view.DOMPoint(cx,chord-.1))&&!hit.isPointInFill(new view.DOMPoint(cx,chord+.1)),`Hybrid ${i} changed the straight shared chord`);
+            const edge=nodes[1],edgeLength=edge.getTotalLength(),edgeToHit=hit.getCTM().inverse().multiply(edge.getCTM());
+            for(let n=0;n<=64;n++)assert(hit.isPointInFill(edge.getPointAtLength(edgeLength*n/64).matrixTransform(edgeToHit)),`Hybrid ${i} inset edge escapes its pointed hit area`);
+            const clip=nodes[3],length=clip.getTotalLength(),clipToHit=hit.getCTM().inverse().multiply(clip.getCTM());
+            for(let n=0;n<=64;n++)assert(hit.isPointInFill(clip.getPointAtLength(length*n/64).matrixTransform(clipToHit)),`Hybrid ${i} selected-band clip escapes its pointed hit area`);
+            const toWheel=svg.getCTM().inverse().multiply(hit.getCTM()),outlineLength=hit.getTotalLength();
+            for(let n=0;n<=128;n++){
+                const point=hit.getPointAtLength(outlineLength*n/128).matrixTransform(toWheel),dx=point.x-1800,dy=point.y-1800;
+                assert(Math.min(Math.abs(dx+dy),Math.abs(dx-dy))/Math.SQRT2>14,`Hybrid ${i} bulb/outline touches a quadrant line`);
+                for(const adjacent of [(i+11)%12,(i+1)%12]){
+                    const neighbor=region(adjacent,"nearby").querySelector(".hit-area");
+                    assert(!neighbor.isPointInFill(point.matrixTransform(neighbor.getCTM().inverse().multiply(svg.getCTM()))),`Hybrid ${i} pointed bulb collides with neighboring slice ${adjacent}`);
+                }
+            }
+        };
+        const assertHybridApexPaint=async i=>{
+            const hit=region(i,"nearby").querySelector(".hit-area"),fill=view.getComputedStyle(hit).fill,id=fill.match(/#([^)"']+)["']?\)$/)?.[1];
+            const svgPaint=doc.createElementNS("http://www.w3.org/2000/svg","svg"),defs=doc.createElementNS(svgPaint.namespaceURI,"defs"),path=doc.createElementNS(svgPaint.namespaceURI,"path"),box=hit.getBBox();
+            if(id){
+                const gradient=doc.getElementById(id);assert(gradient,`Hybrid ${i} computed fill references a missing gradient`);
+                const copy=gradient.cloneNode(false);
+                for(const stop of gradient.querySelectorAll("stop")){
+                    const output=doc.createElementNS(svgPaint.namespaceURI,"stop"),style=view.getComputedStyle(stop);
+                    output.setAttribute("offset",stop.getAttribute("offset"));output.setAttribute("stop-color",style.stopColor);output.setAttribute("stop-opacity",style.stopOpacity);copy.append(output);
+                }
+                defs.append(copy);
+            }
+            svgPaint.setAttribute("xmlns",svgPaint.namespaceURI);svgPaint.setAttribute("width","64");svgPaint.setAttribute("height","64");svgPaint.setAttribute("preserveAspectRatio","none");svgPaint.setAttribute("viewBox",`${box.x} ${box.y} ${box.width} ${box.height}`);
+            path.setAttribute("d",hit.getAttribute("d"));path.setAttribute("fill",id?`url(#${id})`:fill);svgPaint.append(defs,path);
+            const image=new view.Image(),url=URL.createObjectURL(new view.Blob([new view.XMLSerializer().serializeToString(svgPaint)],{type:"image/svg+xml"}));
+            try {
+                await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=reject;image.src=url;});
+                const canvas=doc.createElement("canvas");canvas.width=64;canvas.height=64;const context=canvas.getContext("2d");context.drawImage(image,0,0);
+                for(const inset of [40,60,80]){
+                    const x=32,y=Math.floor(inset/box.height*64),pixels=context.getImageData(x,y,1,1).data;
+                    assert(pixels[3]>=250&&pixels[0]>=245&&pixels[1]>=245&&pixels[2]>=245,`Hybrid ${i} lit apex fill is not opaque near-white (${[...pixels]})`);
+                }
+            } finally { URL.revokeObjectURL(url); }
+        };
+        const pointedHybrid=Array.from({length:12},(_,i)=>({label:`Hybrid ${i}`,intent:"greet",action:{name:"WaitHere"},color:"#63a4e8"}));
+        arm("hybrid-pointed-all",pointedHybrid);
+        for(let i=0;i<12;i++){
+            const nearby=region(i,"nearby"),hit=nearby.querySelector(".hit-area");
+            assertHybridShapes(i);
+            assert(view.getComputedStyle(hit).fill==="rgb(99, 164, 232)",`Hybrid ${i} custom color is not applied to its idle bulb`);
+            region(i,"nearby").focus();
+            assertHybridShapes(i);
+            region(i).focus();
+            keyEvent("keydown","Shift","ShiftLeft",1);
+            await assertHybridApexPaint(i);
+            keyEvent("keyup","Shift","ShiftLeft",1);
+            region(i,"nearby").focus();
+            await assertHybridApexPaint(i);
+            assert(doc.getElementById("destination").textContent==="Openly"&&!replies.length,`Hybrid ${i} Openly preview changed replies`);
+            doc.getElementById("center").focus();
+        }
+        key("Escape");assert(replies.pop()==="hybrid-pointed-all|-1||cancel","Pointed hybrid setup failed to cancel");
+        arm("hybrid-pointed-reuse-plain",Array.from({length:12},()=>({label:"Plain",intent:"greet"})));
+        for(let i=0;i<12;i++){
+            const nearby=region(i,"nearby");
+            const hit=nearby.querySelector(".hit-area"),sector=nearby.closest(".sector"),cx=Number(sector.dataset.bulbX),roundTop=Number(sector.dataset.bulbY)-Number(sector.dataset.bulbRadius);
+            assert(Math.abs(hit.getBBox().y-roundTop)<.01&&hybridShapeNodes(i).every(node=>pathTop(node)>=roundTop-.01)&&!hit.isPointInFill(new view.DOMPoint(cx,roundTop-40)),`Plain reuse retained pointed hybrid geometry in slot ${i}`);
+        }
+        key("Escape");replies.pop();
+        arm("hybrid-pointed-no-target",pointedHybrid,"");
+        for(let i=0;i<12;i++){
+            region(i).focus();
+            await assertHybridApexPaint(i);
+            assert(doc.getElementById("destination").textContent==="No target · Openly",`No-target hybrid ${i} lost its Openly destination`);
+            doc.getElementById("center").focus();
+        }
+        key("Escape");replies.pop();
         for (const [i,badEntry] of [
             ["Signal","greet","intent",{hybrid:false}], ["Signal","greet","intent",{hybrid:1}],
             ["Action","WaitHere","action",{hybrid:true}], ["Key","64","hotkey",{hybrid:true}],
@@ -1500,7 +1586,7 @@ frame.addEventListener("load", async () => {
         report.textContent += " Radial labels and badges: all 12 readable angles, wrapped line order, viewport and slice containment, chord/artwork clearance, and shared lift checked across all four shipped wheels.";
         report.textContent += " Quadrants: two transformed 45°-from-vertical diameters, visible white at 90% opacity, behind all slots/hub, pointer-transparent at slice/hub/exposed probes, fixed across all shipped wheels, themes and slice lifts.";
         report.textContent += " Shift hub Back: existing typed Back replies across shipped submenus/custom indices; held-before-arm modifiers, dual-Shift release, click/Enter/Space, no-Back Cancel, keyboard cancellation and lifecycle resets.";
-        report.textContent += " Hybrids: unchanged blue signal cores, Openly bulbs and flow; SIGNAL · ACTION only for target/core, SIGNAL for Shift/no-target/own-tip with swap-back, per-slot isolation and stable badge/chord geometry; one existing intent reply.";
+        report.textContent += " Hybrids: generated pointed bulbs at all 12 positions, pointed-only hits, inset/band/clip and straight-chord checks, neighbor/quadrant clearance, custom colour, opaque near-white apex raster samples for tip/Shift/no-target, and semicircle restoration on plain reuse; unchanged pie and flow; SIGNAL · ACTION only for target/core, SIGNAL for Shift/no-target/own-tip with swap-back, per-slot isolation and stable badge/chord geometry; one existing intent reply.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

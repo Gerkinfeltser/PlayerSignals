@@ -223,7 +223,10 @@ $capRadius = [Math]::Sqrt(($outerRight[0] - $outerLeft[0]) * ($outerRight[0] - $
 $capRadiusText = $capRadius.ToString('0.###', [Globalization.CultureInfo]::InvariantCulture)
 $tipD = 'M{0}A{1},{1} 0 0 1 {2}Z' -f `
     (Svg-Point $outerLeft), $capRadiusText, (Svg-Point $outerRight)
-$hotkeyPieD = 'M{0}L{1}L{2}Z' -f (Svg-Point $apex), (Svg-Point $outerLeft), (Svg-Point $outerRight)
+# Variant B follows the approved preview coordinates; the slot transform rotates it into each slice.
+$hybridD = 'M1481.989,543.622C1481.989,370 1630,250 1800,108C1970,250 2118.011,370 2118.011,543.622Z'
+$hybridEdgeD = 'M1502.661,523.622C1502.661,375 1640,270 1800,145C1960,270 2097.339,375 2097.339,523.622Z'
+$hotkeyPieD = $coreD
 $capHalfTop = 0.4 * $capRadius
 $capTopY = $outerLeft[1] + (($outerLeft[0] + $capHalfTop) / $outerLeft[0]) * ((Local-Point $tipOuter 0)[1] - $outerLeft[1])
 $hotkeyCapD = 'M{0}L{1}L{2}L{3}Z' -f `
@@ -392,7 +395,7 @@ foreach ($region in $regions) {
         $hit.SetAttribute('class', 'hit-area')
         $hit.SetAttribute('d', $(if ($mode -eq 'target') { $coreD } else { $tipD }))
         $hit.SetAttribute('data-hotkey-d', $(if ($mode -eq 'target') { $hotkeyPieD } else { $hotkeyCapD }))
-        if ($mode -eq 'nearby') { $hit.SetAttribute('data-core-d', $tipD) }
+        if ($mode -eq 'nearby') { $hit.SetAttribute('data-core-d', $tipD); $hit.SetAttribute('data-hybrid-d', $hybridD) }
         else {
             $hit.SetAttribute('data-core-d', $coreD)
             $hit.SetAttribute('data-nav-d', $unionD)
@@ -404,7 +407,7 @@ foreach ($region in $regions) {
         $edge.SetAttribute('style', 'pointer-events:none;')
         $edge.SetAttribute('d', $(if ($mode -eq 'target') { $coreEdgeD } else { $tipEdgeD }))
         $edge.SetAttribute('data-hotkey-d', $(if ($mode -eq 'target') { $hotkeyPieEdgeD } else { $hotkeyCapEdgeD }))
-        if ($mode -eq 'nearby') { $edge.SetAttribute('data-core-d', $tipEdgeD) }
+        if ($mode -eq 'nearby') { $edge.SetAttribute('data-core-d', $tipEdgeD); $edge.SetAttribute('data-hybrid-d', $hybridEdgeD) }
         else {
             $edge.SetAttribute('data-core-d', $coreEdgeD)
             $edge.SetAttribute('data-nav-d', $unionEdgeD)
@@ -420,6 +423,7 @@ foreach ($region in $regions) {
         if ($mode -eq 'nearby') {
             $clipShape.SetAttribute('data-core-d', $tipEdgeD)
             $clipShape.SetAttribute('data-nav-d', $tipEdgeD)
+            $clipShape.SetAttribute('data-hybrid-d', $hybridEdgeD)
         } else {
             $clipShape.SetAttribute('data-core-d', $coreEdgeD)
             $clipShape.SetAttribute('data-nav-d', $unionEdgeD)
@@ -434,7 +438,7 @@ foreach ($region in $regions) {
         $band.SetAttribute('clip-path', "url(#slot-$slot-$mode-selected-band-clip)")
         $band.SetAttribute('style', 'pointer-events:none;')
         $band.SetAttribute('data-hotkey-d', $(if ($mode -eq 'target') { $hotkeyPieEdgeD } else { $hotkeyCapEdgeD }))
-        if ($mode -eq 'nearby') { $band.SetAttribute('data-core-d', $tipEdgeD) }
+        if ($mode -eq 'nearby') { $band.SetAttribute('data-core-d', $tipEdgeD); $band.SetAttribute('data-hybrid-d', $hybridEdgeD) }
         else {
             $band.SetAttribute('data-core-d', $coreEdgeD)
             $band.SetAttribute('data-nav-d', $unionEdgeD)

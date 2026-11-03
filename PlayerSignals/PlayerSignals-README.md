@@ -2,33 +2,31 @@
 
 Want to agree, say thanks, or give someone a puzzled look without typing a sentence? PlayerSignals gives you a small communication wheel with 24 shipped intent defaults; the JSON catalog can add more intents. SkyrimNet receives authored direct narration describing what your character means.
 
-Most signals are requests, not forced compliance. Two shipped hybrid signals—Follow me and Wait here—also request a target-NPC action. On eligible targeted selections, the action runs first; if SkyrimNet's `ExecuteAction` returns `0`, one direct narration includes a compliance sentence. This API acceptance does not prove an in-game effect or NPC response.
+Most signals are requests: the NPC still decides how to react and may not reply. Two shipped hybrid signals—Follow me and Wait here—also request an action from the NPC you're addressing. The action runs first when that NPC is eligible; if SkyrimNet reports success, the narration adds a sentence saying they comply. They may not follow or wait straight away.
 
 ## What's new in 0.2.0
 
-- Magelight 1.7.1+ is the enabled twelve-slice wheel renderer, with per-slot colours and slate/moss/ember themes. UIExtensions is superseded, not a runtime fallback or requirement.
-- Hybrid Follow me and Wait here run their action before narration; compliance wording is included only after action API success.
+- Magelight 1.7.1+ draws the twelve-slice wheel, with per-slot colours and slate/moss/ember themes. You don't need UIExtensions.
+- Hybrid Follow me and Wait here request their action before narration; a compliance sentence is added only when SkyrimNet reports success.
 - Targeted slice cores and Openly tips, no-target Openly, Shift+hub Back, raw dashboard keys with foreground guard/no fallback, optional gamepad opening and stick/A/B/X navigation.
 - 24 catalog IDs, 23 placed in the shipped layout; `dismiss` is available for customization. Hotkey alternate keys, SkyrimNet status toggles and JSON idle animations are not included.
 
-## Test release status
+## Release status
 
-This is 0.2.0 release preparation, not a newly published release or exhaustive runtime acceptance. Targeted/group gestures and an expected no-audience result were observed on the older 2026-10-02 build, with the player as narration originator. Those historical observations do not verify the production Magelight wheel, hybrid actions, raw DLL or gamepad paths.
-
-Mid-save removal has been tested on **one ADT save**. Disabling the mod left saved Papyrus remnants; a ReSaver-cleaned copy subsequently loaded without PlayerSignals missing-script warnings. This is limited test evidence, not a guarantee of clean removal or long-term save safety. See [Updating or removing](#updating-or-removing), and back up your saves before testing.
+Version 0.2.0 is being prepared and has not been published yet.
 
 ## Before you start
 
 You'll need:
 
-- Matching SKSE and dependency builds for your Skyrim SE/AE/VR runtime. Launch through SKSE; native target flags are not runtime acceptance on every version.
+- Matching SKSE and dependency builds for your Skyrim SE/AE/VR version. Launch through SKSE.
 - JContainers with its Lua support files (API 4 / feature 2).
 - SkyrimNet, with `SkyrimNet.esp` loaded and its native API available.
-- Magelight **1.7.1+** with its matching runtime for the wheel and embedded gamepad bridge. The older `minHost: 0.31.2` manifest/Papyrus check remains a host-API threshold, not full-feature compatibility.
+- Magelight **1.7.1+**, built for your Skyrim version, for the wheel and controller support.
 - For action entries, SkyrimNet with `IsActionRegistered`, `ExecuteAction`, the built-in `SkyrimNetInternal` eligibility functions, and optional persistent/short-lived event APIs.
 - The bundled **PlayerSignals.dll** (native API 1, DLL package 1.0.0) and **Address Library for SKSE Plugins**, or VR Address Library on VR. The shipped dashboard slot is raw and requires both; a custom layout with no raw hotkeys does not.
 
-Back up your save and matching SKSE cosave before installing or updating. The startup quest and player-alias save-load handling are designed to initialize PlayerSignals on existing saves. The limited removal test below does not establish installation/update compatibility with every existing save.
+Back up your save and matching SKSE cosave before installing or updating. PlayerSignals is designed to start on existing saves as well as new games.
 
 Install the release mod ZIP with your mod manager and enable **PlayerSignals.esp**. Its Data root contains `PlayerSignals.esp`, `Scripts`, `Seq`, `SKSE` and `Magelight`; this readme belongs alongside them. From a checkout install only the `PlayerSignals/` child, never the repository root or GitHub source archive. Before upgrading, preserve custom JSON, replace old payload files, then merge customizations against the shipped schema. Remove obsolete PlayerSignals dispatch YAML triggers; the optional prompt-only helper is separate. Restart Skyrim after DLL/script updates, then load a save so maintenance reloads the configuration.
 For filesystem-capable assistants, see the [AI configuration helper](PlayerSignals-AI-Helper.md) for a copy-paste prompt, schema rules and merge examples.
@@ -44,13 +42,13 @@ Start the game and load a save, or begin a new game. PlayerSignals checks for Sk
 
 If the captured NPC is still alive, enabled, and loaded when you choose, SkyrimNet receives a targeted narration with your character as the originator (`From`) and the captured NPC as the explicit target. The text describes your character making the gesture and addresses that NPC by name. Moving the crosshair while the wheel is open does not change the submitted target. SkyrimNet still chooses who responds; the captured NPC is not guaranteed to be the responder, and Recent Events may show the selected responder under `To`. Magelight's hub displays the captured NPC's display name, or **Target NPC** if that name is empty.
 
-You'll see a small notification with your character's name only if SkyrimNet's API accepts the narration. For the **Greet** intent, group feedback looks like `Bill greets.`; targeted feedback to the captured NPC Ted looks like `Bill greets Ted.` Think of it as a receipt—not a promise that an NPC heard you or will answer.
+You'll see a small notification with your character's name when SkyrimNet receives the narration. For **Greet**, group feedback looks like `Bill greets.`; targeting Ted looks like `Bill greets Ted.` The NPC may still choose not to answer.
 
-Choose **Social** to open a submenu and **Back** to return. Back occupies zero-based slot 10 (300°, just above cardinal west) in every shipped submenu. **Tab**, center-click, **Escape**, or a fresh press of the configured opening key cancels once armed (default **Right Alt**). Holding/repeating or the initial pre-arm opening press does not cancel. An unmapped browser opening code produces one console warning; Tab/Escape/center still work. Navigation/cancellation sends no narration.
+Choose **Social** to open a submenu and **Back** to return. Back occupies zero-based slot 10 (300°, just above cardinal west) in every shipped submenu. **Tab**, center-click, **Escape**, or a fresh press of the configured opening key cancels once the wheel is ready (default **Right Alt**). Holding the opening key does not cancel. Navigation and cancellation send no narration.
 
 In Magelight, holding either **Shift** changes the hub to **Back** when the current wheel has a Back entry. Click the hub, or focus it and press **Enter/Space**, to use that same Back entry. Releasing Shift restores Cancel; the root wheel and wheels without a Back entry stay Cancel. **Escape**, **Tab**, and the configured opening key still cancel even with Shift held. Gesture Openly preview is unchanged.
 
-**Magelight wheel:** twelve 30° slices run clockwise from the top. Gesture cores target the captured NPC; semicircular bulbs select Openly. Core and bulb share a straight outer-corner chord without a fill gap or overlap sliver. Their insets, selected bands and flow clips follow that outline; the upright broadcast icon is centered in the half-disc's bounds, while ripple motion retains its chord-midpoint pivot. Shift previews Openly without changing page dispatch. A selected core turns bright yellow with a darker-yellow inner band; its idle kind colour moves onto the label/badge. Bulb hover/Shift lights both pieces; only the bulb uses a white-centre (`#ffffff`) to pale warm-edge (`#fff4e8`) radial gradient, with no filters and its thin `#d9bd79` band. Navigation/actions retain pointed neckties; hotkeys instead split into a flat trapezoid cap and chord-edged pie. Both hotkey parts are muted teal when idle. Either part lights both and dispatches the same key; the cap lights with the same white-centre-to-warm-edge gradient while the pie remains bright yellow with a darker-yellow inner band, and only the inset pie carries V-shaped flow. The selected cap's thin band remains unchanged. Labels and their SIGNAL (gesture), ACTION or KEY badges run along each slice; straight-up/down slots stay horizontal, and left-half text is flipped to remain readable. Badges stay directly beneath wrapped labels in the same rotated frame, and use their kind's idle colour when lit. Text wraps or shrinks to fit clear of the hub, cap chord and navigation artwork, without truncation. Submenu, Back, Close and null slots have no badge. Navigation chevrons dim behind the label only; actual visible badges on other kinds remain respected. Every disabled slot uses the same faint pointed necktie, including disabled hotkeys. Slices lift to 1.06; choices dispatch immediately. Reduced-motion preferences are honored. The wheel, title and help paint above the backdrop vignettes. These browser-facing details do not prove in-game acceptance.
+**Magelight wheel:** twelve 30° slices run clockwise from the top. Gesture cores target the captured NPC; semicircular bulbs select Openly. Core and bulb share a straight outer-corner chord without a fill gap or overlap sliver. Their insets, selected bands and flow clips follow that outline; the upright broadcast icon is centered in the half-disc's bounds, while ripple motion retains its chord-midpoint pivot. Shift previews Openly without changing page dispatch. A selected core turns bright yellow with a darker-yellow inner band; its idle kind colour moves onto the label/badge. Bulb hover/Shift lights both pieces; only the bulb uses a white-centre (`#ffffff`) to pale warm-edge (`#fff4e8`) radial gradient, with no filters and its thin `#d9bd79` band. Navigation/actions retain pointed neckties; hotkeys instead split into a flat trapezoid cap and chord-edged pie. Both hotkey parts are muted teal when idle. Either part lights both and dispatches the same key; the cap lights with the same white-centre-to-warm-edge gradient while the pie remains bright yellow with a darker-yellow inner band, and only the inset pie carries V-shaped flow. The selected cap's thin band remains unchanged. Labels and their SIGNAL (gesture), ACTION or KEY badges run along each slice; straight-up/down slots stay horizontal, and left-half text is flipped to remain readable. Badges stay directly beneath wrapped labels in the same rotated frame, and use their kind's idle colour when lit. Text wraps or shrinks to fit clear of the hub, cap chord and navigation artwork, without truncation. Submenu, Back, Close and null slots have no badge. Navigation chevrons dim behind the label only; actual visible badges on other kinds remain respected. Every disabled slot uses the same faint pointed necktie, including disabled hotkeys. Slices lift to 1.06; choices dispatch immediately. Reduced-motion preferences are honored. The wheel, title and help paint above the backdrop vignettes.
 
 Two fixed white diagonal diameters divide every wheel into four groups of three slices. They sit behind all wheel artwork, remain still when slices lift, and do not take clicks. Their stroke is 1.75 px at a 700 px wheel, at 90% opacity in all three themes.
 
@@ -60,21 +58,21 @@ Selected gestures show two scaled arc bands only in the bulb, including Openly/S
 
 Click a gesture's core for the captured target or its bulb for **Openly**. **Left/Right** moves among available entries; **Up** chooses a gesture's bulb, **Down** its core; **Enter/Space** confirms. Up/Down stays on the same navigation/action/hotkey slice. Both hotkey parts dispatch the same key, never Openly. Merged neckties remain selectable at their pointed end; actions stay target-only.
 
-With Magelight's 1.7.1 gamepad bridge, the **left stick** aims at a slot; returning within the `0.35` deadzone focuses the hub after **100 ms**, allowing quick A during spring-back. Aim and press **A** to select; A at the hub cancels or goes Back while X is held in a submenu. **D-pad Up/Left** chooses previous, **Down/Right** next, retaining focus through neutral stick events. **B** cancels; hold **X** for Openly signals and submenu hub Back. Actions/hotkeys never become Openly signals. The two-column hint grid always shows keyboard keycaps; Stick and A/B/X badges appear inline only while a controller is available. Cancel names the configured keyboard opening key. Prior browser checks are not production in-game proof.
+With Magelight 1.7.1+, the **left stick** aims at a slot; returning within the `0.35` deadzone focuses the hub after **100 ms**, allowing quick A during spring-back. Aim and press **A** to select; A at the hub cancels or goes Back while X is held in a submenu. **D-pad Up/Left** chooses previous, **Down/Right** next, retaining focus through neutral stick events. **B** cancels; hold **X** for Openly signals and submenu hub Back. Actions/hotkeys never become Openly signals. The two-column hint grid always shows keyboard keycaps; Stick and A/B/X badges appear inline only while a controller is available. Cancel names the configured keyboard opening key.
 
 The wheel won't open while you're in a blocking menu, another custom menu, or a gameplay state where the required controls are disabled.
 
 ## Who are you talking to?
 
-The NPC under your crosshair when the wheel opens is captured for that choice. Moving your crosshair while the wheel is open does not change the captured NPC. For a targeted selection, if that NPC is no longer alive, enabled, and loaded, PlayerSignals fails closed: it does not silently choose a different NPC or switch to everyone. Shift or the Magelight gesture's explicit **Openly** destination intentionally chooses group mode instead.
+The NPC under your crosshair when the wheel opens is captured for that choice. Moving your crosshair while the wheel is open does not change that NPC. If they die, become disabled, or are no longer loaded before you choose, the targeted gesture is cancelled. PlayerSignals never silently chooses someone else or addresses everyone instead. Hold Shift or choose a gesture's **Openly** tip to address everyone nearby.
 
 If no NPC was captured, the Magelight hub shows **No target · Openly** and gesture narration is addressed to everyone nearby. You can also choose that mode intentionally: hold either **Left Shift** or **Right Shift** through the selection until the wheel closes. PlayerSignals checks Shift when the final selection returns from the wheel; it does not promise to sample the exact click instant. Shift overrides a captured NPC and uses group narration and feedback without that NPC's name.
 
 With no captured NPC, selecting either part of a gesture lights both the core and its bright white Openly bulb without Shift. With a captured NPC, core selection leaves the bulb unlit unless Shift is held; selecting the bulb still shows Openly.
 
-Action-only entries require a captured NPC and have no Openly destination; without a target they are disabled before selection, and Shift does not convert them to group mode. Hybrid signal+action entries are different: they stay selectable without a target because they still work as ordinary signals. In Magelight hybrids keep the signal's pie, straight chord and existing flow, but use a pointed teardrop/onion bulb; plain signals keep semicircular bulbs. A lit hybrid bulb is white through its point with the existing warm rim. The badge reads `SIGNAL · ACTION` only when selecting that slot's core would run its action: a captured target is available, neither Shift key is held, and that slot's tip is not hovered/focused. Otherwise it reads `SIGNAL`. The badge swaps back immediately without changing its reserved frame. There is no added notch, crust or flow. With a valid captured target and no Shift, the controller applies registration and built-in eligibility checks, runs the action once, then sends exactly one `DirectNarration`. Only an `ExecuteAction` result of `0` adds the `complianceNarration` sentence. If the action is refused or fails, narration is exactly the ordinary targeted signal, with no compliance sentence and no extra notification. For hybrids in Openly mode (no target or either Shift held), the action is skipped and only the group signal is narrated. The local player-named receipt remains governed by `DirectNarration` returning `0`; failures, stale targets/sessions and cancellation do not create a second narration or notification.
+Action-only entries need a captured NPC and are disabled without one; Shift does not turn them into Openly signals. Hybrids stay selectable without a target because they can still send a signal. Their bulb is pointed when the core would request an action, and round in Openly mode. The badge shows `SIGNAL · ACTION` only with a captured target, neither Shift key held, and the tip not selected; otherwise it shows `SIGNAL`. With a valid target, the action runs once before one narration. If SkyrimNet reports success, the `complianceNarration` sentence is added. If the action is refused or fails, only the ordinary targeted signal is sent, with no extra notification. Openly skips the action and sends the group signal. A local notification appears only when SkyrimNet receives the narration; cancelled choices and old sessions send nothing.
 
-The shipped hybrid signals are Main slot 8 **Wait here** (`WaitHere`) and Main slot 10 **Follow me** (`AccompanyTarget`). The catalog also includes `dismiss` and its compliance phrase, but Dismiss is unplaced and has no action attached in the shipped layout; the owner checklist below covers it only for a custom hybrid placement. Extras has one action-only entry, Stop following (`StopAccompanying`), at slot 3.
+The shipped hybrid signals are Main slot 8 **Wait here** (`WaitHere`) and Main slot 10 **Follow me** (`AccompanyTarget`). The catalog also includes `dismiss` and its compliance phrase, but Dismiss is unplaced and has no action attached in the shipped layout. Extras has one action-only entry, Stop following (`StopAccompanying`), at slot 3.
 
 ### A note about Recent Events
 
@@ -106,7 +104,7 @@ A few distinctions are worth keeping:
 - **Comfort** offers reassurance; **Well done** congratulates.
 - **Offer** and **Request** suggest giving or asking for something. They don't move items or name a particular object.
 
-Quiet and the other gestures are requests, not remote controls for NPCs. Follow me and Wait here are the shipped hybrids: they narrate as signals in every mode, and request the corresponding action only for an eligible captured target without Shift. Compliance wording is included only after action API success. `dismiss` is available in the catalog but unplaced; adding it to a custom hybrid slot requires its matching action and compliance phrase. The Extras submenu has one action-only slot, Stop following.
+Quiet and the other gestures are requests, not remote controls for NPCs. Follow me and Wait here are the shipped hybrids: they narrate as signals in every mode, and request the corresponding action only for an eligible captured target without Shift. A compliance sentence is added only when SkyrimNet reports success. `dismiss` is available in the catalog but unplaced; adding it to a custom hybrid slot requires its matching action and compliance phrase. The Extras submenu has one action-only slot, Stop following.
 
 ## Make the wheel your own
 
@@ -133,22 +131,13 @@ A hotkey slot normally presses its DirectX scan code after the wheel has fully c
 
 `hotkey` must be a strict integer from 1–263 (1–255 keyboard scan codes; 256–263 SKSE mouse buttons, e.g. 258 = middle mouse) and cannot equal the configured `input.openKeyCode`. `delayMs` is optional (default `100`, integer 0–2000); `holdMs` is optional (default `50`, integer 1–2000). These timing fields are hotkey-only. A hotkey is exclusive with `intent`, `submenu`, `control`, and `action`. Dispatch occurs only after the browsing session and Magelight view have fully released.
 
-For keyboard hotkeys, optional `"raw": true` sends a Windows scan-code key press for mods that poll Windows key state. It is allowed only for hotkeys with scan codes 1–255; `raw: false` is allowed and leaves ordinary hotkey behavior unchanged. Raw presses are sent only after an accepted wheel choice closes and only while Skyrim is the foreground process. If focus has moved elsewhere, dispatch fails closed; there is no `HoldKey` fallback. A raw layout with a missing DLL gets one warning per load at maintenance; a missing or incompatible DLL also fails raw selection closed with a notification and sends nothing. The badge remains **KEY**. Raw slots require `PlayerSignals.dll` and Address Library for SKSE Plugins (the VR Address Library for Skyrim VR), but these dependencies are needed only when a layout has a `raw: true` slot. Layouts without raw slots continue to use normal Skyrim input; mods polling Windows key state directly do not receive those ordinary injected keys.
+For keyboard hotkeys, optional `"raw": true` sends a Windows scan-code key press for mods that poll Windows key state. Use it only with keyboard scan codes 1–255; `raw: false` keeps ordinary hotkey behavior. The key is pressed after the wheel closes, and only while Skyrim is the active window. If you switch away, nothing is sent; PlayerSignals won't try an ordinary key press instead. A missing DLL gives one warning per save load. Choosing a raw slot with a missing or incompatible DLL shows a notification and sends nothing. The badge remains **KEY**. Raw slots need `PlayerSignals.dll` and Address Library for SKSE Plugins (VR Address Library for Skyrim VR). Layouts without raw slots don't need these; their ordinary keys work only with mods that read Skyrim input, not Windows key state.
 
-Add the example to a wheel position. The authored `raw` flag is flat beside `hotkey`; the page payload carries it in its fourth extras object as `{ "raw": true }`, combined with an optional color as `{ "color": "#aabbcc", "raw": true }`. `raw: false` is omitted from page extras.
+Add this example to a wheel position, with `raw` beside `hotkey`:
 
 ```json
 { "label": "SN Dashboard", "hotkey": 64, "raw": true, "delayMs": 0 }
 ```
-
-The owner verified the dashboard raw-key example in the spike, not this production DLL:
-
-| Skyrim runtime | Current evidence |
-|---|---|
-| AE 1.6.1170 | Dashboard owner-verified in the spike; this production DLL still needs in-game testing. |
-| AE 1.7.104 | Production in-game testing still required. |
-| SE 1.5.97 | Build-only support; in-game untested. |
-| VR | Build-only support; in-game untested. |
 
 Restart Skyrim after a DLL or controller update. Load a save after JSON edits to apply the layout and missing-DLL load warning.
 
@@ -206,9 +195,9 @@ This displays **Return**. Back returns to the prior wheel; at root it closes. Us
 
 Each wheel supports **1–12 positions**, clockwise from top slot 0 in 30° slices. Each non-null entry needs a label and one primary kind: intent, action, submenu, control or hotkey. Intent+action without event is a hybrid; action+event+intent is legacy pure-action context, not a hybrid. Reject submenu loops; repeated supported IDs are allowed.
 
-### Target-NPC actions (experimental; runtime-unverified)
+### Target-NPC actions (experimental)
 
-Action entries are marked **ACTION**, use the captured NPC only and have no Openly destination. No target disables them before selection. A captured target that becomes dead/disabled/unloaded fails closed with a local action error; Shift never redirects it.
+Action entries are marked **ACTION**, use the captured NPC only and have no Openly destination. No target disables them before selection. If that NPC dies, becomes disabled, or is no longer loaded, the action is cancelled with a local error. Shift never redirects it.
 
 Configure an action directly in `layout.json`; it is not a narration ID in `intents.json`:
 
@@ -223,7 +212,7 @@ This example uses a built-in action on the shipped main wheel. For another regis
 
 PlayerSignals checks registration and SkyrimNet's own eligibility functions for `AccompanyTarget`, `StopAccompanying` and `WaitHere`. **Other registered actions run without an eligibility check, and PlayerSignals does not enforce action cooldowns.** Direct execution can therefore differ from ordinary AI-selected behavior. Configure only actions whose effects and prerequisites you understand.
 
-Accepted action-only failures show one local notification and one `[PlayerSignals]` trace naming the action and reason. A successful API request is not proof that the NPC completed the action. Hybrid dispatch is distinct and follows the signal semantics above. Navigation, cancellation and stale sessions remain silent.
+If an action-only request fails, you'll see a notification naming the action and reason; details also go in the `[PlayerSignals]` log. Even when SkyrimNet reports success, the NPC may not act straight away. Hybrids send the ordinary signal if their action is refused or fails. Cancelling or leaving an old wheel session sends nothing.
 
 Legacy action/event/intent example:
 
@@ -236,9 +225,7 @@ Legacy action/event/intent example:
 }
 ```
 
-This is a legacy pure action slot, not a hybrid: its intent supplies event context only after action API success and it does not send direct narration. Modes are `persistent`, `shortLived` or `both`. A short-lived event stores the intent phrase as its description and data; it lasts 60 seconds and repeat use of the same action on the same NPC replaces the previous event. Persistent events remain in SkyrimNet's history. No pair means no event; failed action requests register none. Event-registration failure is reported without retrying the action. Events do not use direct narration and do not guarantee passive processing. A registered action may already record its own context. Never add `event` to an intent+action hybrid.
-
-Historical offline verification counts and results are not current evidence for this 12-slice change. Do not treat browser checks, build results or prior test counts as proof of in-game Magelight, action acceptance, SkyrimNet delivery or NPC effects.
+This is a legacy pure action slot, not a hybrid: its intent supplies event context only when SkyrimNet reports that the action succeeded and it does not send direct narration. Modes are `persistent`, `shortLived` or `both`. A short-lived event stores the intent phrase as its description and data; it lasts 60 seconds and repeat use of the same action on the same NPC replaces the previous event. Persistent events remain in SkyrimNet's history. No pair means no event; failed action requests register none. Event-registration failure is reported without retrying the action. Events do not send direct narration; SkyrimNet may not use them in a conversation. A registered action may already record its own context. Never add `event` to an intent+action hybrid.
 
 ### A small, complete example
 
@@ -345,16 +332,6 @@ The file is plain JSON with root `schemaVersion: 1` and an `intents` object. Eac
 
 `complianceNarration` has no terminal period (including before trailing whitespace), contains one or more exact `{target}` markers and optional exact `{player}` markers. Unknown, malformed, nested, or unbalanced brace markers are rejected. Templates substitute once from the original phrase so names containing braces remain literal. Comments and trailing commas are invalid.
 
-### In-game hybrid dispatch checklist (owner)
-
-Check the two shipped hybrid actions, **Follow me** (`AccompanyTarget`) and **Wait here** (`WaitHere`). Test **Dismiss** (`StopAccompanying`) only after adding it as a hybrid in a custom layout; it is not placed in the shipped layout:
-
-- [ ] Eligible captured target, no Shift: action runs once before exactly one targeted `DirectNarration`; compliance sentence appears only when `ExecuteAction` returns `0`.
-- [ ] Refused/ineligible target and action failure: one ordinary targeted signal narration; no compliance sentence and no extra notification. Confirm the local receipt still follows only the `DirectNarration` return-`0` rule.
-- [ ] Openly with no target and with either Shift held: no action; one group signal narration only.
-- [ ] Invalid captured target without Shift (dead, disabled, unloaded): fail closed; no redirection/action/narration. Also check stale session and cancellation remain silent. Shift may intentionally override to Openly.
-- [ ] No path produces more than one action or one narration per selection. API return `0` is not proof of runtime effect or NPC compliance.
-
 This is a **complete one-entry catalog** that works only with a layout that references `greet` and no other IDs. It is not a partial replacement for the shipped catalog: if the layout still uses other IDs, keep those records in the file when editing it.
 
 ```json
@@ -378,7 +355,7 @@ The shipped default narration and notification phrases are in `SKSE/Plugins/Play
 
 ### A little help from the WebUI
 
-The mod also includes an optional SkyrimNet agent named **`playersignals_intent_helper`**, built like the iActions configuration helper. After installing the full updated mod and restarting SkyrimNet with the game, look for it in the WebUI **Agents** page. This packaged prompt has been validated and rendered locally; its appearance and responses in your live WebUI have not yet been verified.
+The mod also includes an optional SkyrimNet agent named **`playersignals_intent_helper`**, built like the iActions configuration helper. After installing the full updated mod and restarting SkyrimNet with the game, look for it in the WebUI **Agents** page.
 
 Tell it what gesture you want. It can suggest wording immediately, without seeing your files. For a phrase edit, paste the current intent record; for a complete catalog replacement, paste the full `intents.json`. For wheel placement or an intent rename/removal, paste both complete files so it can check occupied slots and references. Find them in the winning PlayerSignals mod's `SKSE/Plugins/PlayerSignals` folder and label each pasted file with its filename.
 
@@ -408,17 +385,17 @@ These “actions” are narration requests, not executable NPC commands. Adding 
 
 ### Why doesn't the wheel open?
 
-Check that you launched through SKSE, enabled PlayerSignals.esp, and installed Magelight, JContainers (including its Lua files), and SkyrimNet with SkyrimNet.esp and its native API available. Try again in normal gameplay with other menus closed. If you changed the key, load a save first and check for a conflicting binding. Invalid configuration fails closed; restore your backed-up JSON and reload if the problem started after an edit.
+Check that you launched through SKSE, enabled PlayerSignals.esp, and installed Magelight, JContainers (including its Lua files), and SkyrimNet with SkyrimNet.esp and its native API available. Try again in normal gameplay with other menus closed. If you changed the key, load a save first and check for a conflicting binding. Invalid configuration keeps the wheel off; restore your backed-up JSON and reload if the problem started after an edit.
 
-If Magelight rejects the wheel data or throws while building/arming it, PlayerSignals cancels that request, releases UI mode, and reports one local error plus a `[PlayerSignals]` trace. Check `layout.json`; for a build/arm exception, also check the Magelight page log. No gesture or hotkey is submitted. This release path is browser/build-verified only; in-game confirmation is pending and requires a game restart for the updated Papyrus script.
+If Magelight cannot open the wheel, PlayerSignals cancels the choice and shows an error. No gesture or hotkey is sent. Check `layout.json` and the Magelight page log for details.
 
 ### Why does the wheel look wrong?
 
-Check the Magelight page log and confirm the host/runtime version and packaged `Magelight/PlayerSignals/index.html` are present. If only a label is clipped, try shorter wording.
+Check the Magelight page log, make sure you have Magelight 1.7.1+ for your Skyrim version, and check that `Magelight/PlayerSignals/index.html` is installed. If only a label is clipped, try shorter wording.
 
 ### Why didn't I get a notification?
 
-The notification appears only when SkyrimNet's API reports success. Check the reported PlayerSignals/API error and dependency setup. An invalid captured NPC fails closed unless you held Shift for group mode. Navigation and cancellation intentionally produce no submission notification.
+The notification appears only when SkyrimNet receives the narration successfully. Check any PlayerSignals error and your dependencies. If the captured NPC is no longer available, the gesture is cancelled unless you held Shift for Openly. Navigation and cancellation don't show a submission notification.
 
 ### Why didn't an NPC reply after I got a notification?
 
@@ -430,23 +407,13 @@ No. PlayerSignals describes nonverbal intent to SkyrimNet; it does not animate y
 
 ### Can I enable or remove it during a playthrough?
 
-Existing-save initialization is designed into the mod. Removal was tested on one ADT save: disabling PlayerSignals left saved script data, and a ReSaver-cleaned copy loaded without PlayerSignals missing-script warnings. That does not establish clean removal without intervention or long-term safety. Preserve a pre-installation save and matching SKSE cosave; see [Updating or removing](#updating-or-removing) for the findings and recommended rollback.
+PlayerSignals is designed to start on existing saves. Removing it can leave script data in your save, so keep a pre-installation save and matching SKSE cosave. See [Updating or removing](#updating-or-removing) for the safest rollback.
 
 ## Updating or removing
 
 When updating an older PlayerSignals version, replace its files rather than merging the new version over them. Remove old PlayerSignals YAML trigger/action files; this version uses SkyrimNet's native API instead. Keep the new prompt-only helper bundle if you want its WebUI agent—it is not the old dispatch bundle.
 
 PlayerSignals doesn't add gesture spells, edit NPC world records, or change player controls. A save can still retain quest/script state, and there is no shutdown/uninstall cleaner.
-
-### What the removal test showed
-
-On one ADT test save:
-
-- With PlayerSignals disabled, the save loaded, gameplay continued, and another save was made. No new PlayerSignals narration calls were logged, but missing-plugin/script warnings and saved Papyrus remnants remained.
-- ReSaver identified **two unattached instances and two undefined elements** associated with PlayerSignals.
-- After those remnants were removed from a copy, `Save6_resaver.ess` loaded without PlayerSignals missing-class/type warnings. The captured post-load window was approximately **eight seconds**; it did not include another save/reload cycle after cleanup.
-
-This demonstrates a short successful load after cleanup, **not guaranteed clean removal or long-term safety**. ReSaver cleaning is not a required or universally safe uninstall procedure for this beta. If you investigate saved remnants, work on copies and preserve the originals.
 
 ### Recommended rollback
 

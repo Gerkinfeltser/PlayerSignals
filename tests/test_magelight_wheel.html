@@ -11,8 +11,9 @@ frame.addEventListener("load", async () => {
     if (!frame.srcdoc) return;
     const report = document.getElementById("result");
     try {
-        const doc = frame.contentDocument, view = doc.defaultView, replies = [];
+        const doc = frame.contentDocument, view = doc.defaultView, replies = [], readyAcks=[];
         view.psWheelChoice = value => replies.push(value);
+        view.psWheelReady = token => readyAcks.push(token);
         const assert = (ok, message) => { if (!ok) throw Error(message); };
         const checkHelp = (doc, connected) => {
             const groups = [...doc.querySelectorAll(".helpAction")], view = doc.defaultView;
@@ -1209,8 +1210,9 @@ frame.addEventListener("load", async () => {
         key("Escape"); assert(replies.pop() === "shift-cleared|-1||cancel", "Shift clear setup failed to cancel");
         for (const [i,bad] of [payload([],"Lydia","invalid"), {...payload([]), slots:Array(13).fill(null)}, {...payload([]), target:12}].entries()) {
             const token="invalid-payload-"+i;
+            const readyCount=readyAcks.length;
             begin(token,bad); view.psWheelArm(token); click(region(0));
-            assert(!visible()&&replies.length===1&&replies.pop()===`${token}|-1|rejected|cancel`,"Malformed payload did not report exactly one rejection");
+            assert(!visible()&&replies.length===1&&replies.pop()===`${token}|-1|rejected|cancel`&&readyAcks.length===readyCount,"Malformed payload did not reject without acknowledging initialization");
         }
         for (const mode of ["0", "1"]) {
             arm("host-" + mode, sparse); view.hostMode(mode); key("Enter");
@@ -1816,10 +1818,38 @@ frame.addEventListener("load", async () => {
         await new Promise(resolve=>setTimeout(resolve,120));
         assert(visible() && doc.activeElement === region(2) && region(2).classList.contains("hot"), "Disarm/rearm allowed a stale neutral timer to act on the new wheel");
         stick(4); pad("leftStick","change",0,0); pad("dpadRight");
-        pad("leftStick","change",0,0);
         await new Promise(resolve=>setTimeout(resolve,120));
         assert(doc.activeElement === region(5) && region(5).classList.contains("hot"), "D-pad focus was stolen by pending release grace or neutral stick input");
         key("Escape"); replies.pop();
+
+        const reuseSlots=[{label:"Signal",intent:"greet",action:{name:"WaitHere"}},{label:"Menu",submenu:"social"},{label:"Action",action:{name:"WaitHere"}}];
+        arm("reuse-dirty",reuseSlots);
+        region(1).focus();
+        key("Enter");
+        assert(replies.pop()==="reuse-dirty|1||navigate"&&!visible(),"Reuse setup did not open its submenu");
+        const reuseSubmenu=[...reuseSlots,{label:"Back",control:"back"}];
+        begin("reuse-submenu",payload(reuseSubmenu,"Serana","ember"));
+        view.psWheelArm("reuse-submenu");
+        assert(visible()&&doc.documentElement.classList.contains("ember")&&doc.getElementById("destination").textContent==="Serana","Warm submenu lost its current payload");
+        keyEvent("keydown","Shift","ShiftLeft",1); pad("west");
+        stick(0); pad("leftStick","change",0,0);
+        region(1).focus();
+        assert(doc.querySelector("#slot-0 .actionLabel").textContent==="SIGNAL", "Reuse setup did not leave X/Shift hybrid state");
+        key("Escape");
+        assert(replies.pop()==="reuse-submenu|-1||cancel"&&!flow()&&!visible(),"Reuse setup did not cancel and stop flow");
+        const readyCount=readyAcks.length, reuseToken="reuse-clean";
+        begin(reuseToken,payload(reuseSlots));
+        assert(readyAcks.length===readyCount+1&&readyAcks.at(-1)===reuseToken,"Successful begin did not acknowledge initialization");
+        view.psWheelArm(reuseToken);
+        assert(visible()&&doc.activeElement===region(0)&&region(0).classList.contains("hot"),"Reused page did not begin at its first focused target");
+        assert([...doc.querySelectorAll(".region.hot")].length===1&&[...doc.querySelectorAll(".sector.lit")].map(node=>node.id).join()==="slot-0","Reused page retained focus/lit history");
+        assert(!region(0,"nearby").classList.contains("hot")&&!doc.getElementById("slot-0").classList.contains("hybrid-openly")&&!region(0,"nearby").classList.contains("round"),"Reused page retained Shift/X hybrid preview");
+        assert(doc.querySelector("#slot-0 .actionLabel").textContent==="SIGNAL · ACTION"&&doc.querySelector("#slot-2 .actionLabel").textContent==="ACTION"&&doc.querySelector("#slot-1 .actionLabel").style.display==="none","Reused page retained stale badge text/visibility");
+        assert(doc.documentElement.classList.contains("slate")&&doc.getElementById("center").getAttribute("aria-label")==="Cancel"&&doc.querySelector(".hubHint").textContent==="Center: cancel"&&doc.getElementById("destination").textContent==="Lydia","Reused page retained theme, Back history, hub hint or destination");
+        assert(flow()&&flow().parentElement===region(0,"nearby")&&flowMarks().length===2,"Reused page failed to restart only the initial signal flow");
+        await new Promise(resolve=>setTimeout(resolve,120));
+        assert(visible()&&doc.activeElement===region(0)&&region(0).classList.contains("hot")&&!replies.length&&flow()&&doc.getElementById("center").getAttribute("aria-label")==="Cancel","Cancelled stick timer or input state leaked into reused page");
+        key("Escape"); assert(replies.pop()===`${reuseToken}|-1||cancel`,"Clean reused page failed to cancel");
 
         const fresh = document.createElement("iframe");
         fresh.width = "960"; fresh.height = "1000"; fresh.style.cssText = "position:absolute;left:-1200px;top:0";

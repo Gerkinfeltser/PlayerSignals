@@ -763,6 +763,7 @@
                     const enabled = available(index, mode); region.setAttribute("aria-disabled", String(!enabled)); region.setAttribute("tabindex", "-1");
                 }
             });
+            if (window.psWheelReady) window.psWheelReady(nextRequest);
         } catch (_) { rejectBegin(nextRequest, "build_error"); }
     };
     window.psWheelArm = token => {

@@ -17,6 +17,7 @@ String _mlResult = ""
 Bool _mlDomReady = False
 Bool _mlEntered = False
 Bool _mlPrimed = False
+Bool _mlPageReady = False
 Int _mlSequence = 0
 
 Bool Function UseMagelight()
@@ -33,6 +34,7 @@ Function InvalidateMagelight()
     _mlDomReady = False
     _mlEntered = False
     _mlPrimed = False
+    _mlPageReady = False
     If JContainers.isInstalled() && _mlSlots != 0
         _mlSlots = JValue.release(_mlSlots)
     EndIf
@@ -50,10 +52,17 @@ EndFunction
 Event OnMagelightDomReady(string eventName, string strArg, float numArg, Form sender)
     If UseMagelight() && strArg == "PlayerSignals" && numArg as Int == _mlView && _mlRequest != "" && _mlResult == ""
         If _mlPrimed
+            _mlDomReady = False
             _mlResult = _mlRequest + "|-1||cancel"
         Else
             _mlDomReady = True
         EndIf
+    EndIf
+EndEvent
+
+Event OnMagelightPageReady(string eventName, string strArg, float numArg, Form sender)
+    If UseMagelight() && numArg as Int == _mlView && strArg == _mlRequest && _mlRequest != "" && _mlResult == ""
+        _mlPageReady = True
     EndIf
 EndEvent
 
@@ -106,6 +115,7 @@ Event OnMagelightWheelChoice(string eventName, string strArg, float numArg, Form
     EndIf
     If _mlResult == "" && (strArg == request + "|-1|rejected|cancel" || strArg == request + "|-1|build_error|cancel")
         ; Normalize page failures to the existing cancel/release path before reporting.
+        _mlDomReady = False
         _mlResult = request + "|-1||cancel"
         If strArg == request + "|-1|rejected|cancel"
             Report("wheel data rejected by the page (JSON/schema validation); check layout.json", token)
@@ -181,14 +191,18 @@ Function PrimeMagelight(Int token)
     _mlPrimed = True
 EndFunction
 Event OnMagelightViewFailure(string eventName, string strArg, float numArg, Form sender)
-    If !UseMagelight() || _mlRequest == ""
+    If !UseMagelight()
         Return
     EndIf
     Int token = _generation
     String request = _mlRequest
     Bool ownEvent = strArg == "PlayerSignals" || StringUtil.Substring(strArg, 0, 14) == "PlayerSignals|"
-    If token == _generation && request == _mlRequest && _mlResult == "" && ownEvent && (numArg as Int == _mlView || (eventName == "Magelight_RenderDead" && numArg as Int == 0))
-        _mlResult = request + "|-1||cancel"
+    If token == _generation && request == _mlRequest && ownEvent && (numArg as Int == _mlView || (eventName == "Magelight_RenderDead" && numArg as Int == 0))
+        _mlDomReady = False
+        _mlPageReady = False
+        If request != "" && _mlResult == ""
+            _mlResult = request + "|-1||cancel"
+        EndIf
     EndIf
 EndEvent
 Function ScheduleMaintenance(Float delay)
@@ -248,6 +262,7 @@ Function Maintenance(Int token)
         RegisterForModEvent("Magelight_UIModeEntered", "OnMagelightUIModeEntered")
         RegisterForModEvent("Magelight_UIModeExited", "OnMagelightUIModeExited")
         RegisterForModEvent("Magelight_JS_psWheelChoice", "OnMagelightWheelChoice")
+        RegisterForModEvent("Magelight_JS_psWheelReady", "OnMagelightPageReady")
         RegisterForModEvent("Magelight_ViewLoadFailed", "OnMagelightViewFailure")
         RegisterForModEvent("Magelight_FocusDenied", "OnMagelightViewFailure")
         RegisterForModEvent("Magelight_RenderDead", "OnMagelightViewFailure")
@@ -274,6 +289,14 @@ Function Maintenance(Int token)
         EndIf
         If !listening
             Report("Magelight wheel view/listener is unavailable.")
+            Return
+        EndIf
+        listening = Magelight.RegisterListener(_mlView, "psWheelReady")
+        If token != _generation
+            Return
+        EndIf
+        If !listening
+            Report("Magelight wheel readiness listener is unavailable.")
             Return
         EndIf
     ElseIf Game.GetModByName("UIExtensions.esp") == 255
@@ -982,7 +1005,7 @@ Int Function BrowseMagelight(Int slots, Int token)
     _mlRequest = request
     _mlResult = ""
     _mlSlots = slotLease
-    _mlDomReady = False
+    _mlPageReady = False
     _mlPrimed = False
     Int view = Magelight.FindView("PlayerSignals", "wheel")
     If token != _generation || !_ready || _mlRequest != request
@@ -991,6 +1014,9 @@ Int Function BrowseMagelight(Int slots, Int token)
     If view == 0
         InvalidateMagelight()
         Return -1
+    EndIf
+    If view != _mlView
+        _mlDomReady = False
     EndIf
     _mlView = view
     If firstWheel
@@ -1005,7 +1031,7 @@ Int Function BrowseMagelight(Int slots, Int token)
         EndIf
         Float entryDeadline = Utility.GetCurrentRealTime() + 5.0
         While token == _generation && _mlRequest == request && _mlResult == "" && !_mlEntered && Utility.GetCurrentRealTime() < entryDeadline
-            Utility.WaitMenuMode(0.1)
+            Utility.WaitMenuMode(0.02)
         EndWhile
     Else
         ; Never reacquire after a forced exit between wheels.
@@ -1029,15 +1055,17 @@ Int Function BrowseMagelight(Int slots, Int token)
         InvalidateMagelight()
         Return -1
     EndIf
-    _mlDomReady = False
-    Magelight.ReloadView(view)
-    If token != _generation || _mlRequest != request
-        Return -1
+    ; Keep a successful page warm; maintenance, failures and view changes invalidate it.
+    If !_mlDomReady
+        Magelight.ReloadView(view)
+        If token != _generation || _mlRequest != request
+            Return -1
+        EndIf
+        Float deadline = Utility.GetCurrentRealTime() + 10.0
+        While token == _generation && _mlRequest == request && _mlResult == "" && !_mlDomReady && Utility.GetCurrentRealTime() < deadline
+            Utility.WaitMenuMode(0.02)
+        EndWhile
     EndIf
-    Float deadline = Utility.GetCurrentRealTime() + 10.0
-    While token == _generation && _mlRequest == request && _mlResult == "" && !_mlDomReady && Utility.GetCurrentRealTime() < deadline
-        Utility.WaitMenuMode(0.1)
-    EndWhile
     If token != _generation || _mlRequest != request
         Return -1
     EndIf
@@ -1050,6 +1078,18 @@ Int Function BrowseMagelight(Int slots, Int token)
         Return -1
     EndIf
     If _mlResult != ""
+        InvalidateMagelight()
+        Return -1
+    EndIf
+    ; A request-specific begin acknowledgment proves the warm page is initialized.
+    Float readyDeadline = Utility.GetCurrentRealTime() + 10.0
+    While token == _generation && _mlRequest == request && _mlResult == "" && !_mlPageReady && Utility.GetCurrentRealTime() < readyDeadline
+        Utility.WaitMenuMode(0.02)
+    EndWhile
+    If token != _generation || _mlRequest != request
+        Return -1
+    EndIf
+    If !_mlPageReady || _mlResult != ""
         InvalidateMagelight()
         Return -1
     EndIf
@@ -1171,6 +1211,7 @@ Bool Function FinishMagelight(Int token)
         EndIf
     EndWhile
     If stillOwned && activeView == view
+        _mlDomReady = False
         Return False
     EndIf
     view = Magelight.FindView("PlayerSignals", "wheel")
@@ -1183,7 +1224,7 @@ Bool Function FinishMagelight(Int token)
     If token != _generation
         Return False
     EndIf
-    _mlView = 0
+    ; Retain the view identity with its DOM-ready cache for the next open.
     Return True
 EndFunction
 

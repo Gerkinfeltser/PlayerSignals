@@ -282,8 +282,23 @@ function Subback-Path($d) {
     Transform-PathData $path $subbackMatrix
     $path.GetAttribute('d')
 }
-$subbackUnionD = Subback-Path $unionD
-$subbackEdgeD = Subback-Path $unionEdgeD
+# Narrow the core across its axis; slide shoulders along the unchanged knot arms.
+$navWidth = 0.7
+$navLeft = @(($outerLeft[0] * $navWidth), (-$tipOuter + ($outerLeft[1] + $tipOuter) * $navWidth))
+$navRight = @(-$navLeft[0], $navLeft[1])
+$navUnionD = 'M{0}L{1}L{2}L{3}Z' -f `
+    (Svg-Point $apex), (Svg-Point $navLeft), (Point $tipOuter 0), (Svg-Point $navRight)
+$navSidePoints = @($apex, $navLeft, (Local-Point $tipOuter 0), $navRight, $apex)
+$navLines = @(for ($i = 0; $i -lt 4; $i++) { ,(Side-Line $navSidePoints[$i] $navSidePoints[$i + 1] $edgeInset) })
+$navEdge = [Collections.Generic.List[string]]::new()
+$navEdge.Add(('M' + (Svg-Point (Line-Crossing $navLines[0] $navLines[3]))))
+for ($i = 1; $i -lt 4; $i++) {
+    $a = $navLines[$i - 1]; $b = $navLines[$i]; $corner = Line-Crossing $a $b
+    $navEdge.Add(('L' + (Svg-Point @(($corner[0] - $edgeChamfer * $a[2]), ($corner[1] - $edgeChamfer * $a[3])))))
+    $navEdge.Add(('L' + (Svg-Point @(($corner[0] + $edgeChamfer * $b[2]), ($corner[1] + $edgeChamfer * $b[3])))))
+}
+$subbackUnionD = Subback-Path $navUnionD
+$subbackEdgeD = Subback-Path (($navEdge -join '') + 'Z')
 $svg.SetAttribute('data-nav-scale', $navScale.ToString('0.##', [Globalization.CultureInfo]::InvariantCulture))
 # Fixed slice-local placement clears the hub's maximum pop; fit once at each glyph's outer extent.
 $arrowRadius = 525

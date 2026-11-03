@@ -29,14 +29,14 @@ The native intermediate build directory is `PlayerSignals_native/.build/` and is
 
 ## Runtime requirements and behavior
 
-Raw slots require the matching `PlayerSignals.dll` in `Data/SKSE/Plugins`, SKSE, and Address Library for SKSE Plugins (the VR Address Library on VR). Non-raw slots do not require this DLL. Raw dispatch uses Windows scan-code input only while the Skyrim process owns the foreground window; it sends key-up after the requested hold even if focus changes after key-down. Scan codes are 1–255, and hold time is 1–2000 ms.
+Raw slots require the matching `PlayerSignals.dll` in `Data/SKSE/Plugins`, SKSE, and Address Library for SKSE Plugins (the VR Address Library on VR). Non-raw slots do not require this DLL. Raw dispatch uses Windows scan-code input only while the Skyrim process owns the foreground window; it sends key-up after the requested hold even if focus changes after key-down. For overlapping presses of the same scan code, only the latest press's worker sends key-up; earlier workers log that they skipped it. Scan codes are 1–255, and hold time is 1–2000 ms.
 
-## 1.0.0 payload build receipt
+## 1.0.1 payload build receipt
 
-Offline Windows Release build: `PlayerSignals/SKSE/Plugins/PlayerSignals.dll`, 865280 bytes.
+Offline Windows Release build: `PlayerSignals/SKSE/Plugins/PlayerSignals.dll`, 865792 bytes.
 
-SHA-256: `866088113AB745B33A2CBE46708E581F7EA30429BADCADC7914B6F4893913E9D`.
+SHA-256: `9EFEAC8BAAE660F55F269378CD2EF6389B99F257720C344A2B2A6A43B1CE8306`.
 
-`dumpbin /exports` reports `SKSEPlugin_Load`, `SKSEPlugin_Query`, and `SKSEPlugin_Version`. `/dependents` reports only `KERNEL32.dll`, `USER32.dll`, `ole32.dll`, `VERSION.dll`, and `SHELL32.dll`; no external CRT DLL is imported. Generated metadata identifies plugin version 1.0.0; `GetNativeVersion()` returns API version 1.
+`dumpbin /exports` reports `SKSEPlugin_Load`, `SKSEPlugin_Query`, and `SKSEPlugin_Version`. `/dependents` reports only `KERNEL32.dll`, `USER32.dll`, `ole32.dll`, `VERSION.dll`, and `SHELL32.dll`; no external CRT DLL is imported. Generated metadata identifies plugin version 1.0.1; `GetNativeVersion()` returns API version 1.
 
 This receipt proves the built payload, not installation or runtime acceptance. The owner verified the two dashboards in the 1.6.1170 spike only. Production cases 1–6 still need in-game testing on 1.6.1170 and 1.7.104; 1.5.97 and VR remain build-only, untested.

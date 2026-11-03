@@ -3,6 +3,7 @@
 
 #include <Windows.h>
 
+#include <atomic>
 #include <cstdint>
 #include <thread>
 
@@ -10,7 +11,8 @@ namespace logger = SKSE::log;
 
 namespace {
 constexpr char kScriptName[] = "PlayerSignals_Native";
-constexpr char kVersion[] = "1.0.0";
+constexpr char kVersion[] = "1.0.1";
+std::atomic<std::uint32_t> g_pressSeq[256]{};
 
 void SendKeyUp(WORD scanCode, DWORD flags, std::int32_t requestedCode)
 {
@@ -56,12 +58,17 @@ bool SendRawKey(RE::StaticFunctionTag*, std::int32_t scanCode, std::int32_t hold
         logger::warn("SendRawKey: code={}, result=false, foreground=true: key-down failed, error={}", scanCode, GetLastError());
         return false;
     }
+    const auto ticket = ++g_pressSeq[scanCode];
 
     std::thread worker;
     try {
-        worker = std::thread([scan, flags, holdMs, scanCode]() {
+        worker = std::thread([scan, flags, holdMs, scanCode, ticket]() {
             Sleep(static_cast<DWORD>(holdMs));
-            SendKeyUp(scan, flags, scanCode);
+            if (g_pressSeq[scanCode].load() == ticket) {
+                SendKeyUp(scan, flags, scanCode);
+            } else {
+                logger::info("SendRawKey: code={}: skipping key-up owned by a later press", scanCode);
+            }
         });
         worker.detach();
     } catch (...) {

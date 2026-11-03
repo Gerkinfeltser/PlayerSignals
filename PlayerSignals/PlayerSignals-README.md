@@ -393,7 +393,7 @@ Check the Magelight page log, make sure you have Magelight 1.7.1+ for your Skyri
 
 ### Why didn't I get a notification?
 
-The notification appears only when SkyrimNet receives the narration successfully. Check any PlayerSignals error and your dependencies. If the captured NPC is no longer available, the gesture is cancelled unless you held Shift for Openly. Navigation and cancellation don't show a submission notification.
+The notification appears only when SkyrimNet receives the narration successfully. Check any PlayerSignals error and your dependencies. If the captured NPC is no longer available, the gesture is cancelled unless you chose Openly (Shift, the Openly tip, or X on a gamepad). Navigation and cancellation don't show a submission notification.
 
 ### Why didn't an NPC reply after I got a notification?
 

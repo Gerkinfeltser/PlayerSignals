@@ -169,6 +169,7 @@
     let request = "", completedRequest = "", armed = false, finished = false, focused = -1, focusedMode = "target", targetName = "";
     let liftFrame = 0, liftStart = 0, liftDuration = 0;
     const shiftKeys = new Set();
+    let hubShiftHeld = false;
     // DirectInput DIK offsets -> standard physical KeyboardEvent.code values (not localized key text).
     // https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ee418641(v=vs.85)
     // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values
@@ -476,12 +477,27 @@
     const destination = document.createElement("div"); destination.id = "destination";
     const hint = document.createElement("div"); hint.className = "hubHint"; hint.textContent = "Center: cancel";
     hub.append(caption, destination, hint);
-    cancel.addEventListener("click", () => choose(-1));
-    cancel.addEventListener("mouseenter", () => { if (armed) { if (document.activeElement === cancel) showCancel(); else cancel.focus(); } });
+    cancel.addEventListener("click", event => { syncHubShift(event); activateHub(); });
+    cancel.addEventListener("mouseenter", event => { if (armed) { syncHubShift(event); if (document.activeElement === cancel) showHub(); else cancel.focus(); } });
+    cancel.addEventListener("mousemove", syncHubShift);
     cancel.addEventListener("mouseleave", () => { if (armed && document.activeElement === cancel) liftTo(-1); });
     cancel.addEventListener("blur", () => { if (armed && focused < 0) liftTo(-1); });
-    function showCancel() { stopFlow(); focused = -1; clearHighlight(); liftTo(12); caption.textContent = "Cancel"; destination.textContent = targetName || "No target · Openly"; fit(hub, 100); }
-    cancel.addEventListener("focus", showCancel);
+    function hubBackIndex() { return hubShiftHeld ? entries.findIndex(item => item?.[2] === "back") : -1; }
+    function activateHub() { choose(hubBackIndex(), "target"); }
+    // A new view may open while Shift is already held, without a fresh keydown.
+    function syncHubShift(event) {
+        if (!armed || hubShiftHeld === event.shiftKey) return;
+        hubShiftHeld = event.shiftKey;
+        updateHubAction();
+    }
+    function updateHubAction() {
+        const label = hubBackIndex() >= 0 ? "Back" : "Cancel";
+        cancel.setAttribute("aria-label", label);
+        hint.textContent = "Center: " + label.toLowerCase();
+        if (focused < 0) { caption.textContent = label; fit(hub, 100); }
+    }
+    function showHub() { stopFlow(); focused = -1; clearHighlight(); liftTo(12); destination.textContent = targetName || "No target · Openly"; updateHubAction(); }
+    cancel.addEventListener("focus", showHub);
     function available(index, mode) {
         const kind = entries[index]?.[2];
         return Boolean(kind && !(kind === "action" && !targetName) && (mode === "target" || (mode === "nearby" && (kind === "intent" || kind === "hotkey"))));
@@ -528,7 +544,8 @@
     function choose(index, mode = "cancel") {
         if (!armed || finished || (index >= 0 && !available(index, mode))) return;
         finished = true; armed = false;
-        shiftKeys.clear();
+        shiftKeys.clear(); hubShiftHeld = false;
+        updateHubAction();
         surface.dataset.armed = "false"; stopFlow(); stopLift();
         if (window.magelight) window.magelight.send("__escapecapture", "0");
         completedRequest = request; disable();
@@ -538,7 +555,7 @@
     }
     function failClosed(token = "") {
         request = token; armed = false; finished = true; focused = -1; focusedMode = "target"; targetName = "";
-        shiftKeys.clear();
+        shiftKeys.clear(); hubShiftHeld = false;
         openKeyBrowserCode = "";
         document.getElementById("openKeyHelp").textContent = "";
         stopFlow(); stopLift();
@@ -546,6 +563,7 @@
         document.documentElement.classList.add("slate");
         surface.dataset.armed = "false"; entries.fill(null); disable(); clearHighlight();
         sectors.forEach(({ group, target, content, nearby, actionBadge }) => { delete group.dataset.kind; group.classList.remove("slot-colored"); group.style.removeProperty("--slot-idle-fill"); target.classList.remove("navigation", "gesture", "action", "empty"); content.textContent = ""; nearby.classList.remove("signal"); actionBadge.style.display = "none"; });
+        updateHubAction();
         if (window.magelight) window.magelight.send("__escapecapture", "0");
     }
     function rejectBegin(token, reason) {
@@ -670,7 +688,7 @@
             });
             cancel.setAttribute("tabindex", "0");
             const first = firstAvailable(-1, 1);
-            if (first >= 0) focusRegion(first, "target"); else if (document.activeElement === cancel) showCancel(); else cancel.focus();
+            if (first >= 0) focusRegion(first, "target"); else if (document.activeElement === cancel) showHub(); else cancel.focus();
         } catch (_) { rejectBegin(token, "build_error"); }
     };
     document.addEventListener("keydown", event => {
@@ -680,8 +698,9 @@
             if (!event.repeat) choose(-1);
             return;
         }
+        if (armed && event.key !== "Shift") syncHubShift(event);
         if (event.key === "Shift") {
-            if (armed) { shiftKeys.add(event.code || "Shift" + event.location); if (focused >= 0) highlight(focused, focusedMode); }
+            if (armed) { shiftKeys.add(event.code || "Shift" + event.location); hubShiftHeld = true; if (focused >= 0) highlight(focused, focusedMode); updateHubAction(); }
             return;
         }
         if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); choose(-1); }
@@ -694,19 +713,20 @@
                 focusRegion(index, mode);
             }
         } else if (armed && (event.key === "Enter" || event.key === " ")) {
-            if (document.activeElement === cancel) { event.preventDefault(); choose(-1); }
+            if (document.activeElement === cancel) { event.preventDefault(); activateHub(); }
             else if (focused >= 0 && document.activeElement === sectors[focused][focusedMode]) { event.preventDefault(); choose(focused, focusedMode); }
         }
     });
     document.addEventListener("keyup", event => {
-        if (event.key !== "Shift") return;
+        if (event.key !== "Shift") { syncHubShift(event); return; }
         shiftKeys.delete(event.code || "Shift" + event.location);
-        if (armed && focused >= 0) highlight(focused, focusedMode);
+        if (armed) { hubShiftHeld = shiftKeys.size > 0 || event.shiftKey; if (focused >= 0) highlight(focused, focusedMode); updateHubAction(); }
     });
     window.addEventListener("blur", () => {
-        shiftKeys.clear();
+        shiftKeys.clear(); hubShiftHeld = false;
         if (armed && focused >= 0) highlight(focused, focusedMode);
         else if (armed) liftTo(-1);
+        updateHubAction();
         stopFlow();
     });
     failClosed();

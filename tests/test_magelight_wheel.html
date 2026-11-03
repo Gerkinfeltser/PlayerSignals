@@ -826,6 +826,74 @@ frame.addEventListener("load", async () => {
         assert(region(2).classList.contains("hot") && view.getComputedStyle(region(2,"nearby")).display === "none" && doc.getElementById("destination").textContent === "Navigation", "Shift changed the merged navigation preview");
         region(0).focus(); keyEvent("keydown","Shift","ShiftLeft",1); click(region(0));
         assert(replies.pop() === "shift-preview|0|greet|target", "Shift preview changed core gesture dispatch");
+        const caption = doc.getElementById("caption"), hubHint = doc.querySelector(".hubHint");
+        const assertHubAction = label => assert(caption.textContent === label && center.getAttribute("aria-label") === label && hubHint.textContent.toLowerCase().includes(label.toLowerCase()), `Hub did not show ${label}`);
+        const clickHub = (shiftKey=false) => center.dispatchEvent(new view.MouseEvent("click",{bubbles:true,shiftKey}));
+        const hubKey = key => doc.dispatchEvent(new view.KeyboardEvent("keydown",{key,bubbles:true,cancelable:true,shiftKey:true}));
+        const customBack = Array(12).fill(null); customBack[3] = {label:"Return",control:"back"};
+        arm("hub-back-custom-baseline", customBack); center.focus();
+        click(region(3));
+        const customBackSuffix = replies.pop().split("|").slice(1).join("|");
+        assert(customBackSuffix === "3||navigate", "Normal typed Back slot dispatch changed");
+        const backReply = token => `${token}|${customBackSuffix}`;
+        for (const [name, slots] of Object.entries(layout.wheels)) {
+            if (name === layout.root || !slots.some(slot => slot?.control === "back")) continue;
+            const token = `hub-back-${name}`;
+            const backIndex = slots.findIndex(slot => slot?.control === "back");
+            arm(token+"-slot", slots); click(region(backIndex));
+            const normalSuffix = replies.pop().split("|").slice(1).join("|");
+            arm(token, slots); center.focus();
+            keyEvent("keydown","Shift","ShiftLeft",1);
+            assertHubAction("Back");
+            clickHub(true);
+            assert(replies.pop() === `${token}|${normalSuffix}`, `${name} hub click did not reuse its typed Back reply`);
+        }
+        arm("hub-back-index", customBack); center.focus();
+        keyEvent("keydown","Shift","ShiftRight",2); assertHubAction("Back");
+        keyEvent("keydown","Shift","ShiftLeft",1); keyEvent("keyup","Shift","ShiftRight",2);
+        assertHubAction("Back");
+        keyEvent("keyup","Shift","ShiftLeft",1); assertHubAction("Cancel");
+        keyEvent("keydown","Shift","ShiftLeft",1); keyEvent("keyup","Shift","ShiftLeft",1);
+        center.dispatchEvent(new view.MouseEvent("mouseenter")); keyEvent("keydown","Shift","ShiftRight",2);
+        assertHubAction("Back");
+        keyEvent("keyup","Shift","ShiftRight",2); assertHubAction("Cancel");
+        center.focus(); keyEvent("keydown","Shift","ShiftLeft",1); assertHubAction("Back");
+        hubKey("Enter"); assert(replies.pop() === backReply("hub-back-index"), "Focused-hub Enter did not activate typed Back");
+        arm("hub-back-space", customBack); center.focus(); keyEvent("keydown","Shift","ShiftRight",2);
+        hubKey(" "); assert(replies.pop() === backReply("hub-back-space"), "Focused-hub Space did not activate typed Back");
+        arm("hub-back-release", customBack); keyEvent("keydown","Shift","ShiftLeft",1); center.focus(); assertHubAction("Back");
+        keyEvent("keyup","Shift","ShiftLeft",1); assertHubAction("Cancel");
+        clickHub(); assert(replies.pop() === "hub-back-release|-1||cancel", "Released Shift hub did not cancel");
+        arm("hub-held-pointer", customBack); center.focus();
+        center.dispatchEvent(new view.MouseEvent("mousemove",{bubbles:true,shiftKey:true})); assertHubAction("Back");
+        center.dispatchEvent(new view.MouseEvent("mousemove",{bubbles:true,shiftKey:false})); assertHubAction("Cancel");
+        clickHub(true); assert(replies.pop() === backReply("hub-held-pointer"), "Already-held Shift click required a new keydown");
+        arm("hub-held-keyboard", customBack); center.focus();
+        hubKey("Enter"); assert(replies.pop() === backReply("hub-held-keyboard"), "Already-held Shift Enter required a new keydown");
+        for (const [name, keyName, code, location] of [["Escape","Escape","Escape",0],["Tab","Tab","Tab",0],["open","Alt","AltRight",2]]) {
+            const token = `hub-shift-cancel-${name}`;
+            arm(token, customBack); center.focus(); keyEvent("keydown","Shift","ShiftLeft",1);
+            keyEvent("keydown",keyName,code,location);
+            assert(replies.pop() === `${token}|-1||cancel`, `${name} stopped cancelling while Shift was held`);
+        }
+        for (const [token, slots] of [
+            ["hub-root-no-back", layout.wheels[layout.root]],
+            ["hub-custom-no-back", [{label:"Signal",intent:"greet"}]],
+            ["hub-label-is-not-back", [{label:"Back",intent:"greet"}]]
+        ]) {
+            arm(token, slots); center.focus(); keyEvent("keydown","Shift","ShiftRight",2);
+            assertHubAction("Cancel");
+            click(center); assert(replies.pop() === `${token}|-1||cancel`, `${token} incorrectly enabled hub Back`);
+        }
+        arm("hub-blur-reset", customBack); center.focus(); keyEvent("keydown","Shift","ShiftLeft",1);
+        view.dispatchEvent(new view.Event("blur"));
+        assertHubAction("Cancel");
+        keyEvent("keydown","Shift","ShiftRight",2); assertHubAction("Back");
+        key("Escape"); assert(replies.pop() === "hub-blur-reset|-1||cancel", "Blur-reset setup failed to cancel");
+        arm("hub-reopen-reset", customBack); center.focus(); keyEvent("keydown","Shift","ShiftLeft",1);
+        assertHubAction("Back"); view.hostMode("0"); assert(!visible()&&!replies.length, "Host disarm left hub input active");
+        arm("hub-reopened", customBack); center.focus();
+        assertHubAction("Cancel"); key("Escape"); assert(replies.pop() === "hub-reopened|-1||cancel", "Reopened hub retained Shift state");
         arm("shift-disarm", [{label:"Gesture",intent:"greet"}]); doc.getElementById("center").focus(); region(0).focus();
         keyEvent("keydown","Shift","ShiftLeft",1); assert(region(0,"nearby").classList.contains("hot"), "Disarm preview setup failed"); key("Escape");
         assert(replies.pop() === "shift-disarm|-1||cancel", "Shift disarm failed"); arm("shift-cleared", [{label:"Gesture",intent:"greet"}]);
@@ -1364,6 +1432,7 @@ frame.addEventListener("load", async () => {
         report.textContent += " Flow: geometry-scaled signal/trail/padding; lit non-bulb chevrons use additive warm-white #fff6e0 at peak 0.35 (clamped-addition normal fallback); bulb ripples stay at 0.12 (warm yellow when lit, exact mint when uncoloured, slot-derived lower hue/lightness lift when coloured); HOLD/power-fade profile, exclusions, one shared rAF, 2400ms travel and reduced-motion/0ms behavior. Colours: strict extras, all six kinds/three themes, both idle parts, standard selected fills/bands/caps, lit label/badge colours, disabled actions, malformed extras and reuse cleanup.";
         report.textContent += " Radial labels and badges: all 12 readable angles, wrapped line order, viewport and slice containment, chord/artwork clearance, and shared lift checked across all five shipped wheels.";
         report.textContent += " Quadrants: two transformed 45°-from-vertical diameters, visible white at 90% opacity, behind all slots/hub, pointer-transparent at slice/hub/exposed probes, fixed across all shipped wheels, themes and slice lifts.";
+        report.textContent += " Shift hub Back: existing typed Back replies across shipped submenus/custom indices; held-before-arm modifiers, dual-Shift release, click/Enter/Space, no-Back Cancel, keyboard cancellation and lifecycle resets.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

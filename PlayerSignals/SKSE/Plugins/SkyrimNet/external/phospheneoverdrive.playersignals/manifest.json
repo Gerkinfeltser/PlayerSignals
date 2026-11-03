@@ -1,6 +1,6 @@
 {
   "author": "phospheneoverdrive",
-  "description": "Optional SkyrimNet WebUI agent for authoring PlayerSignals intents.json and matching wheel references. Generates JSON for the user to save; does not read or write configuration files, add actions/triggers, or control wheel dispatch. PlayerSignals is alpha; in-game acceptance of the current catalog and recipient feedback remains pending.",
+  "description": "Optional SkyrimNet WebUI agent that drafts intents.json and layout.json changes for PlayerSignals 0.2.0 from files you paste in. It does not read or write your configuration files, and the wheel works without it.",
   "icon": "package",
   "id": "phospheneoverdrive.playersignals",
   "min_skyrimnet_version": "0.25.0",

@@ -64,7 +64,7 @@
     #wheelSvg .sector[aria-disabled="true"] .target-region .hit-area { fill: var(--nav-fill) !important; stroke: rgba(216,212,200,.28); stroke-width: 9; }
     #wheelSvg .sector.slot-colored:not([aria-disabled="true"]) .target-region:not(.hot) .hit-area, #wheelSvg .sector.slot-colored:not([aria-disabled="true"]) .nearby-region:not(.hot) .hit-area { fill: var(--slot-idle-fill) !important; }
     .sector.slot-colored { --lit-kind-fill: var(--slot-idle-fill); }
-    .sector.slot-colored.hybrid-openly { --slot-idle-fill: var(--gesture-fill) !important; } /* Hybrid acting as a plain signal tweens back to signal blue. */
+    .sector.slot-colored.hybrid-openly { --slot-idle-fill: var(--slot-openly-fill) !important; } /* Hybrid acting as a plain signal tweens partway toward signal blue. */
     #wheelSvg #center-hit { fill: #292c29 !important; fill-opacity: 1 !important; pointer-events: all; }
     #wheelSvg #center path { pointer-events: visiblePainted; cursor: pointer; }
     #center:hover #center-hit, #center:focus #center-hit { fill: #53452e !important; }
@@ -290,6 +290,11 @@
     const slotColor = item => item?.[3]?.color ?? (item?.[3]?.hybrid ? HYBRID_DEFAULT_COLOR : null);
     const SLOT_RIPPLE_HUE_SHIFT = .16; // Turns toward lower hue.
     const SLOT_RIPPLE_LIGHTNESS_LIFT = 93 / 255; // HSL lightness: #7fe6d4 minus #455766.
+    const HYBRID_OPENLY_MIX = .5; // Share of signal blue in a hybrid's Openly fill (1 = full signal colour).
+    function mixHex(a, b, t) {
+        const channel = (hex, i) => parseInt(hex.slice(1 + 2 * i, 3 + 2 * i), 16);
+        return "rgb(" + [0, 1, 2].map(i => Math.round(channel(a, i) + (channel(b, i) - channel(a, i)) * t)).join(",") + ")";
+    }
     function slotRippleTint(hex) {
         const [r, g, b] = [1, 3, 5].map(start => parseInt(hex.slice(start, start + 2), 16) / 255);
         const max = Math.max(r, g, b), min = Math.min(r, g, b), chroma = max - min;
@@ -584,7 +589,7 @@
         document.documentElement.classList.remove("slate", "moss", "ember");
         document.documentElement.classList.add("slate");
         surface.dataset.armed = "false"; entries.fill(null); disable(); clearHighlight();
-        sectors.forEach(({ group, target, content, nearby, actionBadge }) => { delete group.dataset.kind; group.classList.remove("slot-colored", "hybrid-openly"); group.style.removeProperty("--slot-idle-fill"); target.classList.remove("navigation", "gesture", "action", "empty"); content.textContent = ""; nearby.classList.remove("signal", "hybrid"); actionBadge.style.display = "none"; });
+        sectors.forEach(({ group, target, content, nearby, actionBadge }) => { delete group.dataset.kind; group.classList.remove("slot-colored", "hybrid-openly"); group.style.removeProperty("--slot-idle-fill"); group.style.removeProperty("--slot-openly-fill"); target.classList.remove("navigation", "gesture", "action", "empty"); content.textContent = ""; nearby.classList.remove("signal", "hybrid"); actionBadge.style.display = "none"; });
         updateHubAction();
         if (window.magelight) window.magelight.send("__escapecapture", "0");
     }
@@ -664,6 +669,7 @@
                 group.classList.toggle("slot-colored", Boolean(slotColor(item)));
                 nearby.classList.toggle("hybrid", item?.[3]?.hybrid === true);
                 if (slotColor(item)) group.style.setProperty("--slot-idle-fill", slotColor(item));
+                if (item?.[3]?.hybrid) group.style.setProperty("--slot-openly-fill", mixHex(slotColor(item), getComputedStyle(document.documentElement).getPropertyValue("--gesture-fill").trim(), HYBRID_OPENLY_MIX));
                 const navigation = ["navigation", "submenu", "back"].includes(kind);
                 const merged = disabled || (kind !== "intent" && kind !== "hotkey");
                 target.classList.toggle("empty", !item);

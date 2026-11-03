@@ -826,10 +826,15 @@ frame.addEventListener("load", async () => {
             for (const mode of ["target","nearby"]) assert(hybridFill(i,mode)===color, `Hybrid ${i}/${mode} idle fill is not ${color}`);
         };
         assertHybridIdle(0,"rgb(92, 74, 114)");
-        for (const color of [null,"#63a4e8"]) {
-            arm("hybrid-openly-tween", [{...hybrids[0], ...(color ? {color} : {})},hybrids[1]]);
+        for (const [theme, mixes] of [
+            ["slate", ["rgb(81, 81, 108)", "rgb(84, 126, 167)"]],
+            ["moss", ["rgb(80, 82, 94)", "rgb(83, 127, 153)"]],
+            ["ember", ["rgb(96, 73, 88)", "rgb(100, 118, 147)"]]
+        ]) for (const [colorIndex, color] of [null,"#63a4e8"].entries()) {
+            const slots=[{...hybrids[0], ...(color ? {color} : {})},hybrids[1]];
+            arm("hybrid-openly-tween", slots, "Lydia", theme);
             center.focus();
-            const idle=color ? "rgb(99, 164, 232)" : "rgb(92, 74, 114)", blue="rgb(69, 87, 102)";
+            const idle=color ? "rgb(99, 164, 232)" : "rgb(92, 74, 114)", mixed=mixes[colorIndex];
             assertHybridIdle(0,idle);
             doc.documentElement.style.removeProperty("--ps-tween");
             await raf.nextFrame();
@@ -839,15 +844,15 @@ frame.addEventListener("load", async () => {
                 assert(style.transitionProperty.split(",").map(s=>s.trim()).includes("fill"), "Hybrid fill has no transition");
                 const transition=hit.getAnimations().find(a=>a.transitionProperty==="fill");
                 if (view.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-                    assert(!transition && hybridFill(0,mode)===blue, "Reduced motion did not snap hybrid to signal blue");
+                    assert(!transition && hybridFill(0,mode)===mixed, "Reduced motion did not snap hybrid to its 50% Openly mix");
                 } else {
                     assert(transition && transition.effect.getTiming().duration>0, "Openly fill swapped instantly instead of starting a transition");
                     transition.pause(); transition.currentTime=transition.effect.getTiming().duration/2;
-                    assert(![idle,blue].includes(hybridFill(0,mode)), "Hybrid mid-tween fill is an endpoint");
+                    assert(![idle,mixed].includes(hybridFill(0,mode)), "Hybrid mid-tween fill is an endpoint");
                     transition.finish();
                 }
             }
-            assertHybridIdle(0,blue);
+            assertHybridIdle(0,mixed);
             keyEvent("keyup","Shift","ShiftLeft",1);
             for (const mode of ["target","nearby"]) {
                 const hit=region(0,mode).querySelector(".hit-area");
@@ -857,15 +862,15 @@ frame.addEventListener("load", async () => {
             assertHybridIdle(0,idle);
             doc.documentElement.style.setProperty("--ps-tween","0ms");
             region(0,"nearby").focus();
-            assert(hybridColorGroup.classList.contains("hybrid-openly") && view.getComputedStyle(hybridColorGroup).getPropertyValue("--slot-idle-fill").trim()==="#455766", "Own tip did not set the hybrid idle palette to signal blue");
+            assert(hybridColorGroup.classList.contains("hybrid-openly") && view.getComputedStyle(hybridColorGroup).getPropertyValue("--slot-idle-fill").replace(/\s/g,"")===mixed.replace(/\s/g,""), "Own tip did not set the hybrid idle palette to its 50% Openly mix");
             assertHybridIdle(1,"rgb(92, 74, 114)");
             assert(hybridFill(0)==="rgb(255, 220, 140)" && hybridFill(0,"nearby").includes("cap-lit-hybrid-gradient"), "Openly changed hot core/bulb appearance");
             center.focus(); assertHybridIdle(0,idle);
             keyEvent("keydown","Shift","ShiftLeft",1);
-            assertHybridIdle(0,blue);
+            assertHybridIdle(0,mixed);
             key("Escape"); replies.pop();
-            arm("hybrid-openly-no-target", [hybrids[0]], ""); center.focus();
-            assertHybridIdle(0,blue);
+            arm("hybrid-openly-no-target", slots, "", theme); center.focus();
+            assertHybridIdle(0,mixed);
             key("Escape"); replies.pop();
         }
         key("Escape"); replies.pop();
@@ -873,7 +878,7 @@ frame.addEventListener("load", async () => {
         assert(hybridColorGroup.classList.contains("slot-colored") && hybridColorGroup.style.getPropertyValue("--slot-idle-fill") === "#63a4e8", "Explicit hybrid colour did not override the purple default");
         key("Escape"); replies.pop();
         arm("hybrid-color-reuse-plain", [{label:"Signal",intent:"greet"}]); center.focus();
-        assert(!hybridColorGroup.classList.contains("slot-colored") && !hybridColorGroup.classList.contains("hybrid-openly") && hybridColorGroup.style.getPropertyValue("--slot-idle-fill") === "" && view.getComputedStyle(region(0).querySelector(".hit-area")).fill === "rgb(69, 87, 102)", "Plain signal reuse retained the hybrid colour or Openly class");
+        assert(!hybridColorGroup.classList.contains("slot-colored") && !hybridColorGroup.classList.contains("hybrid-openly") && hybridColorGroup.style.getPropertyValue("--slot-idle-fill") === "" && hybridColorGroup.style.getPropertyValue("--slot-openly-fill") === "" && view.getComputedStyle(region(0).querySelector(".hit-area")).fill === "rgb(69, 87, 102)", "Plain signal reuse retained the hybrid colour, Openly mix or class");
         key("Escape"); replies.pop();
         for (const slot of hybrids) for (const [mode,target,shift] of [
             ["target","Lydia",false], ["nearby","Lydia",false],
@@ -883,7 +888,7 @@ frame.addEventListener("load", async () => {
             arm(token,[slot],target); center.focus();
             const group=doc.getElementById("slot-0"), badge=group.querySelector(".actionLabel"), label=doc.querySelector('.sectorLabel[data-index="0"]'), frame=label.closest("foreignObject"), reserved=[frame.getAttribute("x"),frame.getAttribute("y"),frame.getAttribute("width"),frame.getAttribute("height"),badge.style.fontSize];
             assert(group.dataset.kind==="intent"&&group.getAttribute("aria-disabled")!=="true"&&badge.textContent===(target?"SIGNAL · ACTION":"SIGNAL"),"Hybrid rendered as a disabled or target-only action, or showed ACTION when Openly");
-            assert(region(0).classList.contains("gesture")&&view.getComputedStyle(region(0).querySelector(".hit-area")).fill===(target?"rgb(92, 74, 114)":"rgb(69, 87, 102)")&&view.getComputedStyle(region(0,"nearby")).display!=="none","Hybrid lost its target/Openly idle palette or Openly bulb");
+            assert(region(0).classList.contains("gesture")&&view.getComputedStyle(region(0).querySelector(".hit-area")).fill===(target?"rgb(92, 74, 114)":"rgb(81, 81, 108)")&&view.getComputedStyle(region(0,"nearby")).display!=="none","Hybrid lost its target/Openly idle palette or Openly bulb");
             assertInkGeometry(0,label,badge,"Hybrid initial");
             region(0,mode).focus();
             if (shift) keyEvent("keydown","Shift","ShiftLeft",1);
@@ -1652,7 +1657,7 @@ frame.addEventListener("load", async () => {
         report.textContent += " Quadrants: two transformed 45°-from-vertical diameters, visible white at 90% opacity, behind all slots/hub, pointer-transparent at slice/hub/exposed probes, fixed across all shipped wheels, themes and slice lifts.";
         report.textContent += " Shift hub Back: existing typed Back replies across shipped submenus/custom indices; held-before-arm modifiers, dual-Shift release, click/Enter/Space, no-Back Cancel, keyboard cancellation and lifecycle resets.";
         report.textContent += " Hybrids: generated pointed bulbs at all 12 positions, pointed-only hits, inset/band/clip and straight-chord checks, neighbor/quadrant clearance, custom colour, opaque near-white apex raster samples for tip/Shift/no-target, and semicircle restoration on plain reuse; unchanged pie and flow; SIGNAL · ACTION only for target/core, SIGNAL for Shift/no-target/own-tip with swap-back, per-slot isolation and stable badge/chord geometry; one existing intent reply.";
-        report.textContent += " Hybrid Openly palette: idle core/bulb purple or explicit colour, Shift blue with a real sampled fill transition (reduced motion snaps), release restoration, no-target blue, own-tip isolation, plain-slot reset and unchanged hot fills.";
+        report.textContent += " Hybrid Openly palette: idle core/bulb purple or explicit colour, 50% signal-fill mix resolved at arm time across slate/moss/ember, real sampled Shift fill transition (reduced motion snaps), release restoration, no-target mix, own-tip isolation, plain-slot palette reset and unchanged hot fills.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

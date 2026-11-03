@@ -1,24 +1,34 @@
-# PlayerSignals (for SkyrimNet)
+# PlayerSignals 0.2.0 (for SkyrimNet)
 
 PlayerSignals is a configurable communication wheel for SkyrimNet. Gesture entries send authored direct narration; target-NPC action entries execute registered SkyrimNet actions. Most gesture requests do not force compliance; the two shipped hybrid signals also narrate NPC compliance only after a successful action API result. Action API acceptance does not prove that an in-game effect occurred.
 
 ## Status
 
-**Historical limited-test release (before target-NPC actions).** The 2026-10-02 ASSOS session recorded eight player-originator gestures, seven NPC responses and one expected no-audience result. One ADT removal test retained saved Papyrus remnants; a ReSaver-cleaned copy loaded without missing-script warnings during a short window. These records do not establish action execution, exhaustive runtime acceptance or safe mid-save removal. The older ESP-lock build failure is historical; current offline results are below. See internal `docs-dev/plans/player-signals.md` for evidence and limits.
+**Release preparation, not a published release.** The 2026-10-02 ASSOS observations predate target actions and the production Magelight/raw-key/gamepad work. They do not establish 0.2.0 runtime acceptance or safe mid-save removal. See [Dependencies and targeting](#dependencies-and-targeting), [Configuration](#configuration) and the [player guide's in-game hybrid checklist](PlayerSignals/PlayerSignals-README.md#in-game-hybrid-dispatch-checklist-owner) for public behavior and verification guidance.
 
-**Experimental Magelight branch:** the wheel has 12 generated 30° slices clockwise from the top (slot 0), keeps its ChevronKnot as authored SVG artwork, and contains no raster artwork. The gesture destination for everyone nearby is **Openly**, shown with sound-wave ripple arcs and no head. SVG-attribute hover bounce and incoming-only fade honor reduced motion. Labels and badges follow each slice radially, with the straight-up/down slots horizontal and the left half flipped to stay readable; they share an SVG-attribute frame inside the lifted group, with no CSS transform on their foreignObject or HTML content. Fitting allows wrapping and shrinking within the core sides, clear of the hub, cap chord and navigation artwork. Core/tip shapes have dark outer edges and chamfered light inset lines; armed-only top and bottom quarter-screen vignettes aid contrast, with title/help above them. The captured NPC's display name appears in the hub; without a captured NPC it shows **No target · Openly**. Pure action-only entries are disabled; hybrids remain signal entries. UIExtensions remains available for wheels of up to 8 slots and fails closed above that limit. These rendering revisions are browser-verified only; Ultralight rendering and actual game frame cost remain unverified.
+Magelight is the enabled renderer: twelve clockwise 30° slices, captured-target cores and **Openly** tips, with no-target Openly and Shift+hub Back. The old UIExtensions renderer is superseded; its dormant source branch is not a selectable runtime fallback. Rendering/input checks in a browser do not prove installed Ultralight or game behavior.
 
-- Internal specification: `docs-dev/specs/player-signals.md` (external linked development documentation; not edited here).
-- [Player guide](PlayerSignals/PlayerSignals-README.md): friendly setup, wheel customization, targeting, and troubleshooting; this file is inside the packaged mod root.
-- Internal implementation plan: `docs-dev/plans/player-signals.md`; design and tasks: `openspec/changes/add-target-npc-actions/`. These linked directories are not in this worktree and were left unchanged.
+- [Configuration](#configuration): supported slot kinds, schema constraints and authored phrases.
+- [Player guide](PlayerSignals/PlayerSignals-README.md): packaged setup, customization, troubleshooting and the owner hybrid checklist.
+- [Build and checks](#build-and-checks): development commands and limits of local verification.
+
+## What's new in 0.2.0
+
+- Magelight twelve-slice wheel, target/Openly split, no-target Openly and Shift+hub Back.
+- Intent, action, ordinary/raw hotkey and hybrid slots; per-slot colours and slate/moss/ember themes.
+- Follow me and Wait here hybrids run the target action first; only API success adds compliance narration. Openly never runs the action.
+- Bundled raw-key DLL with foreground guard and no HoldKey fallback.
+- Stick aiming, A/B/X controls, optional `openGamepadButton`, and keyboard-always/pad-when-connected hint grid.
+- 24 shipped catalog IDs (23 placed; `dismiss` remains available for customization).
+
+Not included: hotkey slots with an alternate key, SkyrimNet status toggles, or JSON idle animations.
 
 ## Repository layout
 
 ```text
 PlayerSignals/              Mod root; only this child folder belongs in MO2
 PlayerSignals_spriggit/      Authored plugin records (outside the mod root)
-docs-dev/                    Externally linked internal contracts and evidence (not published)
-openspec/                    Externally linked change artifacts (not published)
+PlayerSignals_native/        Native SKSE project, outside the installable payload
 build/                       PowerShell build and local compiler flags
 tests/                       Raw JSON/schema regressions executed on LuaJIT
 ```
@@ -27,10 +37,10 @@ The mod root contains `PlayerSignals.esp`, startup quest SEQ, three Papyrus scri
 
 ## Dependencies and targeting
 
-Required: SKSE, UIExtensions, JContainers API 4 / feature 2 with working Lua support, and SkyrimNet. Startup requires `SkyrimNet.esp` loaded and a nonempty `SkyrimNetApi.GetBuildVersion()`.
+Required for the shipped layout: matching Skyrim SE/AE/VR SKSE and dependency builds, **Magelight 1.7.1+** with its matching runtime, JContainers API 4 / feature 2 with Lua, SkyrimNet, the bundled **PlayerSignals.dll**, and **Address Library for SKSE Plugins** (VR Address Library on VR). SE/AE/VR native build targets are not proof of runtime acceptance on all versions.
 
-The enabled Magelight backend also requires Magelight host **0.31.2+** and its matching runtime. Action entries require SkyrimNet's `IsActionRegistered`, `ExecuteAction`, `SkyrimNetInternal` built-in eligibility functions and, when configured, persistent/short-lived event APIs.
-Only layouts containing a `raw: true` hotkey additionally require `PlayerSignals.dll` (native API version 1) and Address Library for SKSE Plugins (the VR Address Library for Skyrim VR). Layouts without raw slots do not require either; ordinary hotkeys retain Skyrim input dispatch.
+Startup requires loaded `SkyrimNet.esp` and nonempty `SkyrimNetApi.GetBuildVersion()`. Actions use `IsActionRegistered`, `ExecuteAction`, `SkyrimNetInternal` built-in eligibility and optional event APIs. Magelight's unchanged `minHost: 0.31.2` manifest/Papyrus check is a host-API threshold; the page's embedded gamepad bridge requires 1.7.1+. UIExtensions is not a runtime requirement; its declarations remain a build input for dormant code.
+Custom layouts without `raw: true` slots do not require the native DLL or Address Library. The shipped dashboard is raw, so the default layout does require both. DLL package version stays 1.0.0 and native API stays 1, independently of mod version 0.2.0.
 
 Before the wheel opens, PlayerSignals captures the current crosshair NPC. For a targeted selection, SkyrimNet receives direct narration with the player as originator (`From`) and the captured NPC as the explicit target. Ordinary gesture narration addresses that NPC; hybrid signals include a separate compliance sentence only if their action succeeds. Moving the crosshair after opening does not change the submitted recipient. The captured NPC must remain alive, enabled, and 3D-loaded when submitting or the selection fails closed. SkyrimNet selects the responder; this call does not force the captured NPC to respond, and SkyrimNet may replace event `To` with the selected responder.
 
@@ -44,7 +54,7 @@ Pure action-only entries execute once on the valid captured NPC, with no direct 
 
 ## Installation and first use
 
-Before installing or updating, back up your save and matching SKSE cosave. Install the mod ZIP attached to the [GitHub release](https://github.com/Gerkinfeltser/PlayerSignals/releases) through MO2 and enable `PlayerSignals.esp`. The ZIP root is the mod's Data root: `PlayerSignals.esp`, `Scripts/`, `SEQ/`, and `SKSE/` are directly inside it. GitHub's automatic source archives are not the installable mod ZIP; if using a repository checkout, install only the **`PlayerSignals/` child folder**, not the repository root. Install and enable the dependencies above. Do not install or activate an old PlayerSignals trigger bundle; direct narration uses SkyrimNet's native API.
+Before installing or updating, back up your save and matching SKSE cosave, and preserve customized JSON. Install the mod ZIP from a published [GitHub release](https://github.com/Gerkinfeltser/PlayerSignals/releases) through MO2 and enable `PlayerSignals.esp`; this preparation does not publish 0.2.0. Its Data root includes `PlayerSignals.esp`, `Scripts/`, `SEQ/`, `SKSE/` and `Magelight/`. GitHub source archives are not installable mod ZIPs; from a checkout install only **`PlayerSignals/`**, never the repository root. Install matching dependencies first. Replace old payload files, remove obsolete PlayerSignals dispatch triggers, and merge custom JSON against the current schema rather than blindly overwriting it. Restart Skyrim after DLL/scripts change, then load a save for maintenance/config reload. The optional prompt helper is not a dispatch trigger bundle.
 
 Launch through SKSE and load a save or start a new game. If SkyrimNet.esp or the native API build version is missing, PlayerSignals will not enable. In normal gameplay, press **Right Alt** to open the wheel and choose a gesture. A local notification confirms the API accepted the submission; SkyrimNet decides whether NPCs speak.
 
@@ -76,7 +86,7 @@ Optional `input.openGamepadButton` binds one button as an alternate open/cancel 
 
 The game may still perform its normal action for the configured button.
 
-Each wheel supports 1–12 ordered slots. Magelight lays out 12 slices of 30° clockwise from slot 0 at the top. UIExtensions supports at most 8 slots; a wheel configured with more than 8 fails closed with an actionable notification rather than being truncated. A slot is `null` (disabled) or has a nonempty label and one primary kind: `intent`, `action`, `submenu`, `control` (`back` / `close`), or `hotkey`. An `intent` slot may additionally have `action: { "name": ..., "args": ... }` to form a hybrid; this is the only additional kind combination and hybrid slots must not have `event`. An action slot may instead carry paired `event` (`persistent`, `shortLived`, or `both`) and catalog `intent` fields for legacy action context; that remains a pure action and does not send direct narration. A hotkey slot may have `hotkey`, `delayMs`, `holdMs`, optional `color`, and optional strict boolean `raw` in addition to `label`; timings apply only to hotkeys. The `hotkey` code is a strict integer 1–263 (1–255 keyboard DirectInput scan codes, 256–263 SKSE mouse buttons: 256 left, 257 right, 258 middle), `delayMs` defaults to 100 (integer 0–2000), and `holdMs` defaults to 50 (integer 1–2000). Its code must differ from `input.openKeyCode`. `raw: true` is keyboard-only and requires scan code 1–255; `raw: false` retains normal hotkey behavior. Every referenced narration/event intent must exist in `intents.json`. All wheels and catalog entries are validated. Unknown fields, wrong types, broken references, cycles and oversized wheels fail closed.
+Each wheel supports 1–12 ordered slots, placed clockwise from slot 0 at the top. A slot is `null` (disabled) or has a nonempty label and one primary kind: `intent`, `action`, `submenu`, `control` (`back` / `close`), or `hotkey`. An intent plus action without event is a hybrid; action+event+intent is legacy pure-action context and sends no direct narration. Hotkeys accept integer codes 1–263 (keyboard 1–255, mouse 256–263), `delayMs` 0–2000 (default 100) and `holdMs` 1–2000 (default 50); their code must differ from `input.openKeyCode`. Optional `raw` is a strict boolean and true permits keyboard codes only. All referenced intents/wheels and all catalog records are validated; unknown fields, wrong types, broken references, cycles and oversized wheels fail closed. Exact rules are in the specification.
 
 In Magelight, any non-null slot can override its idle colour with a six-digit hex string (`#rrggbb`, either letter case):
 
@@ -84,7 +94,7 @@ In Magelight, any non-null slot can override its idle colour with a six-digit he
 { "label": "Greet", "intent": "greet", "color": "#4a6b5c" }
 ```
 
-The fill override changes idle colour only, not the standard yellow selected fill, band or white caps; lit labels and badges use the chosen idle colour. Disabled slots keep their shared disabled look, and theme changes do not replace slot colours. Very light or very dark colours can hurt label readability. UIExtensions ignores the colour; the shipped layout colours only Yes (green) and No (red).
+The fill override changes idle colour only, not the standard yellow selected fill, band or white caps; lit labels and badges use the chosen idle colour. Disabled slots keep their shared disabled look, and theme changes do not replace slot colours. Very light or very dark colours can hurt label readability. The shipped layout colours only Yes/Agree (green) and No/Disagree (red).
 
 Custom-coloured gesture bulbs derive their unlit ripple tint from the slot colour (lower hue, increased HSL lightness); uncoloured ripples stay mint and lit-bulb ripples stay warm yellow, all at the existing `0.12` strength.
 
@@ -119,7 +129,7 @@ The dashboard raw-key example was owner-verified in the spike, not with this pro
 | SE 1.5.97 | Build-only support; in-game untested. |
 | VR | Build-only support; in-game untested. |
 
-Labels, slot order, disabled slots, repeated supported intents, wheel names/submenus, and opening key are customizable without recompiling. UIExtensions supports at most eight slots; Magelight places twelve 30° slices clockwise from the top. Every shipped submenu puts Back at zero-based slot 10. Submenu, Back, Close and target-only actions use merged neckties. Only Submenu/Back neckties scale by 0.85 about the wheel centre, including hits, insets, selected bands, flow and label placement/fit; their stroke widths stay unchanged. Submenu and Back alone show the authored ChevronKnot with its V apex on the smaller outer tip and arms hugging the tip edges. The knot retains its approved absolute size and original stroke widths; tails may extend beyond the shortened outer edges. It lifts with its slice and stays hidden when disabled. Only Submenu/Back show two thin clipped arcs at radii 560 and 610, outside the hub's maximum pop, clipped to the active outline. Hotkeys have a flat-topped trapezoid cap and straight-chord pie with separate borders: either part selects the same key and lights both. Gesture cores and half-disc bulbs share a straight outer-corner chord without a fill gap or overlap sliver; insets, selected bands and flow clips follow it. The upright broadcast icon is centered in the half-disc's bounds at its existing size; ripple motion stays centered on the chord midpoint. Shift previews Openly on a gesture without changing page dispatch. SIGNAL, ACTION and KEY badges remain upright beneath wrapped labels; Submenu, Back, Close and null slots have no badge. Lit badges use their kind's idle fill, and navigation chevrons dim behind the label only; actual visible badges on other kinds remain respected. The selected band is 30 units wide (15 visible units), including the lit cap; its stroke width is 30. Slices lift to 1.06. All disabled slots use the same faint pointed necktie, not a split/trapezoid; actions without a target are disabled. Captured-target names and untampered custom labels are unchanged.
+Labels, order, disabled slots, repeated intents, wheel names/submenus and opening inputs are customizable without recompiling. Every shipped submenu has Back at zero-based slot 10. Submenu/Back use 0.85-scale narrowed neckties and vector ChevronKnot art; actions, hotkeys and signals have distinct geometry. Hotkey cap and pie select the same key, never Openly. Signals use round Openly bulbs; hybrids show pointed bulbs only while the core would run an action, with a stable pointed hit envelope during the visible Openly-round transition. Label fitting wraps/shrinks without truncation. See the player guide for detailed artwork and motion behavior.
 
 Center Cancel lifts to 1.08 on hover/focus using the same SVG-attribute ease-out-back tween as slices, and returns on leave/blur. The opaque octagon, its native frame and upright text scale together and paint last above all slices, arrows, labels and insets. Its painted paths take Cancel hit priority inside the moving outline; slices remain selectable immediately outside it. Core and merged outlines extend their existing straight sides to concealed inner points, including their inset lines, so no transverse inner cap appears during the bounce. Reduced motion or `--ps-tween: 0ms` snaps both hub and slice lifts, with no idle animation frames. Matching armed-only vignettes fade from 80% black at each screen edge to transparent at 25vh behind the wheel, title and ~20px two-line help, so they do not dim white cap highlights. The help substitutes the configured physical key's short name (or omits it if unmapped):
 
@@ -133,7 +143,7 @@ The shortened help does not remove controls: Up chooses a gesture's Openly bulb,
 
 Keyboard keycaps are always shown in the two-column action hint; Stick and muted Xbox-colour A/B/X badges appear inline only while a controller is available, and Cancel names the configured opening key. The left stick aims at twelve angles above a `0.35` deadzone; returning inside it focuses the hub after a **100 ms** release grace. Aim and press **A** while deflected to select a slot; a quick A during spring-back still selects it. A at the hub cancels, or goes Back while X is held in a submenu. D-pad Up/Left steps backward, Down/Right forward and retains focus through neutral stick events. Hold X for Openly signals, hybrid badge/tint and hub Back preview; B cancels. Empty and disabled slots are not focused.
 
-Optional top-level `"theme": "slate"` selects the Magelight idle palette; `moss` and `ember` are also supported. Unknown/non-string themes reject the layout; UIExtensions ignores this validated setting. Load a save to apply JSON changes. Hotkey cap/pie idle fills use muted teal: slate `#3d5a55`, moss `#3c5560`, ember `#3f5654`. Idle Submenu/Back fills use `--subnav-fill`: slate `#38392f`, moss `#2d3a2f`, ember `#402e2a`; their labels use `--subnav-label` `#bfb8a6` across themes. Without a slot colour override, selected navigation labels retain the existing `--nav-fill` colors. Hot pies/cores use `--selection-outline` bright yellow for fill and inset line, with a 30-unit `--selection-band` darker-yellow band (15 visible units, stroke width 30), including the lit cap. Lit gesture bulbs and hotkey caps instead use a white-centre (`#ffffff`) to pale warm-edge (`#fff4e8`) radial gradient, with no filters; the thin `#d9bd79` band and existing edge lines remain unchanged. The kind's idle fill swaps onto selected labels/badges: gesture blue/green/rust, action red, neutral navigation, teal hotkey, or the slot's custom colour. Core-only gesture selection leaves the bulb in its idle palette; bulb hover or Shift lights both. Reduced motion or zero `--ps-tween` makes lifts instant and flow static; choices dispatch without a fade-out delay. Typed Submenu/Back labels lose exactly one trailing navigation marker, not arbitrary authored text.
+Optional top-level `"theme": "slate"` selects the idle palette; `moss` and `ember` are also supported. Unknown/non-string themes reject the layout. Load a save to apply changes. Explicit per-slot colours survive theme changes, disabled slots keep their shared look, and common yellow selected fills/white caps are preserved. Reduced motion or zero `--ps-tween` makes lifts instant and flow static; selection has no fade-out delay. Magelight strips exactly one generated Submenu/Back navigation suffix, never arbitrary authored text.
 **Flow bands:** a selected gesture always animates its bulb, never its core, including the full Openly state. Actions and utilities animate chevrons; hotkey V-shaped flow stays in the inset pie only, while the cap remains lit without flow. Disabled actions and empty slots show none.
 
 | Kind | Marks | Trail in real SVG units | Tint/blend |
@@ -150,7 +160,7 @@ One shared flow loop runs only while selected and stops on leave, blur, selectio
 
 Shipped catalog: 24 IDs. The four shipped wheels contain 23 IDs; `dismiss` remains in the catalog, with its compliance phrase, but is unplaced and has no attached action in the shipped layout. The main wheel's slot 8 **Wait here** and slot 10 **Follow me** are the two hybrid signals, with `WaitHere` and `AccompanyTarget` actions. Extras slot 3 is the sole shipped action-only slot (`StopAccompanying`).
 
-For exact schema rules and all shipped narration defaults, see the internal `docs-dev/specs/player-signals.md` and the installed [player guide](PlayerSignals/PlayerSignals-README.md).
+See [Configuration](#configuration) for schema constraints; authored narration defaults remain in `PlayerSignals/SKSE/Plugins/PlayerSignals/intents.json`. The [player guide](PlayerSignals/PlayerSignals-README.md#make-the-wheel-your-own) includes customization examples.
 
 ## Build and checks
 

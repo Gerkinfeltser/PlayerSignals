@@ -1,7 +1,7 @@
 {
     "modId": "PlayerSignals",
-    "name": "PlayerSignals wheel spike",
-    "version": "0.0.0",
+    "name": "PlayerSignals",
+    "version": "0.2.0",
     "minHost": "0.31.2",
     "session": "isolated",
     "network": "file",

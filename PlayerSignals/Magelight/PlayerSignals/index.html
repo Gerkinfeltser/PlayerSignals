@@ -174,16 +174,15 @@
     const shiftKeys = new Set();
     let hubShiftHeld = false, padOpenly = false;
     function openlyHeld() { return padOpenly || hubShiftHeld || shiftKeys.size > 0; }
-    let keyboardSeen = false, padAvailable = false, stickAimed = false, stickReleaseTimer = 0;
+    let padAvailable = false, stickAimed = false, stickReleaseTimer = 0;
     function resetStick() {
         clearTimeout(stickReleaseTimer); stickReleaseTimer = 0; stickAimed = false;
     }
     function inputHelp() {
-        document.getElementById("keyboardHelp").hidden = !keyboardSeen && padAvailable;
         document.getElementById("padHelp").hidden = !padAvailable;
     }
     for (const type of ["mousemove", "mousedown", "mouseup", "wheel", "keydown", "keyup"])
-        document.addEventListener(type, () => { keyboardSeen = true; inputHelp(); resetStick(); });
+        document.addEventListener(type, resetStick);
     // DirectInput DIK offsets -> standard physical KeyboardEvent.code values (not localized key text).
     // https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ee418641(v=vs.85)
     // https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_code_values

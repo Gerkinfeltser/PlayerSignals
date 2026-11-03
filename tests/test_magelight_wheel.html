@@ -1750,7 +1750,7 @@ frame.addEventListener("load", async () => {
         freshArm("help-neither");
         assert(JSON.stringify(helpState())===JSON.stringify({pad:false,keyboard:true}), "Fresh page without input did not show keyboard fallback");
         freshView.qaPadState({connected:true,active:false,device:"gamepad"});
-        assert(JSON.stringify(helpState())===JSON.stringify({pad:true,keyboard:false}), "Connected-pad-only fresh page did not show pad help");
+        assert(JSON.stringify(helpState())===JSON.stringify({pad:true,keyboard:true}), "Connected pad did not show pad help alongside always-on keyboard help");
         freshView.qaPadState({connected:false,active:false,device:"keyboardMouse"});
         assert(JSON.stringify(helpState())===JSON.stringify({pad:false,keyboard:true}), "Disconnect did not restore keyboard fallback");
         freshView.hostMode("0");

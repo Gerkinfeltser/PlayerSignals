@@ -10,6 +10,7 @@ Magelight is the enabled renderer: twelve clockwise 30° slices, captured-target
 
 - [Configuration](#configuration): supported slot kinds, schema constraints and authored phrases.
 - [Player guide](PlayerSignals/PlayerSignals-README.md): packaged setup, customization, troubleshooting and the owner hybrid checklist.
+- [AI configuration helper](PlayerSignals/PlayerSignals-AI-Helper.md): copy-paste prompt, validator rules and worked merge instructions.
 - [Build and checks](#build-and-checks): development commands and limits of local verification.
 
 ## What's new in 0.2.0

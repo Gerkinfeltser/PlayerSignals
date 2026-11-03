@@ -31,6 +31,7 @@ You'll need:
 Back up your save and matching SKSE cosave before installing or updating. The startup quest and player-alias save-load handling are designed to initialize PlayerSignals on existing saves. The limited removal test below does not establish installation/update compatibility with every existing save.
 
 Install the release mod ZIP with your mod manager and enable **PlayerSignals.esp**. Its Data root contains `PlayerSignals.esp`, `Scripts`, `Seq`, `SKSE` and `Magelight`; this readme belongs alongside them. From a checkout install only the `PlayerSignals/` child, never the repository root or GitHub source archive. Before upgrading, preserve custom JSON, replace old payload files, then merge customizations against the shipped schema. Remove obsolete PlayerSignals dispatch YAML triggers; the optional prompt-only helper is separate. Restart Skyrim after DLL/script updates, then load a save so maintenance reloads the configuration.
+For filesystem-capable assistants, see the [AI configuration helper](PlayerSignals-AI-Helper.md) for a copy-paste prompt, schema rules and merge examples.
 
 Start the game and load a save, or begin a new game. PlayerSignals checks for SkyrimNet.esp and a nonempty native API build version at startup; if either is missing, the feature stays disabled. No MCM setup is required, and no external trigger bundle is needed.
 

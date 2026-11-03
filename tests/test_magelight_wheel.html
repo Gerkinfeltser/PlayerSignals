@@ -65,6 +65,41 @@ frame.addEventListener("load", async () => {
         arm("geometry", Array.from({length:12}, (_, i) => ({label:"Slot " + i, intent:"greet"})));
         doc.getElementById("center").focus();
         const svg = doc.getElementById("wheelSvg");
+        const quadrantLines=[...doc.querySelectorAll("#quadrant-lines line")], quadrantState=(checkSlices=false)=>{
+            const group=doc.getElementById("quadrant-lines");
+            assert(quadrantLines.length===2,"Wheel does not have exactly two quadrant diameters");
+            assert(quadrantLines.every(line=>[...doc.querySelectorAll('g[id^="slot-"][data-index]'),doc.getElementById("center")].every(node=>line.compareDocumentPosition(node)&view.Node.DOCUMENT_POSITION_FOLLOWING)),"Quadrant lines are not painted behind every slot and the hub");
+            const style=view.getComputedStyle(group);
+            assert(style.display!=="none"&&style.visibility==="visible"&&style.stroke==="rgb(255, 255, 255)"&&Number(style.opacity)===.9&&style.pointerEvents==="none","Quadrant lines are not visible white, 90%-opacity and noninteractive");
+            const inverse=svg.getCTM().inverse(), angles=[], matrices=quadrantLines.map(line=>{
+                const matrix=inverse.multiply(line.getCTM()), a=new view.DOMPoint(Number(line.getAttribute("x1")),Number(line.getAttribute("y1"))).matrixTransform(matrix), b=new view.DOMPoint(Number(line.getAttribute("x2")),Number(line.getAttribute("y2"))).matrixTransform(matrix);
+                const lineStyle=view.getComputedStyle(line),screenWidth=parseFloat(lineStyle.strokeWidth)*Math.hypot(line.getScreenCTM().a,line.getScreenCTM().b);
+                assert(lineStyle.display!=="none"&&lineStyle.visibility==="visible"&&Number(lineStyle.opacity)>0&&lineStyle.stroke==="rgb(255, 255, 255)"&&lineStyle.pointerEvents==="none"&&screenWidth>=1.5&&screenWidth<=2,"Quadrant stroke is hidden, interactive or outside the requested 700px weight");
+                const mid=new view.DOMPoint((a.x+b.x)/2,(a.y+b.y)/2), radius=Math.hypot(b.x-a.x,b.y-a.y)/2, angle=(Math.atan2(b.x-a.x,-(b.y-a.y))*180/Math.PI+360)%180;
+                angles.push(angle);
+                assert(Math.hypot(mid.x-1800,mid.y-1800)<.1&&radius>1850&&radius<2000,`Quadrant diameter transformed to wrong center/extent (${radius})`);
+                return [matrix.a,matrix.b,matrix.c,matrix.d,matrix.e,matrix.f].join(",");
+            });
+            assert(angles.some(angle=>Math.abs(angle-45)<.01)&&angles.some(angle=>Math.abs(angle-135)<.01),"Quadrant diameters are not at both 45° and 135° from vertical");
+            const screenPoint=(line,radius,sign=1,offset=0)=>{
+                const matrix=inverse.multiply(line.getCTM()), x1=Number(line.getAttribute("x1")), y1=Number(line.getAttribute("y1")), x2=Number(line.getAttribute("x2")), y2=Number(line.getAttribute("y2")), a=new view.DOMPoint(x1,y1).matrixTransform(matrix), b=new view.DOMPoint(x2,y2).matrixTransform(matrix), dx=b.x-a.x, dy=b.y-a.y, length=Math.hypot(dx,dy);
+                const local=new view.DOMPoint(1800+sign*radius*dx/length-offset*dy/length,1800+sign*radius*dy/length+offset*dx/length).matrixTransform(svg.getScreenCTM());
+                const hit=doc.elementFromPoint(local.x,local.y);
+                assert(hit&&!hit.closest("#quadrant-lines"),"Quadrant line intercepts an elementFromPoint probe");
+                return hit;
+            };
+            for(const line of quadrantLines){
+                screenPoint(line,1100); // The diameter runs through a gap, not an interactive slice.
+                const throughHub=screenPoint(line,250),exposed=screenPoint(line,1850);
+                if(checkSlices)for(const sign of [-1,1])for(const offset of [-40,40])assert(screenPoint(line,900,sign,offset).closest(".region"),"Quadrant line stole an adjacent slice hit");
+                assert(throughHub.closest("#center"),"Quadrant line crossing hub does not hit the hub");
+                assert(!exposed.closest(".region")&&!exposed.closest("#center"),"Exposed quadrant line probe unexpectedly hits wheel artwork");
+            }
+            return matrices;
+        };
+        const quadrantRest=quadrantState(true);
+        for(let i=0;i<12;i++){ region(i).focus(); assert(JSON.stringify(quadrantState())===JSON.stringify(quadrantRest),"Quadrant line matrices changed during slice lift"); }
+        doc.getElementById("center").focus();
         const center = doc.getElementById("center"), hubPop = doc.getElementById("hub-pop"), hubScale = () => svg.getCTM().inverse().multiply(hubPop.getCTM()).a;
         const hubHit = doc.getElementById("center-hit"), hubPaintPaths = [...center.querySelectorAll("path")].map(path => {
             const style = view.getComputedStyle(path);
@@ -492,6 +527,7 @@ frame.addEventListener("load", async () => {
                     begin(token,payload(slots)); route();
                     assert(!replies.length,"Unarmed choice escaped");
                     view.psWheelArm(token);
+                    quadrantState();
                     if(kind==="submenu"||kind==="back"){
                         region(i).focus();
                         checkKnot(doc.getElementById(`slot-${i}`).querySelector(".chevron-knot"),i,kind);
@@ -575,6 +611,7 @@ frame.addEventListener("load", async () => {
             const actualKinds = [0,1,2,3,4].map(index => view.getComputedStyle(region(index).querySelector(".hit-area")).fill);
             const subnavFill={slate:"rgb(56, 57, 47)",moss:"rgb(45, 58, 47)",ember:"rgb(64, 46, 42)"}[theme];
             assert(actualKinds.every((fill,index) => fill === (index===2||index===3?subnavFill:[fills[theme][1],fills[theme][2],null,null,fills[theme][4]][index])), `Idle gesture/action/navigation/hotkey fills mismatch in ${theme}: ${actualKinds}`);
+            assert(JSON.stringify(quadrantState())===JSON.stringify(quadrantRest),`${theme} theme changed fixed quadrant lines`);
             assert([2,3].every(index=>view.getComputedStyle(region(index).querySelector(".hit-area")).fill===subnavFill),`${theme} idle submenu/back fill changed`);
             for(const index of [2,3]) {
                 const label=doc.querySelector(`.sectorLabel[data-index="${index}"]`),range=doc.createRange();
@@ -1326,6 +1363,7 @@ frame.addEventListener("load", async () => {
         report.textContent += " Hotkeys: no target required, F6 hub and KEY badge, Up/Down stays on one slice, either hit region dispatches the typed hotkey, malformed/conflicting payloads fail closed. Utility arcs remain slice-owned, clipped and noninteractive at radii 560/610; hub motion, boundary routing, reduced-motion/0ms behavior and open-key help remain covered.";
         report.textContent += " Flow: geometry-scaled signal/trail/padding; lit non-bulb chevrons use additive warm-white #fff6e0 at peak 0.35 (clamped-addition normal fallback); bulb ripples stay at 0.12 (warm yellow when lit, exact mint when uncoloured, slot-derived lower hue/lightness lift when coloured); HOLD/power-fade profile, exclusions, one shared rAF, 2400ms travel and reduced-motion/0ms behavior. Colours: strict extras, all six kinds/three themes, both idle parts, standard selected fills/bands/caps, lit label/badge colours, disabled actions, malformed extras and reuse cleanup.";
         report.textContent += " Radial labels and badges: all 12 readable angles, wrapped line order, viewport and slice containment, chord/artwork clearance, and shared lift checked across all five shipped wheels.";
+        report.textContent += " Quadrants: two transformed 45°-from-vertical diameters, visible white at 90% opacity, behind all slots/hub, pointer-transparent at slice/hub/exposed probes, fixed across all shipped wheels, themes and slice lifts.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

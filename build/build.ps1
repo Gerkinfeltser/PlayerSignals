@@ -506,6 +506,18 @@ foreach ($region in $regions) {
     $parts.Submenu.SetAttribute('transform', ($submenuPlacement + $parts.Submenu.GetAttribute('transform')).Trim())
     $parts.Upmenu.SetAttribute('transform', ($backPlacement + $parts.Upmenu.GetAttribute('transform')).Trim())
 }
+# Fixed quadrant diameters sit behind all wheel artwork, outside every lifted group.
+$quadrants = $art.CreateElement('g', $svg.NamespaceURI)
+$quadrants.SetAttribute('id', 'quadrant-lines')
+$quadrants.SetAttribute('aria-hidden', 'true')
+$quadrants.SetAttribute('style', 'fill:none;stroke:#fff;stroke-width:9;opacity:.9;pointer-events:none;')
+foreach ($x in @(450, 3150)) {
+    $line = $art.CreateElement('line', $svg.NamespaceURI)
+    $line.SetAttribute('x1', [string]$x); $line.SetAttribute('y1', '450')
+    $line.SetAttribute('x2', [string](3600 - $x)); $line.SetAttribute('y2', '3150')
+    [void]$quadrants.AppendChild($line)
+}
+[void]$svg.PrependChild($quadrants)
 $center.SetAttribute('id', 'center')
 $centerHit.SetAttribute('id', 'center-hit'); $centerHit.SetAttribute('class', 'hit-area')
 foreach ($part in @('Top', 'Bottom')) {

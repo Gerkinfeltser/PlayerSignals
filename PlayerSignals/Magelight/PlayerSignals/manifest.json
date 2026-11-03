@@ -10,7 +10,8 @@
             "path": "index.html",
             "layer": "popup",
             "fullscreen": true,
-            "startVisible": false
+            "startVisible": false,
+            "gamepad": "keys"
         }
     }
 }

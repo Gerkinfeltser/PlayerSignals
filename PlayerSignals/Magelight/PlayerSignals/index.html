@@ -73,7 +73,7 @@
     #wheelSvg #center path { pointer-events: visiblePainted; cursor: pointer; }
     #center:hover #center-hit, #center:focus #center-hit { fill: #53452e !important; }
     #wheelSvg foreignObject, .actionLabel { pointer-events: none; }
-    .sectorLabel, .hubContent { width: 100%; height: 100%; display: grid; align-content: center; overflow-wrap: anywhere; text-align: center; }
+    .sectorLabel, .hubContent { width: 100%; height: 100%; display: grid; align-content: center; overflow-wrap: normal; word-break: normal; hyphens: none; text-align: center; }
     .sectorLabel { font: 600 80px/1.12 Georgia, serif; color: #fff3d9; }
     .sector[data-kind="submenu"]:not(.lit) .sectorLabel, .sector[data-kind="back"]:not(.lit) .sectorLabel { color: var(--subnav-label); }
     .actionLabel { fill: #f0ce89; font: 700 58px Georgia, serif; text-anchor: middle; dominant-baseline: middle; text-rendering: geometricPrecision; }
@@ -257,10 +257,11 @@
     }
     function fit(content, size) {
         content.style.fontSize = size + "px";
-        for (let attempt = 0; attempt < 4; attempt++) {
+        // Whole words overflow rather than split; stop at 32 SVG units (~6px on a 700px wheel).
+        while (size > 32) {
             const scale = Math.min(1, content.clientWidth / Math.max(1, content.scrollWidth), content.clientHeight / Math.max(1, content.scrollHeight));
             if (scale >= 1) break;
-            size *= scale * .95;
+            size = Math.max(32, size * scale * .95);
             content.style.fontSize = size + "px";
         }
     }

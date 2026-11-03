@@ -811,6 +811,32 @@ frame.addEventListener("load", async () => {
             }
         }
         key("Escape"); assert(replies.pop()==="badge-visibility-null-11|-1||cancel","Badge visibility setup failed to cancel");
+        const assertWholeWords = (label, context) => {
+            const walker = doc.createTreeWalker(label, view.NodeFilter.SHOW_TEXT);
+            for (let node; (node = walker.nextNode());) for (const match of node.textContent.matchAll(/\S+/g)) {
+                const range = doc.createRange();
+                range.setStart(node, match.index); range.setEnd(node, match.index + match[0].length);
+                assert(range.getClientRects().length === 1, `${context}: word "${match[0]}" split across lines`);
+            }
+        };
+        const minimumLabels = [];
+        for (const word of ["Challenge", "Surrender", "Pneumonoultramicroscopicsilicovolcanoconiosis".repeat(3)]) {
+            const slots = Array(12).fill(null);
+            slots[0] = slots[6] = {label:word,intent:"greet"};
+            arm("whole-word-" + word, slots); center.focus();
+            for (const i of [0,6]) {
+                const label = doc.querySelector(`.sectorLabel[data-index="${i}"]`);
+                assertWholeWords(label, `Idle slot ${i}`);
+                region(i).focus();
+                assertWholeWords(label, `Lit slot ${i}`);
+                assertWholeWords(doc.querySelector(".hubContent"), `Hub slot ${i}`);
+                if (word.length > 100) {
+                    assert(parseFloat(label.style.fontSize) === 32 && label.scrollWidth > label.clientWidth, "Unfittable word must remain whole at the 32-unit minimum");
+                } else assert(label.scrollWidth <= label.clientWidth, `${word} must fit without overflow`);
+                center.focus();
+            }
+            key("Escape"); replies.pop();
+        }
         for(const [wheelName,shippedSlots] of Object.entries(layout.wheels)) {
             arm(`badge-shipped-${wheelName}`,shippedSlots); center.focus();
             for(let i=0;i<12;i++) {
@@ -818,9 +844,15 @@ frame.addEventListener("load", async () => {
                 assert(label.textContent===expected,`Shipped ${wheelName} slot ${i} changed its exact label text/order`);
                 assertLabelFrame(i);
                 if(expected)assertInkGeometry(i,label,badge,`Shipped ${wheelName}`);
+                if(expected) {
+                    assertWholeWords(label, `Shipped ${wheelName} ${i} idle`);
+                    if(parseFloat(label.style.fontSize) === 32) minimumLabels.push(`${wheelName}:${i}:${expected}`);
+                }
                 region(i).focus();
                 assertLabelFrame(i);
                 if(expected)assertInkGeometry(i,label,badge,`Selected shipped ${wheelName}`);
+                if(expected)assertWholeWords(label, `Shipped ${wheelName} ${i} lit`);
+                assertWholeWords(doc.querySelector(".hubContent"), `Shipped ${wheelName} ${i} hub`);
                 center.focus();
             }
             key("Escape"); replies.pop();
@@ -1861,6 +1893,7 @@ frame.addEventListener("load", async () => {
         report.textContent += " Hotkeys: no target required, F6 hub and KEY badge, Up/Down stays on one slice, either hit region dispatches the typed hotkey, malformed/conflicting payloads fail closed. Utility arcs remain slice-owned, clipped and noninteractive at radii 560/610; hub motion, boundary routing, reduced-motion/0ms behavior and open-key help remain covered.";
         report.textContent += " Flow: geometry-scaled signal/trail/padding; lit non-bulb chevrons use additive warm-white #fff6e0 at peak 0.35 (clamped-addition normal fallback); bulb ripples stay at 0.12 (warm yellow when lit, exact mint when uncoloured, slot-derived lower hue/lightness lift when coloured); HOLD/power-fade profile, exclusions, one shared rAF, 2400ms travel and reduced-motion/0ms behavior. Colours: strict extras, all six kinds/three themes, both idle parts, standard selected fills/bands/caps, lit label/badge colours, disabled actions, malformed extras and reuse cleanup.";
         report.textContent += " Radial labels and badges: all 12 readable angles, wrapped line order, viewport and slice containment, chord/artwork clearance, and shared lift checked across all four shipped wheels.";
+        report.textContent += " Whole words: all shipped labels idle/lit and hub, Challenge/Surrender and oversized single words at slots 0/6. Shipped labels at 32-unit minimum: " + (minimumLabels.join(", ") || "none") + ".";
         report.textContent += " Quadrants: two transformed 45°-from-vertical diameters, visible white at 90% opacity, behind all slots/hub, pointer-transparent at slice/hub/exposed probes, fixed across all shipped wheels, themes and slice lifts.";
         report.textContent += " Shift hub Back: existing typed Back replies across shipped submenus/custom indices; held-before-arm modifiers, dual-Shift release, click/Enter/Space, no-Back Cancel, keyboard cancellation and lifecycle resets.";
         report.textContent += " Hybrids: pointed idle/core bulbs at all 12 positions; round visible fill/inset/band/clip during Shift, X, no-target and own-tip Openly; plain-signal white gradient and active ripple clipping; fixed pointed hit footprints with 12-frame pointed-only hover focus stability; keyboard swap-back, per-slot isolation, plain reuse and lifecycle reset; unchanged core and one existing intent reply.";

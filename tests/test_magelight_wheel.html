@@ -725,7 +725,7 @@ frame.addEventListener("load", async () => {
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         const badgeKinds = [
             ["intent", {label:"Greet",intent:"greet"}, "SIGNAL", "--gesture-fill"],
-            ["hybrid", {label:"Dismiss",intent:"dismiss",action:{name:"StopAccompanying",args:{}}}, "SIGNAL · ACTION", "--gesture-fill"],
+            ["hybrid", {label:"Dismiss",intent:"dismiss",action:{name:"StopAccompanying",args:{}}}, "SIGNAL · ACTION", "--slot-idle-fill"],
             ["action", {label:"Wait here",action:{name:"WaitHere"}}, "ACTION", "--action-fill"],
             ["hotkey", {label:"Dashboard",hotkey:64}, "KEY", "--hotkey-fill"]
         ];
@@ -750,7 +750,7 @@ frame.addEventListener("load", async () => {
                 assert(view.getComputedStyle(badge).fill==="rgb(240, 206, 137)",`${kind} badge ${i} idle fill is not #f0ce89`);
                 assertBadgeLayout(i,badge,label,kind,text);
                 region(i).focus();
-                assert(view.getComputedStyle(badge).fill===badgeRgb(view.getComputedStyle(doc.documentElement).getPropertyValue(fillVar)),`${kind} badge ${i} lit fill does not match its kind`);
+                assert(view.getComputedStyle(badge).fill===badgeRgb(view.getComputedStyle(doc.getElementById(`slot-${i}`)).getPropertyValue(fillVar)),`${kind} badge ${i} lit fill does not match its kind`);
                 assertLabelFrame(i);
                 assertInkGeometry(i,label,badge,`Lit ${kind}`);
                 doc.getElementById("center").focus();
@@ -763,7 +763,7 @@ frame.addEventListener("load", async () => {
             for(let i=0;i<12;i++) {
                 const badge=doc.querySelector(`#slot-${i} .actionLabel`),slot=badgeKinds[i%badgeKinds.length];
                 region(i).focus();
-                assert(view.getComputedStyle(badge).fill===badgeRgb(view.getComputedStyle(doc.documentElement).getPropertyValue(slot[3])),`${theme} ${slot[0]} badge ${i} lit fill does not match its kind`);
+                assert(view.getComputedStyle(badge).fill===badgeRgb(view.getComputedStyle(doc.getElementById(`slot-${i}`)).getPropertyValue(slot[3])),`${theme} ${slot[0]} badge ${i} lit fill does not match its kind`);
                 doc.getElementById("center").focus();
             }
             key("Escape"); replies.pop();
@@ -810,6 +810,16 @@ frame.addEventListener("load", async () => {
             {label:"Wait here",intent:"wait_here",action:{name:"WaitHere",args:{}}},
             {label:"Dismiss",intent:"dismiss",action:{name:"StopAccompanying",args:{}}}
         ];
+        arm("hybrid-default-color", [hybrids[0]]);
+        const hybridColorGroup = doc.getElementById("slot-0");
+        assert(hybridColorGroup.classList.contains("slot-colored") && hybridColorGroup.style.getPropertyValue("--slot-idle-fill") === "#5c4a72", "Uncoloured hybrid did not get the purple default");
+        key("Escape"); replies.pop();
+        arm("hybrid-explicit-color", [{...hybrids[0], color:"#63a4e8"}]);
+        assert(hybridColorGroup.classList.contains("slot-colored") && hybridColorGroup.style.getPropertyValue("--slot-idle-fill") === "#63a4e8", "Explicit hybrid colour did not override the purple default");
+        key("Escape"); replies.pop();
+        arm("hybrid-color-reuse-plain", [{label:"Signal",intent:"greet"}]); center.focus();
+        assert(!hybridColorGroup.classList.contains("slot-colored") && hybridColorGroup.style.getPropertyValue("--slot-idle-fill") === "" && view.getComputedStyle(region(0).querySelector(".hit-area")).fill === "rgb(69, 87, 102)", "Plain signal reuse retained the hybrid colour");
+        key("Escape"); replies.pop();
         for (const slot of hybrids) for (const [mode,target,shift] of [
             ["target","Lydia",false], ["nearby","Lydia",false],
             ["target","Lydia",true], ["target","",false]
@@ -818,7 +828,7 @@ frame.addEventListener("load", async () => {
             arm(token,[slot],target); center.focus();
             const group=doc.getElementById("slot-0"), badge=group.querySelector(".actionLabel"), label=doc.querySelector('.sectorLabel[data-index="0"]'), frame=label.closest("foreignObject"), reserved=[frame.getAttribute("x"),frame.getAttribute("y"),frame.getAttribute("width"),frame.getAttribute("height"),badge.style.fontSize];
             assert(group.dataset.kind==="intent"&&group.getAttribute("aria-disabled")!=="true"&&badge.textContent===(target?"SIGNAL · ACTION":"SIGNAL"),"Hybrid rendered as a disabled or target-only action, or showed ACTION when Openly");
-            assert(region(0).classList.contains("gesture")&&view.getComputedStyle(region(0).querySelector(".hit-area")).fill==="rgb(69, 87, 102)"&&view.getComputedStyle(region(0,"nearby")).display!=="none","Hybrid lost the blue signal core or Openly bulb");
+            assert(region(0).classList.contains("gesture")&&view.getComputedStyle(region(0).querySelector(".hit-area")).fill==="rgb(92, 74, 114)"&&view.getComputedStyle(region(0,"nearby")).display!=="none","Hybrid lost the purple signal core or Openly bulb");
             assertInkGeometry(0,label,badge,"Hybrid initial");
             region(0,mode).focus();
             if (shift) keyEvent("keydown","Shift","ShiftLeft",1);

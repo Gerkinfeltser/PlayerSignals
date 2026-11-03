@@ -285,6 +285,8 @@
         action: { count: 4, trail: 46 * flowScale, tint: "--flow-lit-tint", litTint: "--flow-lit-tint" },
         util: { count: 4, trail: 46 * flowScale, tint: "--flow-lit-tint", litTint: "--flow-lit-tint" }
     };
+    const HYBRID_DEFAULT_COLOR = "#5c4a72"; // Hybrid (signal + action) slots without an explicit colour.
+    const slotColor = item => item?.[3]?.color ?? (item?.[3]?.hybrid ? HYBRID_DEFAULT_COLOR : null);
     const SLOT_RIPPLE_HUE_SHIFT = .16; // Turns toward lower hue.
     const SLOT_RIPPLE_LIGHTNESS_LIFT = 93 / 255; // HSL lightness: #7fe6d4 minus #455766.
     function slotRippleTint(hex) {
@@ -387,7 +389,7 @@
         const palette = getComputedStyle(document.documentElement);
         flowOpacity = Number(palette.getPropertyValue(flowBulb ? flowLit ? "--flow-lit-signal-opacity" : "--flow-opacity" : "--flow-lit-opacity"));
         let color = palette.getPropertyValue(flowLit ? flowPreset.litTint : flowPreset.tint).trim();
-        if (flowBulb && !flowLit && entries[index][3]?.color) color = slotRippleTint(entries[index][3].color);
+        if (flowBulb && !flowLit && slotColor(entries[index])) color = slotRippleTint(slotColor(entries[index]));
         flow.style.mixBlendMode = flowAdditive ? "plus-lighter" : "normal";
         if (!flowAdditive) {
             // Resolve terminal palette colors, never an intermediate hover-tween fill.
@@ -657,9 +659,9 @@
                 if (subback) knot.setAttribute("transform", `translate(0 ${1692 * (1 - navScale)})`);
                 else knot.removeAttribute("transform");
                 group.dataset.kind = kind || "";
-                group.classList.toggle("slot-colored", Boolean(item?.[3]?.color));
+                group.classList.toggle("slot-colored", Boolean(slotColor(item)));
                 nearby.classList.toggle("hybrid", item?.[3]?.hybrid === true);
-                if (item?.[3]?.color) group.style.setProperty("--slot-idle-fill", item[3].color);
+                if (slotColor(item)) group.style.setProperty("--slot-idle-fill", slotColor(item));
                 const navigation = ["navigation", "submenu", "back"].includes(kind);
                 const merged = disabled || (kind !== "intent" && kind !== "hotkey");
                 target.classList.toggle("empty", !item);

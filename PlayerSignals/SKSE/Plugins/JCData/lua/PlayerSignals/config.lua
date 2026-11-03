@@ -191,8 +191,12 @@ local function validate(root, intents)
     if r.theme == nil then r.theme = 'slate' end
     assert(type(r.theme) == 'string' and themes[r.theme], 'theme: expected slate, moss or ember')
     nonempty(r.root, 'root')
-    local input = object(r.input, 'input', {openKeyCode=true})
-    assert(type(input.openKeyCode) == 'number' and input.openKeyCode >= 1 and input.openKeyCode <= 255, 'input.openKeyCode: expected integer 1..255')
+    local input = object(r.input, 'input', {openKeyCode=true, openGamepadButton=true})
+    assert(type(input.openKeyCode) == 'number' and input.openKeyCode >= 1 and input.openKeyCode <= 255 and input.openKeyCode == math.floor(input.openKeyCode), 'input.openKeyCode: expected integer 1..255')
+    if input.openGamepadButton ~= nil then
+        assert(type(input.openGamepadButton) == 'number' and input.openGamepadButton >= 266 and input.openGamepadButton <= 281 and input.openGamepadButton == math.floor(input.openGamepadButton), 'input.openGamepadButton: expected integer 266..281')
+        assert(input.openGamepadButton ~= input.openKeyCode, 'input.openGamepadButton: must differ from input.openKeyCode')
+    end
     local wheels = object(r.wheels, 'wheels')
     assert(next(wheels), 'wheels: expected nonempty object')
     assert(wheels[r.root], 'root: unknown wheel ' .. r.root)
@@ -296,11 +300,14 @@ local function jsonString(value)
     end) .. '"'
 end
 
-function M.wheelPayload(slots, theme, target, openKey)
+function M.wheelPayload(slots, theme, target, openKey, openGamepadButton)
     local ok, result = pcall(function()
         assert(type(theme) == 'string' and themes[theme], 'theme: expected slate, moss or ember')
         assert(type(target) == 'string', 'target: expected string')
         assert(type(openKey) == 'number' and openKey == math.floor(openKey) and openKey >= 1 and openKey <= 255, 'openKey: expected integer 1..255')
+        if openGamepadButton ~= nil then
+            assert(type(openGamepadButton) == 'number' and openGamepadButton == math.floor(openGamepadButton) and openGamepadButton >= 266 and openGamepadButton <= 281 and openGamepadButton ~= openKey, 'openGamepadButton: expected distinct integer 266..281')
+        end
         local entries = {}
         for i = 1, 12 do
             local slot = slots[i]
@@ -341,7 +348,8 @@ function M.wheelPayload(slots, theme, target, openKey)
                 entries[i] = '[' .. jsonString(slot.label) .. ',' .. jsonString(identity) .. ',' .. jsonString(kind) .. extras .. ']'
             end
         end
-        return '{"theme":' .. jsonString(theme) .. ',"target":' .. jsonString(target) .. ',"openKey":' .. openKey .. ',"slots":[' .. table.concat(entries, ',') .. ']}'
+        local gamepad = openGamepadButton and ',"openGamepadButton":' .. openGamepadButton or ''
+        return '{"theme":' .. jsonString(theme) .. ',"target":' .. jsonString(target) .. ',"openKey":' .. openKey .. gamepad .. ',"slots":[' .. table.concat(entries, ',') .. ']}'
     end)
     if ok then return result end
     return ''
@@ -373,7 +381,8 @@ function M.load(args)
         if not layoutOk then error(args.path .. ': ' .. tostring(r), 0) end
         -- Build native containers directly: no metadata/reference-string reinterpretation.
         -- Numeric fields use the native JSON integer decoder only after raw validation.
-        local root = JValue.objectFromPrototype('{"schemaVersion":1,"hasRawSlots":' .. (r.hasRawSlots and 1 or 0) .. ',"input":{"openKeyCode":' .. r.input.data.openKeyCode .. '}}')
+        local gamepad = r.input.data.openGamepadButton and ',"openGamepadButton":' .. r.input.data.openGamepadButton or ''
+        local root = JValue.objectFromPrototype('{"schemaVersion":1,"hasRawSlots":' .. (r.hasRawSlots and 1 or 0) .. ',"input":{"openKeyCode":' .. r.input.data.openKeyCode .. gamepad .. '}}')
         root.theme = r.theme
         local notifications = JMap.object(); root.notifications = notifications
         local narrations = JMap.object(); root.narrations = narrations

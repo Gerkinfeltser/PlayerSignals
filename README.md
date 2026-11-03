@@ -52,13 +52,29 @@ See the [player guide](PlayerSignals/PlayerSignals-README.md) for a quick walkth
 
 ### Existing saves, updates, and removal
 
-Back up your save before installing or updating. The stable startup quest/SEQ and player alias `OnInit`/`OnPlayerLoadGame` path are designed to initialize on existing saves. This cutover adds no saved controller fields, changes no property defaults, aliases, quest/FormIDs, or startup SEQ, and rebuilds its private native maps from both JSON files through Lua on load. Existing-save support is by design, but the current install/update path has not been tested in-game.
+Back up your save before installing or updating. The stable startup quest/SEQ and player alias `OnInit`/`OnPlayerLoadGame` path are designed to initialize on existing saves. The optional pad binding adds private controller key/held state, reset during maintenance; property defaults, aliases, quest/FormIDs and startup SEQ are unchanged. Private native maps are rebuilt from both JSON files through Lua on load. Existing-save support is by design, but the current install/update path has not been tested in-game.
 
 PlayerSignals does not add gesture spells, edit NPC world records, or toggle player controls. Saves may retain quest/script state, and the mod has no shutdown/uninstall cleaner. One ADT test confirmed that disabling the mod left two unattached instances and two undefined elements; a ReSaver-cleaned copy loaded without PlayerSignals missing-script warnings, but only a short post-load window was captured. Do not treat this as guaranteed clean removal or prescribe ReSaver cleanup as universally safe. Restore a pre-installation save and matching SKSE cosave for the safest rollback. SkyrimNet may retain narration history separately; restoring a Skyrim save does not erase it.
 
 ## Configuration
 
-Edit `PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json` and, for intent IDs or phrases, `PlayerSignals/SKSE/Plugins/PlayerSignals/intents.json` inside the mod, then load a save to apply changes. Right Alt defaults to keyboard scan code `184`; configurable opening-key codes are `1–255`. In Magelight, press the configured open key again to cancel an armed wheel, like Tab/Escape/center, without narration. The page requires an integer `openKey` in its Lua payload and maps known DirectInput scan codes to physical `KeyboardEvent.code` values; unmapped codes warn once per page/code and retain Tab/Escape/center cancellation. Pre-arm keydowns, repeat keydowns and keyups cannot toggle it closed. No live reload or JSON write-back.
+Edit `PlayerSignals/SKSE/Plugins/PlayerSignals/layout.json` and, for intent IDs or phrases, `PlayerSignals/SKSE/Plugins/PlayerSignals/intents.json` inside the mod, then load a save to apply changes. Right Alt defaults to keyboard scan code `184`; configurable opening-key codes are `1–255`. Optional `input.openGamepadButton` accepts an SKSE gamepad code `266–281`; it is absent by default, so no gamepad opening button is registered unless configured. That button opens and cancels the wheel like the keyboard opening key. The game may also respond to the button's normal binding. In Magelight, pressing the configured open key again cancels an armed wheel, like Tab/Escape/center, without narration. No live reload or JSON write-back.
+
+
+Optional `input.openGamepadButton` binds one button as an alternate open/cancel key. It is absent from the shipped layout; if set, use a distinct integer `266–281` (SKSE `InputMap.h`):
+
+| Button | Code | Button | Code |
+|---|---:|---|---:|
+| D-pad Up | 266 | D-pad Down | 267 |
+| D-pad Left | 268 | D-pad Right | 269 |
+| Start | 270 | Back | 271 |
+| Left Thumb | 272 | Right Thumb | 273 |
+| Left Shoulder | 274 | Right Shoulder | 275 |
+| A | 276 | B | 277 |
+| X | 278 | Y | 279 |
+| Left Trigger | 280 | Right Trigger | 281 |
+
+The game may still perform its normal action for the configured button.
 
 Each wheel supports 1–12 ordered slots. Magelight lays out 12 slices of 30° clockwise from slot 0 at the top. UIExtensions supports at most 8 slots; a wheel configured with more than 8 fails closed with an actionable notification rather than being truncated. A slot is `null` (disabled) or has a nonempty label and one primary kind: `intent`, `action`, `submenu`, `control` (`back` / `close`), or `hotkey`. An `intent` slot may additionally have `action: { "name": ..., "args": ... }` to form a hybrid; this is the only additional kind combination and hybrid slots must not have `event`. An action slot may instead carry paired `event` (`persistent`, `shortLived`, or `both`) and catalog `intent` fields for legacy action context; that remains a pure action and does not send direct narration. A hotkey slot may have `hotkey`, `delayMs`, `holdMs`, optional `color`, and optional strict boolean `raw` in addition to `label`; timings apply only to hotkeys. The `hotkey` code is a strict integer 1–263 (1–255 keyboard DirectInput scan codes, 256–263 SKSE mouse buttons: 256 left, 257 right, 258 middle), `delayMs` defaults to 100 (integer 0–2000), and `holdMs` defaults to 50 (integer 1–2000). Its code must differ from `input.openKeyCode`. `raw: true` is keyboard-only and requires scan code 1–255; `raw: false` retains normal hotkey behavior. Every referenced narration/event intent must exist in `intents.json`. All wheels and catalog entries are validated. Unknown fields, wrong types, broken references, cycles and oversized wheels fail closed.
 
@@ -114,6 +130,8 @@ Slice: target  ·  Tip or Shift: Openly
 
 The shortened help does not remove controls: Up chooses a gesture's Openly bulb, Down returns to its core, Space also selects, and Tab cancels. On navigation, actions and hotkeys, Up and Down stay on the same slice; hotkey cap/pie have no Openly variant.
 
+With a pad detected or used, help switches to two lines: **Stick/D-pad: choose · A: select** and **X: Openly · B: cancel**. Keyboard or mouse input restores keyboard help. The left stick aims at twelve angles above a `0.35` deadzone; centering retains focus. D-pad Up/Left steps backward, Down/Right forward. A selects the focused core; hold X to select signals Openly, including hybrid badge/tint and hub Back preview. B cancels. Empty and disabled slots are not focused.
+
 Optional top-level `"theme": "slate"` selects the Magelight idle palette; `moss` and `ember` are also supported. Unknown/non-string themes reject the layout; UIExtensions ignores this validated setting. Load a save to apply JSON changes. Hotkey cap/pie idle fills use muted teal: slate `#3d5a55`, moss `#3c5560`, ember `#3f5654`. Idle Submenu/Back fills use `--subnav-fill`: slate `#38392f`, moss `#2d3a2f`, ember `#402e2a`; their labels use `--subnav-label` `#bfb8a6` across themes. Without a slot colour override, selected navigation labels retain the existing `--nav-fill` colors. Hot pies/cores use `--selection-outline` bright yellow for fill and inset line, with a 30-unit `--selection-band` darker-yellow band (15 visible units, stroke width 30), including the lit cap. Lit gesture bulbs and hotkey caps instead use a white-centre (`#ffffff`) to pale warm-edge (`#fff4e8`) radial gradient, with no filters; the thin `#d9bd79` band and existing edge lines remain unchanged. The kind's idle fill swaps onto selected labels/badges: gesture blue/green/rust, action red, neutral navigation, teal hotkey, or the slot's custom colour. Core-only gesture selection leaves the bulb in its idle palette; bulb hover or Shift lights both. Reduced motion or zero `--ps-tween` makes lifts instant and flow static; choices dispatch without a fade-out delay. Typed Submenu/Back labels lose exactly one trailing navigation marker, not arbitrary authored text.
 **Flow bands:** a selected gesture always animates its bulb, never its core, including the full Openly state. Actions and utilities animate chevrons; hotkey V-shaped flow stays in the inset pie only, while the cap remains lit without flow. Disabled actions and empty slots show none.
 
@@ -154,7 +172,7 @@ Submenu/Back cores use `$navWidth = 0.7`: shoulders are 30% narrower and slide a
 
 The controller captures the NPC display name before opening Magelight and passes it through a JContainers value for Lua to read; the name is not interpolated into Lua source. The hub displays the captured name, falling back to **Target NPC** for an empty name. An absent target displays **No target · Openly**; pure action-only entries are disabled, while hybrids stay enabled as signals. Submission-time target validity checks remain unchanged.
 
-Magelight's inspected page contract exposes mouse/keyboard input and `__uimode`, not flat-gamepad events or a controller-in-use signal (`D:/git/MagelightUI/README.md:68–74`, `docs/SDK.md:14–33`). The installed Papyrus API and built-in page examples expose no gamepad delivery API. Controller selection and A/X/Y prompts are therefore not implemented. Offline checks do not establish in-game Magelight or SkyrimNet behavior.
+Pad support uses the gamepad bridge embedded in the installed Magelight **1.7.1** DLL: `magelight.gamepad.getState()`, `onStateChange()` and `onAction()`. The manifest uses `"gamepad": "navigation"` because the bridge dispatches raw action/vector callbacks only for that style; `"keys"` is keyboard emulation. PlayerSignals consumes `leftStick` change vectors (positive Y up), D-pad controls, `west` (X), and accept/cancel actions directly, with no generic navigation scope or stick-generated arrows. These are browser-harness verified, not production in-game proof; older public SDK typings do not describe this bridge.
 
 ## License
 

@@ -11,7 +11,7 @@
             "layer": "popup",
             "fullscreen": true,
             "startVisible": false,
-            "gamepad": "keys"
+            "gamepad": "navigation"
         }
     }
 }

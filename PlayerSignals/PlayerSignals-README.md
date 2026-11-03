@@ -50,7 +50,9 @@ Center Cancel lifts to 1.08 and always paints above the slices, concealing their
 
 Selected gestures show two scaled arc bands only in the bulb, including Openly/Shift full selection. With only the core selected, the blue bulb uses subtle additive mint bands; a lit bulb uses pale warm-yellow additive ripples at the same low 0.12 peak. The selected band is 30 units wide (15 visible units), including the lit cap; its stroke width is 30. Only actually visible badges contribute to flow dimming, so navigation chevrons dim behind the label alone. Actions and other utilities use four warm-white (`#fff6e0`) additive chevrons at peak 0.35, with clamped-addition normal-blend fallback. Hotkey V-shaped flow stays in the inset pie only; the cap remains lit without flow. Labels/badges remain readable. Bands travel every 2.4 seconds, stop on leave/blur/close/selection, and stay static under reduced motion or zero tween. Disabled actions and empty slots show none.
 
-Click a gesture's core for the captured target or its bulb for **Openly**. **Left/Right** moves among available entries; **Up** chooses a gesture's bulb, **Down** its core; **Enter/Space** confirms. Up/Down stays on the same navigation/action/hotkey slice. Both hotkey parts dispatch the same key, never Openly. Merged neckties remain selectable at their pointed end; actions stay target-only. Controller navigation is not implemented because the inspected Magelight contract exposes no flat-gamepad delivery.
+Click a gesture's core for the captured target or its bulb for **Openly**. **Left/Right** moves among available entries; **Up** chooses a gesture's bulb, **Down** its core; **Enter/Space** confirms. Up/Down stays on the same navigation/action/hotkey slice. Both hotkey parts dispatch the same key, never Openly. Merged neckties remain selectable at their pointed end; actions stay target-only.
+
+With Magelight 1.7.1's gamepad bridge, the **left stick** aims at a slot; returning within the `0.35` deadzone keeps the last focus. **D-pad Up/Left** chooses the previous entry; **Down/Right** chooses the next. **A** selects the focused core, **B** cancels, and holding **X** selects signals **Openly**, like Shift: hybrid badges/tints change and the hub becomes Back where a Back entry exists. Actions and hotkeys do not become Openly signals. Pad detection/input shows two-line pad help; using the keyboard or mouse restores keyboard help. These changes are browser-verified; production in-game testing remains required.
 
 The wheel won't open while you're in a blocking menu, another custom menu, or a gameplay state where the required controls are disabled.
 
@@ -277,6 +279,37 @@ For example, to use **F9**, change only the existing `input.openKeyCode` value t
 ```
 
 Use an integer from `1` to `255` that corresponds to a keyboard scan code—not a key name, ASCII value, Windows virtual-key code, or mouse/gamepad button. Check for conflicting bindings in other mods. Avoid Tab (the menu's cancel key) and either Shift key (the group-targeting override). Save your edit, then **load a save** to replace the old opening-key registration. Changing the opening key does not change Shift's targeting behavior.
+
+### Optional gamepad opening button
+
+`input.openGamepadButton` is optional and omitted from the shipped layout. Add it inside the existing `input` object to register one SKSE gamepad button as an alternate open/cancel key:
+
+```json
+{ "input": { "openKeyCode": 184, "openGamepadButton": 266 } }
+```
+
+Use an integer from `266` to `281`, different from `openKeyCode`. These are SKSE gamepad codes from [`InputMap.h`](https://github.com/ianpatt/skse64/blob/master/skse64/InputMap.h); the header defines the 16-button range as 266–281. These are not keyboard scan codes:
+
+| Button | SKSE code |
+|---|---:|
+| D-pad Up | 266 |
+| D-pad Down | 267 |
+| D-pad Left | 268 |
+| D-pad Right | 269 |
+| Start | 270 |
+| Back | 271 |
+| Left Thumb | 272 |
+| Right Thumb | 273 |
+| Left Shoulder | 274 |
+| Right Shoulder | 275 |
+| A | 276 |
+| B | 277 |
+| X | 278 |
+| Y | 279 |
+| Left Trigger | 280 |
+| Right Trigger | 281 |
+
+On save load, PlayerSignals registers the configured button and unregisters it during maintenance; with the field absent it registers no gamepad open key. Buttons that the game also uses still perform their game action. Changing the setting requires loading a save.
 
 ### Supported intent IDs
 

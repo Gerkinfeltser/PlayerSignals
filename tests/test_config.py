@@ -367,6 +367,20 @@ class ConfigValidation(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaisesRegex(LuaError, r'wheels\.main\[1\]'):
                 self.parse(config)
 
+
+    def test_optional_gamepad_open_button(self):
+        parsed = self.parse(minimal())
+        self.assertEqual(parsed.input.data.openKeyCode, 184)
+        self.assertIsNone(parsed.input.data.openGamepadButton)
+        for button in (266, 281):
+            config = minimal()
+            config['input']['openGamepadButton'] = button
+            self.assertEqual(self.parse(config).input.data.openGamepadButton, button)
+        for button in (265, 282, 266.0, 266.5, True, '266', 184):
+            config = minimal()
+            config['input']['openGamepadButton'] = button
+            with self.subTest(button=button):
+                self.rejects(config)
     def test_numeric_types_and_boundaries(self):
         for field in ('schemaVersion', 'openKeyCode'):
             for invalid in (True, False, 1.0, '1', None, 0, 256, -1):

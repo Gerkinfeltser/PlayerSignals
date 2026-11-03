@@ -3,6 +3,8 @@ Scriptname PlayerSignals_Controller extends Quest
 String _path = "Data/SKSE/Plugins/PlayerSignals/layout.json"
 Int _config = 0
 Int _key = 0
+Int _padKey = 0
+Bool _padHeld = False
 Int _generation = 0
 Bool _ready = False
 Bool _browsing = False
@@ -159,7 +161,11 @@ Function PrimeMagelight(Int token)
     JMap.setObj(payloadArgs, "slots", _mlSlots)
     JMap.setStr(payloadArgs, "target", JMap.getStr(_config, "target"))
     JMap.setInt(payloadArgs, "openKey", JMap.getInt(JMap.getObj(_config, "input"), "openKeyCode"))
-    String payload = JValue.evalLuaStr(payloadArgs, "return jrequire('PlayerSignals.config').wheelPayload(jobject.slots, '" + JMap.getStr(_config, "theme") + "', jobject.target, jobject.openKey)")
+    Int inputConfig = JMap.getObj(_config, "input")
+    If JMap.hasKey(inputConfig, "openGamepadButton")
+        JMap.setInt(payloadArgs, "openGamepadButton", JMap.getInt(inputConfig, "openGamepadButton"))
+    EndIf
+    String payload = JValue.evalLuaStr(payloadArgs, "return jrequire('PlayerSignals.config').wheelPayload(jobject.slots, '" + JMap.getStr(_config, "theme") + "', jobject.target, jobject.openKey, jobject.openGamepadButton)")
     payloadArgs = JValue.release(payloadArgs)
     If token != _generation || request != _mlRequest
         Return
@@ -190,12 +196,17 @@ Function ScheduleMaintenance(Float delay)
     _ready = False
     _browsing = False
     _held = False
+    _padHeld = False
     If UseMagelight()
         InvalidateMagelight()
     EndIf
     If _key > 0
         UnregisterForKey(_key)
         _key = 0
+    EndIf
+    If _padKey > 0
+        UnregisterForKey(_padKey)
+        _padKey = 0
     EndIf
     RegisterForSingleUpdate(delay)
 EndFunction
@@ -306,7 +317,13 @@ Function Maintenance(Int token)
         EndIf
     EndIf
     Int newKey = JMap.getInt(JMap.getObj(candidate, "input"), "openKeyCode")
+    Int inputConfig = JMap.getObj(candidate, "input")
+    Int newPadKey = 0
+    If JMap.hasKey(inputConfig, "openGamepadButton")
+        newPadKey = JMap.getInt(inputConfig, "openGamepadButton")
+    EndIf
     Bool newHeld = Input.IsKeyPressed(newKey)
+    Bool newPadHeld = newPadKey > 0 && Input.IsKeyPressed(newPadKey)
     If token != _generation
         candidate = JValue.release(candidate)
         Return
@@ -317,10 +334,21 @@ Function Maintenance(Int token)
         candidate = JValue.release(candidate)
         Return
     EndIf
+    If newPadKey > 0
+        RegisterForKey(newPadKey)
+        If token != _generation
+            UnregisterForKey(newKey)
+            UnregisterForKey(newPadKey)
+            candidate = JValue.release(candidate)
+            Return
+        EndIf
+    EndIf
     ; No external calls between the final generation guard and publishing readiness.
     _config = candidate
     _key = newKey
+    _padKey = newPadKey
     _held = newHeld
+    _padHeld = newPadHeld
     _ready = True
     Debug.Trace("[PlayerSignals] Ready: " + _path + "; key " + _key)
 EndFunction
@@ -356,12 +384,19 @@ Bool Function ValidateNative(Int config)
     EndIf
     Int inputConfig = JMap.getObj(config, "input")
     Int wheels = JMap.getObj(config, "wheels")
+    Int padCodeType = JMap.valueType(inputConfig, "openGamepadButton")
     If !JValue.isMap(inputConfig) || !JValue.isMap(wheels) || JMap.valueType(inputConfig, "openKeyCode") != 2
         Return False
     EndIf
     Int code = JMap.getInt(inputConfig, "openKeyCode")
     If code < 1 || code > 255 || !JMap.hasKey(wheels, JMap.getStr(config, "root"))
         Return False
+    EndIf
+    If JMap.hasKey(inputConfig, "openGamepadButton")
+        Int padCode = JMap.getInt(inputConfig, "openGamepadButton")
+        If padCodeType != 2 || padCode < 266 || padCode > 281 || padCode == code
+            Return False
+        EndIf
     EndIf
     String name = JMap.nextKey(wheels)
     While name != ""
@@ -460,10 +495,16 @@ Bool Function ValidateNative(Int config)
 EndFunction
 
 Event OnKeyDown(Int keyCode)
-    If keyCode != _key || _held
+    Bool isOpenKey = keyCode == _key
+    Bool isPadKey = _padKey > 0 && keyCode == _padKey
+    If (!isOpenKey && !isPadKey) || (isOpenKey && _held) || (isPadKey && _padHeld)
         Return
     EndIf
-    _held = True
+    If isOpenKey
+        _held = True
+    Else
+        _padHeld = True
+    EndIf
     If !_ready || _browsing || Utility.IsInMenuMode() || UI.IsMenuOpen("CustomMenu")
         Return
     EndIf
@@ -472,7 +513,7 @@ Event OnKeyDown(Int keyCode)
     EndIf
     Actor player = Game.GetPlayer()
     ; External gameplay gates/player lookup can yield to maintenance or another key stack.
-    If keyCode != _key || !_ready || _browsing
+    If (keyCode != _key && keyCode != _padKey) || !_ready || _browsing
         Return
     EndIf
     ; A newly accepted session invalidates an older delayed hotkey dispatch.
@@ -582,8 +623,10 @@ Event OnKeyDown(Int keyCode)
     If token == _generation && UseMagelight()
         ; The overlay may suppress keyup while it owns keyboard focus.
         Bool held = Input.IsKeyPressed(_key)
+        Bool padHeld = _padKey > 0 && Input.IsKeyPressed(_padKey)
         If token == _generation
             _held = held
+            _padHeld = padHeld
         EndIf
     EndIf
     If token == _generation
@@ -805,8 +848,10 @@ Event OnKeyUp(Int keyCode, Float holdTime)
     If keyCode == _key
         _held = False
     EndIf
+    If keyCode == _padKey
+        _padHeld = False
+    EndIf
 EndEvent
-
 Int Function Browse(Int config, Int history, Int token, Actor player)
     Int result = BrowseWheels(config, history, token, player)
     If UseMagelight() && token == _generation

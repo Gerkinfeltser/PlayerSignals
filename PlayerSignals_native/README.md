@@ -33,9 +33,9 @@ Raw slots require the matching `PlayerSignals.dll` in `Data/SKSE/Plugins`, SKSE,
 
 ## 1.0.1 payload build receipt
 
-Offline Windows Release build: `PlayerSignals/SKSE/Plugins/PlayerSignals.dll`, 865792 bytes.
+Offline Windows Release build: `PlayerSignals/SKSE/Plugins/PlayerSignals.dll`, 866816 bytes.
 
-SHA-256: `9EFEAC8BAAE660F55F269378CD2EF6389B99F257720C344A2B2A6A43B1CE8306`.
+SHA-256: `40395C55F5958C6DF88180EA34FF82F42C82C22C2C768B1703B9436721ED4742`.
 
 `dumpbin /exports` reports `SKSEPlugin_Load`, `SKSEPlugin_Query`, and `SKSEPlugin_Version`. `/dependents` reports only `KERNEL32.dll`, `USER32.dll`, `ole32.dll`, `VERSION.dll`, and `SHELL32.dll`; no external CRT DLL is imported. Generated metadata identifies plugin version 1.0.1; `GetNativeVersion()` returns API version 1.
 

@@ -816,17 +816,52 @@ frame.addEventListener("load", async () => {
         ]) {
             const token=`hybrid-${slot.intent}-${mode}-${target || "none"}-${shift}`;
             arm(token,[slot],target); center.focus();
-            const group=doc.getElementById("slot-0"), badge=group.querySelector(".actionLabel");
-            assert(group.dataset.kind==="intent"&&group.getAttribute("aria-disabled")!=="true"&&badge.textContent==="SIGNAL · ACTION","Hybrid rendered as a disabled or target-only action, or lost its sole badge marker");
+            const group=doc.getElementById("slot-0"), badge=group.querySelector(".actionLabel"), label=doc.querySelector('.sectorLabel[data-index="0"]'), frame=label.closest("foreignObject"), reserved=[frame.getAttribute("x"),frame.getAttribute("y"),frame.getAttribute("width"),frame.getAttribute("height"),badge.style.fontSize];
+            assert(group.dataset.kind==="intent"&&group.getAttribute("aria-disabled")!=="true"&&badge.textContent===(target?"SIGNAL · ACTION":"SIGNAL"),"Hybrid rendered as a disabled or target-only action, or showed ACTION when Openly");
             assert(region(0).classList.contains("gesture")&&view.getComputedStyle(region(0).querySelector(".hit-area")).fill==="rgb(69, 87, 102)"&&view.getComputedStyle(region(0,"nearby")).display!=="none","Hybrid lost the blue signal core or Openly bulb");
+            assertInkGeometry(0,label,badge,"Hybrid initial");
             region(0,mode).focus();
             if (shift) keyEvent("keydown","Shift","ShiftLeft",1);
+            const expected=(!target||mode==="nearby"||shift)?"SIGNAL":"SIGNAL · ACTION";
+            assert(badge.textContent===expected,`Hybrid ${mode}/${target||"no target"}/${shift?"Shift":"no Shift"} badge state is incorrect`);
+            assert(JSON.stringify([frame.getAttribute("x"),frame.getAttribute("y"),frame.getAttribute("width"),frame.getAttribute("height"),badge.style.fontSize])===JSON.stringify(reserved),"Hybrid badge swap changed its reserved label frame or font size");
+            assertInkGeometry(0,label,badge,"Hybrid swapped");
             assert(doc.getElementById("destination").textContent===(!target?"No target · Openly":mode==="nearby"||shift?"Openly":target),"Hybrid target/Shift/Openly preview differs from a signal");
+            if (shift) {
+                keyEvent("keyup","Shift","ShiftLeft",1);
+                assert(badge.textContent===(mode==="nearby"?"SIGNAL":"SIGNAL · ACTION"),"Hybrid badge did not immediately restore after Shift release");
+                assertInkGeometry(0,label,badge,"Hybrid shift swapback");
+            }
             assert(doc.querySelectorAll(".signal-flow").length===1&&doc.querySelectorAll(".signal-flow .flow-mark").length===2&&doc.querySelector(".signal-flow").parentElement===region(0,"nearby"),"Hybrid changed or interrupted the existing two-band bulb-only signal flow");
             assert(replies.length===0,"Hybrid preview dispatched a choice");
             click(region(0,mode));
             assert(replies.length===1&&replies.pop()===`${token}|0|${slot.intent}|${mode}`&&!visible(),"Hybrid did not emit exactly one existing intent reply");
         }
+        arm("hybrid-isolation", [hybrids[0], hybrids[1], {label:"Signal",intent:"greet"}], "Lydia");
+        const hybridBadge=i=>doc.querySelector(`#slot-${i} .actionLabel`);
+        region(0).focus(); region(0,"nearby").focus();
+        assert(hybridBadge(0).textContent==="SIGNAL"&&hybridBadge(1).textContent==="SIGNAL · ACTION","Tip focus did not change only its own hybrid badge");
+        key("ArrowDown");
+        assert(doc.activeElement===region(0)&&hybridBadge(0).textContent==="SIGNAL · ACTION"&&hybridBadge(1).textContent==="SIGNAL · ACTION","Keyboard tip focus did not swap back only its own hybrid badge");
+        keyEvent("keydown","Shift","ShiftRight",2);
+        assert(hybridBadge(0).textContent==="SIGNAL"&&hybridBadge(1).textContent==="SIGNAL","Either Shift did not swap every hybrid badge");
+        keyEvent("keyup","Shift","ShiftRight",2);
+        assert(hybridBadge(0).textContent==="SIGNAL · ACTION"&&hybridBadge(1).textContent==="SIGNAL · ACTION","Shift release did not restore every eligible hybrid badge");
+        keyEvent("keydown","Shift","ShiftLeft",1); keyEvent("keydown","Shift","ShiftRight",2);
+        keyEvent("keyup","Shift","ShiftLeft",1);
+        assert(hybridBadge(0).textContent==="SIGNAL"&&hybridBadge(1).textContent==="SIGNAL","One Shift release restored ACTION while the other Shift remained held");
+        view.dispatchEvent(new view.Event("blur"));
+        assert(hybridBadge(0).textContent==="SIGNAL · ACTION"&&hybridBadge(1).textContent==="SIGNAL · ACTION","Blur did not clear held-Shift badge state");
+        center.focus(); center.dispatchEvent(new view.MouseEvent("mousemove",{bubbles:true,shiftKey:true}));
+        assert(hybridBadge(0).textContent==="SIGNAL"&&hybridBadge(1).textContent==="SIGNAL","Already-held Shift pointer state did not update every hybrid badge");
+        center.dispatchEvent(new view.MouseEvent("mousemove",{bubbles:true,shiftKey:false}));
+        assert(hybridBadge(0).textContent==="SIGNAL · ACTION"&&hybridBadge(1).textContent==="SIGNAL · ACTION","Pointer modifier release did not restore eligible hybrid badges");
+        key("Escape"); replies.pop();
+        arm("hybrid-isolation-no-target", [hybrids[0], hybrids[1]], "");
+        assert(hybridBadge(0).textContent==="SIGNAL"&&hybridBadge(1).textContent==="SIGNAL","No target did not set every hybrid badge to SIGNAL");
+        region(0).focus(); region(0,"nearby").focus(); region(0).focus();
+        assert(hybridBadge(0).textContent==="SIGNAL"&&hybridBadge(1).textContent==="SIGNAL","No-target hybrid badge changed on core/tip focus");
+        key("Escape"); replies.pop();
         for (const [i,badEntry] of [
             ["Signal","greet","intent",{hybrid:false}], ["Signal","greet","intent",{hybrid:1}],
             ["Action","WaitHere","action",{hybrid:true}], ["Key","64","hotkey",{hybrid:true}],
@@ -1465,7 +1500,7 @@ frame.addEventListener("load", async () => {
         report.textContent += " Radial labels and badges: all 12 readable angles, wrapped line order, viewport and slice containment, chord/artwork clearance, and shared lift checked across all four shipped wheels.";
         report.textContent += " Quadrants: two transformed 45°-from-vertical diameters, visible white at 90% opacity, behind all slots/hub, pointer-transparent at slice/hub/exposed probes, fixed across all shipped wheels, themes and slice lifts.";
         report.textContent += " Shift hub Back: existing typed Back replies across shipped submenus/custom indices; held-before-arm modifiers, dual-Shift release, click/Enter/Space, no-Back Cancel, keyboard cancellation and lifecycle resets.";
-        report.textContent += " Hybrids: Follow/Wait/Dismiss retain unchanged blue signal cores, Openly bulbs and flow; sole SIGNAL · ACTION marker passes all-angle badge/chord checks, stays enabled without a target and preserves one intent reply for target/tip/Shift.";
+        report.textContent += " Hybrids: unchanged blue signal cores, Openly bulbs and flow; SIGNAL · ACTION only for target/core, SIGNAL for Shift/no-target/own-tip with swap-back, per-slot isolation and stable badge/chord geometry; one existing intent reply.";
     } catch (error) { report.textContent = "FAIL: " + error.stack; }
 });
 fetch("../PlayerSignals/Magelight/PlayerSignals/index.html").then(response => response.text()).then(markup => {

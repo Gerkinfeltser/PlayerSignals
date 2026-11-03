@@ -270,7 +270,7 @@
             region.addEventListener("focus", () => highlight(index, mode));
             for (const event of ["mouseleave", "blur"]) region.addEventListener(event, () => { if (flowIndex === index) stopFlow(); });
         }
-        return { group, pop, target, nearby, content, labelBox, labelRadius, actionBadge, frame, knot: group.querySelector(".chevron-knot"), scale: 1, from: 1, to: 1, peak: 1.06 };
+        return { group, pop, target, nearby, content, labelBox, labelRadius, actionBadge, badgeCenter: 0, badgeTop: 0, frame, knot: group.querySelector(".chevron-knot"), scale: 1, from: 1, to: 1, peak: 1.06 };
     });
     let flowNavScale = 1;
     // One reusable effect: bulb bands paint behind the core; necktie bands paint beneath text.
@@ -490,11 +490,24 @@
         hubShiftHeld = event.shiftKey;
         updateHubAction();
     }
+    function updateHybridBadges() {
+        sectors.forEach((sector, index) => {
+            if (!entries[index]?.[3]?.hybrid) return;
+            const text = hubShiftHeld || shiftKeys.size > 0 || !targetName || (focused === index && focusedMode === "nearby") ? "SIGNAL" : "SIGNAL · ACTION";
+            if (sector.actionBadge.textContent === text) return;
+            sector.actionBadge.textContent = text;
+            sector.actionBadge.setAttribute("x", "0"); sector.actionBadge.setAttribute("y", "0");
+            const box = sector.actionBadge.getBBox();
+            sector.actionBadge.setAttribute("x", sector.badgeCenter - box.x - box.width / 2);
+            sector.actionBadge.setAttribute("y", sector.badgeTop - box.y);
+        });
+    }
     function updateHubAction() {
         const label = hubBackIndex() >= 0 ? "Back" : "Cancel";
         cancel.setAttribute("aria-label", label);
         hint.textContent = "Center: " + label.toLowerCase();
         if (focused < 0) { caption.textContent = label; fit(hub, 100); }
+        updateHybridBadges();
     }
     function showHub() { stopFlow(); focused = -1; clearHighlight(); liftTo(12); destination.textContent = targetName || "No target · Openly"; updateHubAction(); }
     cancel.addEventListener("focus", showHub);
@@ -510,7 +523,7 @@
     }
     function highlight(index, mode) {
         if (!armed || !available(index, mode)) return;
-        focused = index; focusedMode = mode; clearHighlight();
+        focused = index; focusedMode = mode; clearHighlight(); updateHybridBadges();
         const sector = sectors[index], [label, , kind] = entries[index];
         sector[mode].classList.add("hot"); sector.target.classList.add("hot");
         const preview = kind === "intent" && (!targetName || shiftKeys.size > 0);
@@ -603,11 +616,11 @@
             }
             document.documentElement.classList.replace("slate", data.theme);
             data.slots.forEach((item, index) => {
+                entries[index] = item;
                 // Lua keeps the appended markers for UIExtensions; remove one typed suffix in this view only.
                 if (item?.[2] === "submenu" && item[0].endsWith(" >")) item[0] = item[0].slice(0, -2);
                 if (item?.[2] === "back" && item[0].endsWith(" <")) item[0] = item[0].slice(0, -2);
-                entries[index] = item;
-                const { group, pop, target, nearby, content, labelBox, labelRadius, actionBadge, frame, knot } = sectors[index];
+                const sector = sectors[index], { group, pop, target, nearby, content, labelBox, labelRadius, actionBadge, frame, knot } = sector;
                 const kind = item?.[2], disabled = !item || (kind === "action" && !targetName);
                 const subback = !disabled && (kind === "submenu" || kind === "back");
                 actionBadge.textContent = kind === "hotkey" ? "KEY" : kind === "intent" ? item?.[3]?.hybrid ? "SIGNAL · ACTION" : "SIGNAL" : "ACTION";
@@ -667,8 +680,10 @@
                     const point = new DOMPoint((rect.left + rect.right) / 2, rect.bottom).matrixTransform(actionBadge.parentElement.getScreenCTM().inverse());
                     actionBadge.setAttribute("x", "0"); actionBadge.setAttribute("y", "0");
                     const box = actionBadge.getBBox();
-                    actionBadge.setAttribute("x", point.x - box.x - box.width / 2);
-                    actionBadge.setAttribute("y", point.y + 12 - box.y);
+                    sector.badgeCenter = point.x;
+                    sector.badgeTop = point.y + 12;
+                    actionBadge.setAttribute("x", sector.badgeCenter - box.x - box.width / 2);
+                    actionBadge.setAttribute("y", sector.badgeTop - box.y);
                 }
                 frame.setAttribute("transform", `rotate(${labelAngle} ${labelX} ${labelY})`);
                 group.setAttribute("aria-disabled", String(disabled));

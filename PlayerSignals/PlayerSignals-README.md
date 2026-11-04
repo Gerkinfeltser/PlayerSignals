@@ -1,8 +1,12 @@
-# PlayerSignals 0.2.0: a little less talking, a little more nodding
+# PlayerSignals 0.2.1: a little less talking, a little more nodding
 
 Want to agree, say thanks, or give someone a puzzled look without typing a sentence? PlayerSignals gives you a small communication wheel with 24 shipped intent defaults; the JSON catalog can add more intents. SkyrimNet receives authored direct narration describing what your character means.
 
 Most signals are requests: the NPC still decides how to react and may not reply. Two shipped hybrid signals—Follow me and Wait here—also request an action from the NPC you're addressing. The action runs first when that NPC is eligible; if SkyrimNet reports success, the narration adds a sentence saying they comply. They may not follow or wait straight away.
+
+## What's new in 0.2.1
+
+- Fixed: with some other mods installed (for example EasyWheel), the wheel never started and showed "PlayerSignals: Magelight wheel view/listener is unavailable." The Magelight view is now named `PlayerSignalsWheel`, which no other mod uses. No layout or catalog changes; update over 0.2.0 and restart the game.
 
 ## What's new in 0.2.0
 
@@ -13,7 +17,7 @@ Most signals are requests: the NPC still decides how to react and may not reply.
 
 ## Release status
 
-Version 0.2.0 is being prepared and has not been published yet.
+Version 0.2.1 is the current release: a hotfix for 0.2.0.
 
 ## Before you start
 

@@ -1,6 +1,6 @@
 {
   "author": "phospheneoverdrive",
-  "description": "Optional SkyrimNet WebUI agent that drafts intents.json and layout.json changes for PlayerSignals 0.2.0 from files you paste in. It does not read or write your configuration files, and the wheel works without it.",
+  "description": "Optional SkyrimNet WebUI agent that drafts intents.json and layout.json changes for PlayerSignals 0.2.1 from files you paste in. It does not read or write your configuration files, and the wheel works without it.",
   "icon": "package",
   "id": "phospheneoverdrive.playersignals",
   "min_skyrimnet_version": "0.25.0",
@@ -16,5 +16,5 @@
   "tags": ["dialogue", "immersion", "configuration"],
   "title": "PlayerSignals Intent Helper",
   "type": "bundle",
-  "version": "0.2.0"
+  "version": "0.2.1"
 }

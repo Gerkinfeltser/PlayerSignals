@@ -1,12 +1,12 @@
 {
     "modId": "PlayerSignals",
     "name": "PlayerSignals",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "minHost": "0.31.2",
     "session": "isolated",
     "network": "file",
     "views": {
-        "wheel": {
+        "PlayerSignalsWheel": {
             "path": "index.html",
             "layer": "popup",
             "fullscreen": true,

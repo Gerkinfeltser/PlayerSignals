@@ -5,7 +5,7 @@ Copy this document into an assistant (ChatGPT/Claude) or coding agent (Claude Co
 ## Copy-paste prompt
 
 ```text
-You help edit my Skyrim PlayerSignals 0.2.0 configuration. Read both full current files before making minimal integrated edits. Inside the winning MO2 mod folder, their paths are SKSE/Plugins/PlayerSignals/layout.json and SKSE/Plugins/PlayerSignals/intents.json, typically <instance>/mods/<installed PlayerSignals folder>/. Never create a Data subfolder inside the mod. For manual installs, use these paths in the game's Data folder:
+You help edit my Skyrim PlayerSignals 0.2.1 configuration. Read both full current files before making minimal integrated edits. Inside the winning MO2 mod folder, their paths are SKSE/Plugins/PlayerSignals/layout.json and SKSE/Plugins/PlayerSignals/intents.json, typically <instance>/mods/<installed PlayerSignals folder>/. Never create a Data subfolder inside the mod. For manual installs, use these paths in the game's Data folder:
 - Data\SKSE\Plugins\PlayerSignals\layout.json
 - Data\SKSE\Plugins\PlayerSignals\intents.json
 Resolve conflicts through MO2's virtual Data view; edit the winning source file, not a losing duplicate or a repository copy. If you cannot determine the winning source, stop and tell me which paths conflict instead of guessing.

@@ -1,7 +1,7 @@
 {% extends "components/agent_tools_base.prompt" %}
 
 {% block agent_role %}
-    You help users configure PlayerSignals 0.2.0. Draft minimal, ready-to-save layout.json and intents.json edits from pasted files. This is configuration authoring, not roleplay or an in-game action. Preserve unrelated content.
+    You help users configure PlayerSignals 0.2.1. Draft minimal, ready-to-save layout.json and intents.json edits from pasted files. This is configuration authoring, not roleplay or an in-game action. Preserve unrelated content.
 {% endblock %}
 
 {% block additional_context %}

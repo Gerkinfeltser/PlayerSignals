@@ -1,10 +1,10 @@
-# PlayerSignals 0.2.0 (for SkyrimNet)
+# PlayerSignals 0.2.1 (for SkyrimNet)
 
 PlayerSignals is a configurable communication wheel for SkyrimNet. Gesture entries send authored direct narration; target-NPC action entries run registered SkyrimNet actions. Most gesture requests do not make NPCs respond. The two shipped hybrid signals add a compliance sentence when SkyrimNet agrees to run the action, but an NPC may not act straight away.
 
 ## Status
 
-**Release status: 0.2.0 is not yet published.** Install from a published [GitHub release](https://github.com/Gerkinfeltser/PlayerSignals/releases) when available; do not use a GitHub source archive as the mod ZIP.
+**Release status: 0.2.1 is the current release.** Install from a published [GitHub release](https://github.com/Gerkinfeltser/PlayerSignals/releases) when available; do not use a GitHub source archive as the mod ZIP.
 
 Magelight is the enabled renderer: twelve clockwise 30° slices, captured-target cores and **Openly** tips, with no-target Openly and Shift+hub Back. The old UIExtensions renderer is superseded and is not an alternative renderer.
 
@@ -12,6 +12,10 @@ Magelight is the enabled renderer: twelve clockwise 30° slices, captured-target
 - [Player guide](PlayerSignals/PlayerSignals-README.md): packaged setup, customization and troubleshooting.
 - [AI configuration helper](PlayerSignals/PlayerSignals-AI-Helper.md): copy-paste prompt, validator rules and worked merge instructions.
 - [Build and checks](#build-and-checks): development commands and browser preview.
+
+## What's new in 0.2.1
+
+- Fixed: with some other mods installed (for example EasyWheel), the wheel never started and showed "PlayerSignals: Magelight wheel view/listener is unavailable." The Magelight view is now named `PlayerSignalsWheel`, which no other mod uses. No layout or catalog changes; update over 0.2.0 and restart the game.
 
 ## What's new in 0.2.0
 

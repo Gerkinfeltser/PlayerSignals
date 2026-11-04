@@ -42,7 +42,7 @@ Function InvalidateMagelight()
     If token != _generation
         Return
     EndIf
-    Int view = Magelight.FindView("PlayerSignals", "wheel")
+    Int view = Magelight.FindView("PlayerSignals", "PlayerSignalsWheel")
     If token == _generation && view != 0
         Magelight.ShowView(view, False)
     EndIf
@@ -275,7 +275,7 @@ Function Maintenance(Int token)
             Report("Magelight PlayerSignals mod registration failed.")
             Return
         EndIf
-        _mlView = Magelight.FindView("PlayerSignals", "wheel")
+        _mlView = Magelight.FindView("PlayerSignals", "PlayerSignalsWheel")
         If token != _generation
             Return
         EndIf
@@ -1014,7 +1014,7 @@ Int Function BrowseMagelight(Int slots, Int token)
     _mlSlots = slotLease
     _mlPageReady = False
     _mlPrimed = False
-    Int view = Magelight.FindView("PlayerSignals", "wheel")
+    Int view = Magelight.FindView("PlayerSignals", "PlayerSignalsWheel")
     If token != _generation || !_ready || _mlRequest != request
         Return -1
     EndIf
@@ -1221,7 +1221,7 @@ Bool Function FinishMagelight(Int token)
         _mlDomReady = False
         Return False
     EndIf
-    view = Magelight.FindView("PlayerSignals", "wheel")
+    view = Magelight.FindView("PlayerSignals", "PlayerSignalsWheel")
     If token != _generation
         Return False
     EndIf
